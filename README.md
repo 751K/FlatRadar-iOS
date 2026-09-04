@@ -78,16 +78,25 @@ unit test target. Without that check `xcodebuild test` will happily print
 | Workflow | Trigger | What it does |
 |---|---|---|
 | `ios.yml` | every push / PR | unit tests, and asserts they actually ran |
-| `screenshots.yml` | manual | App Store screenshots, 5 languages × 2 devices |
 | `release.yml` | manual | archive, validate, optionally upload to App Store Connect |
 | `asc-preflight.yml` | manual | checks the App Store Connect and test credentials still work |
 
-**Xcode Cloud** runs the same screenshot suite roughly an order of magnitude
-faster than the GitHub runners (1m28s for seven cases against tens of minutes).
-Its credentials are injected into the test plan by `ci_scripts/ci_post_clone.sh`,
-because Xcode Cloud forbids environment variables named `TEST_RUNNER_*` while
-`xcodebuild` only forwards variables with exactly that prefix. The script
-explains the whole knot.
+App Store screenshots are **not** built here. They run on **Xcode Cloud**, which
+does the same suite roughly an order of magnitude faster than a GitHub runner
+(1m28s for seven cases against tens of minutes) and picks its devices from its
+own workflow configuration. The GitHub workflow that used to do it is gone;
+`scripts/xcode_cloud.py` is the entry point that replaced it:
+
+```bash
+python3 scripts/xcode_cloud.py run --wait     # trigger a screenshot build
+python3 scripts/xcode_cloud.py status 265     # per-case, per-device results
+python3 scripts/xcode_cloud.py fetch  265     # download and extract the PNGs
+```
+
+Credentials reach the tests through `ci_scripts/ci_post_clone.sh`, which writes
+them into the test plan: Xcode Cloud refuses environment variables named
+`TEST_RUNNER_*`, and `xcodebuild` forwards only variables with exactly that
+prefix. The script explains the whole knot.
 
 ## The contract with the backend
 

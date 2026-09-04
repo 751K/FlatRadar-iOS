@@ -118,15 +118,20 @@ jobs:
           print(f"✓ 凭据可用：{a.get('name')}  ({a.get('bundleId')})  id={app['id']}")
           PY
 
-  ui-test-credentials:
-    # 截图用的那对凭据，失效方式比 ASC 那三个更阴。
+  test-account:
+    # 查的是**测试账号本身**还能不能用，不是「截图会不会拿到凭据」。
     #
-    # 值为空时 ScreenshotTests.launch() 和 ci_post_clone.sh 都会**静默退回访客
-    # 模式**——测试全过、张数尺寸全对，只是 Notifications 那一屏拍不到（访客的
-    # tab bar 里没有 Alerts）。2026-09-04 那批产出就是这么少了一屏，而没有任何
-    # 一行日志说过一句。
+    # 这个区别在截图搬去 Xcode Cloud 之后变得要紧：真正送进测试进程的那份值存
+    # 在 Xcode Cloud 的 Secret 环境变量里，这个 job 读的是 GitHub 上的副本，
+    # 两边可以各自漂移。所以它绿了**不代表** Xcode Cloud 那边配好了——别拿它
+    # 当那件事的证据。
     #
-    # 所以这里真的登录一次。登完立刻登出，不给用户的「活跃会话」留下垃圾。
+    # 那它还查什么：账号有没有被停用、密码有没有被改、角色是不是还是 user。
+    # 这三件是两边共同的前提，几秒就能知道，比排队等一轮构建划算。
+    #
+    # 「Xcode Cloud 那份配好没有」由截图套件自己保证——05-Notifications 里的
+    # assertTabSelected(Tab.alerts) 在访客模式下必然失败，因为访客的 tab bar
+    # 里根本没有 Alerts。那条断言在正确的地方，这个 job 不重复它。
     runs-on: ubuntu-latest
     steps:
       - name: 登录一次再登出
@@ -198,7 +203,7 @@ jobs:
               sys.exit(f"✗ 登录返回里没有 token，字段是 {sorted(data)}")
 
           role = data.get("role") or (data.get("user") or {}).get("role")
-          print(f"✓ 凭据可用：{user} 登录成功，role={role}")
+          print(f"✓ 测试账号可用：{user} 登录成功，role={role}")
           if role == "guest":
               sys.exit("✗ 这个账号是 guest —— 访客的 tab bar 里没有 Alerts，"
                        "Notifications 那屏还是拍不到。")
