@@ -78,7 +78,6 @@ unit test target. Without that check `xcodebuild test` will happily print
 | Workflow | Trigger | What it does |
 |---|---|---|
 | `ios.yml` | every push / PR | unit tests, and asserts they actually ran |
-| `asc-preflight.yml` | manual | checks the App Store Connect and test credentials still work |
 
 Builds are **not** produced here. `release.yml` existed for that and never once
 worked: cloud signing could not mint a distribution identity for this account,
@@ -117,12 +116,22 @@ spec as the source of truth**, and it will tell you when it falls behind.
 
 ## Security
 
-The repo is public and holds no credentials. CI reads them from GitHub Secrets
-and Xcode Cloud secret environment variables; local tooling reads
-`~/.config/asc/`. When the screenshot tests find no credentials they fall back to
-guest mode rather than failing — which is convenient and also means an empty
-secret produces a full green run with one screen quietly missing, so
-`asc-preflight.yml` checks for exactly that.
+The repo is public and holds no credentials. `ios.yml` needs none. Everything
+that does need them runs elsewhere: Xcode Cloud reads its own secret environment
+variables, and local tooling (`tools/asc/`, `scripts/xcode_cloud.py`) reads
+`~/.config/asc/`. There are deliberately **no** App Store Connect secrets in this
+repo's GitHub Secrets — nothing here would consume them, and a stored copy that
+nothing reads is a copy that can silently drift from the one that matters.
+
+One silent failure mode is worth knowing about. When the screenshot tests find no
+credentials they fall back to guest mode rather than failing, so a missing or
+wrong credential yields a fully green run with the Alerts screen quietly absent —
+guests have no Alerts tab. There used to be a workflow that logged in to check
+for exactly that; it was deleted once screenshots moved to Xcode Cloud, because
+it read *this* repo's copy of the credentials while the run used Xcode Cloud's,
+so its green stopped meaning anything. The guard that does hold is inside the
+suite: `testCapture05_Notifications` asserts the Alerts tab is the selected one,
+which cannot pass in guest mode.
 
 ## Contributing
 
