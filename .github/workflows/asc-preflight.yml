@@ -1,0 +1,119 @@
+# App Store Connect 凭据体检。
+#
+# 为什么单独有这么一条
+# --------------------
+# release.yml 是唯一用到 ASC_* 三个 secret 的工作流，而它只在真要发版时才按。
+# 于是「凭据配错了」这件事的暴露时机是最糟的那个：你想发版的那一刻。
+#
+# 而且最常见的两种配错，光看 `gh secret list` 一点都看不出来——名字在那儿，
+# 三个都齐：
+#
+#   1. ASC_KEY_ID 尾部多一个换行。release.yml 会拼 AuthKey_${ASC_KEY_ID}.p8
+#      当文件名，多一个 \n 文件名就废了，而报错是「私钥文件不存在」，
+#      根因藏在两层之外。
+#   2. ASC_KEY_P8 粘贴时被截断或丢了换行。ES256 私钥解析失败，报错是一句
+#      密码学库的堆栈，跟「secret 配错了」看不出关系。
+#
+# 这条工作流只读：签一个 JWT，查一次 app 信息，什么都不改、不上传、不提交。
+# 配好 secret 之后按一次，几十秒，比在发版当天调试强。
+name: ASC Preflight
+
+on:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: pip install 'pyjwt[crypto]>=2.8.0'
+
+      - name: 体检
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          BUNDLE_ID: com.j.kong.FlatRadar
+        run: |
+          set -euo pipefail
+
+          # 先查那两个「看不出来」的配错，再去调 API——否则 API 报的错会把
+          # 根因盖掉。
+          python3 - <<'PY'
+          import os, re, sys
+
+          fails = []
+
+          kid = os.environ.get("ASC_KEY_ID", "")
+          if not kid:
+              fails.append("ASC_KEY_ID 是空的")
+          elif kid != kid.strip():
+              fails.append(
+                  "ASC_KEY_ID 首尾有空白字符（多半是粘贴时带了换行）。"
+                  "release.yml 会拿它拼 AuthKey_<ID>.p8 的文件名，"
+                  "带空白就会变成「私钥文件不存在」。")
+          elif not re.fullmatch(r"[A-Z0-9]{10}", kid):
+              fails.append(f"ASC_KEY_ID 不像 ASC 的 key id（应是 10 位大写字母数字），长度 {len(kid)}")
+
+          iss = os.environ.get("ASC_ISSUER_ID", "")
+          if not iss:
+              fails.append("ASC_ISSUER_ID 是空的")
+          elif iss != iss.strip():
+              fails.append("ASC_ISSUER_ID 首尾有空白字符")
+          elif not re.fullmatch(r"[0-9a-fA-F-]{36}", iss):
+              fails.append(f"ASC_ISSUER_ID 不像 UUID，长度 {len(iss)}")
+
+          p8 = os.environ.get("ASC_KEY_P8", "")
+          if not p8:
+              fails.append("ASC_KEY_P8 是空的")
+          else:
+              if "BEGIN PRIVATE KEY" not in p8:
+                  fails.append("ASC_KEY_P8 里没有 BEGIN PRIVATE KEY —— 内容不是 .p8 私钥")
+              if "END PRIVATE KEY" not in p8:
+                  fails.append("ASC_KEY_P8 里没有 END PRIVATE KEY —— 多半被截断了")
+              if p8.count("\n") < 2:
+                  fails.append("ASC_KEY_P8 只有一行 —— 换行在粘贴时丢了")
+
+          if fails:
+              # 只说形状，不打印任何值。
+              print("凭据形状检查未通过：")
+              for f in fails:
+                  print("  ✗ " + f)
+              sys.exit(1)
+          print("✓ 形状检查通过（key id 10 位、issuer 是 UUID、私钥有头有尾有换行）")
+          PY
+
+          # 私钥落盘，权限收紧
+          install -m 700 -d "$RUNNER_TEMP/asc"
+          printf '%s' "$ASC_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8"
+          chmod 600 "$RUNNER_TEMP/asc/AuthKey_${ASC_KEY_ID}.p8"
+
+          python3 -c "
+          import json, os, pathlib
+          tmp = os.environ['RUNNER_TEMP']
+          cfg = {
+              'key_id': os.environ['ASC_KEY_ID'],
+              'issuer_id': os.environ['ASC_ISSUER_ID'],
+              'p8_path': f\"{tmp}/asc/AuthKey_{os.environ['ASC_KEY_ID']}.p8\",
+              'bundle_id': os.environ['BUNDLE_ID'],
+          }
+          pathlib.Path(f'{tmp}/asc/config.json').write_text(json.dumps(cfg))
+          "
+
+          # 真正调一次 API：签 JWT + 按 bundle id 查 app。只读。
+          ASC_CONFIG="$RUNNER_TEMP/asc/config.json" python3 - <<'PY'
+          import sys
+          sys.path.insert(0, "tools/asc")
+          import asc_api as m
+
+          cfg = m.load_config()
+          m.jwt_for(cfg)          # 私钥不能签名的话，这里就炸
+          app = m.find_app(cfg)   # issuer / key 无权限的话，这里 401
+          a = app["attributes"]
+          print(f"✓ 凭据可用：{a.get('name')}  ({a.get('bundleId')})  id={app['id']}")
+          PY
