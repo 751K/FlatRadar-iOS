@@ -16,7 +16,7 @@
 #
 # 这条工作流只读：签一个 JWT，查一次 app 信息，什么都不改、不上传、不提交。
 # 配好 secret 之后按一次，几十秒，比在发版当天调试强。
-name: ASC Preflight
+name: Secrets Preflight
 
 on:
   workflow_dispatch:
@@ -116,4 +116,98 @@ jobs:
           app = m.find_app(cfg)   # issuer / key 无权限的话，这里 401
           a = app["attributes"]
           print(f"✓ 凭据可用：{a.get('name')}  ({a.get('bundleId')})  id={app['id']}")
+          PY
+
+  ui-test-credentials:
+    # 截图用的那对凭据，失效方式比 ASC 那三个更阴。
+    #
+    # 值为空时 ScreenshotTests.launch() 和 ci_post_clone.sh 都会**静默退回访客
+    # 模式**——测试全过、张数尺寸全对，只是 Notifications 那一屏拍不到（访客的
+    # tab bar 里没有 Alerts）。2026-09-04 那批产出就是这么少了一屏，而没有任何
+    # 一行日志说过一句。
+    #
+    # 所以这里真的登录一次。登完立刻登出，不给用户的「活跃会话」留下垃圾。
+    runs-on: ubuntu-latest
+    steps:
+      - name: 登录一次再登出
+        env:
+          UI_TEST_USERNAME: ${{ secrets.UI_TEST_USERNAME }}
+          UI_TEST_PASSWORD: ${{ secrets.UI_TEST_PASSWORD }}
+          API: https://flatradar.app/api/v1
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, sys, urllib.error, urllib.request
+
+          api = os.environ["API"]
+          user = os.environ.get("UI_TEST_USERNAME", "")
+          pw = os.environ.get("UI_TEST_PASSWORD", "")
+
+          if not user or not pw:
+              sys.exit("✗ UI_TEST_USERNAME / UI_TEST_PASSWORD 有一个是空的。"
+                       "截图会静默退回访客模式，Notifications 那屏拍不到，"
+                       "而测试仍然全过。")
+
+          # UA 是必须的，不是礼貌。带 urllib 默认 UA 时 Cloudflare 直接回
+          # 403 + "error code: 1010"，请求根本到不了后端——而 403 看起来
+          # 太像「凭据被拒」了，这条检查会替 Cloudflare 背锅，报一句
+          # 「用户名或密码不对」，然后你去改一个本来就没错的 secret。
+          HEADERS = {"Content-Type": "application/json",
+                     "User-Agent": "FlatRadar-CI/1.0 (secrets-preflight)"}
+
+          def post(path, body, token=None):
+              h = dict(HEADERS)
+              if token:
+                  h["Authorization"] = f"Bearer {token}"
+              req = urllib.request.Request(
+                  api + path, data=json.dumps(body).encode(),
+                  headers=h, method="POST")
+              with urllib.request.urlopen(req, timeout=30) as r:
+                  return json.loads(r.read())
+
+          def envelope(raw):
+              """后端的响应一定是 {ok, data|error}。解不出这个壳，说明这次
+              回应不是后端给的（Cloudflare 拦截页、网关错误页……）。"""
+              try:
+                  d = json.loads(raw)
+              except Exception:
+                  return None
+              return d if isinstance(d, dict) and "ok" in d else None
+
+          try:
+              resp = post("/auth/login",
+                          {"username": user, "password": pw,
+                           "device_name": "secrets-preflight", "ttl_days": 1})
+          except urllib.error.HTTPError as e:
+              raw = e.read()
+              env = envelope(raw)
+              if env is None:
+                  sys.exit(f"✗ 请求没到后端：HTTP {e.code}，"
+                           f"server={e.headers.get('server')}，"
+                           f"body={raw[:120]!r}。"
+                           "这不是凭据问题，别去动 secret。")
+              msg = (env.get("error") or {}).get("message", "")
+              sys.exit(f"✗ 登录被拒：HTTP {e.code} {msg}——"
+                       "secret 里的用户名或密码不对。")
+          except urllib.error.URLError as e:
+              sys.exit(f"✗ 连不上 {api}：{e.reason}。这不是凭据问题。")
+
+          data = resp.get("data") or {}
+          token = data.get("token")
+          if not token:
+              sys.exit(f"✗ 登录返回里没有 token，字段是 {sorted(data)}")
+
+          role = data.get("role") or (data.get("user") or {}).get("role")
+          print(f"✓ 凭据可用：{user} 登录成功，role={role}")
+          if role == "guest":
+              sys.exit("✗ 这个账号是 guest —— 访客的 tab bar 里没有 Alerts，"
+                       "Notifications 那屏还是拍不到。")
+
+          # 不留会话：/auth/verify 要求先有 token，验不了「密码对不对」这件事
+          # 本身，所以只能真登录；那就负责把它撤掉。
+          try:
+              post("/auth/logout", {}, token=token)
+              print("✓ 已登出，未留下会话")
+          except urllib.error.HTTPError as e:
+              print(f"⚠ 登出失败 HTTP {e.code}——会话会自然过期（ttl_days=1）")
           PY
