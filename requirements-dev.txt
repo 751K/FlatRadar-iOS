@@ -1,0 +1,3 @@
+# scripts/ 下那几个 Python 工具的测试依赖。
+# 它们本身只用标准库——保持这样，CI 的 macOS runner 才不必额外装东西。
+pytest>=8.0

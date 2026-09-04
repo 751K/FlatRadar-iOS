@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+
+# Xcode
+build/
+DerivedData/
+**/xcuserdata/
+**/.build/
+*.xcuserstate
+*.bak
+
+# 签名材料，永远不进仓库
+*.mobileprovision
+*.cer
+*.certSigningRequest
+*.p12
+*.p8
+
+# App Store Connect API key（asc_api.py 从 ~/.config/asc/ 读，不从仓库读）
+AuthKey_*.p8
+
+# Python（scripts/ 与 tests/）
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 截图产物
+screenshots/
+*.xcresult
+*.xcresult.zip
