@@ -78,8 +78,14 @@ unit test target. Without that check `xcodebuild test` will happily print
 | Workflow | Trigger | What it does |
 |---|---|---|
 | `ios.yml` | every push / PR | unit tests, and asserts they actually ran |
-| `release.yml` | manual | archive, validate, optionally upload to App Store Connect |
 | `asc-preflight.yml` | manual | checks the App Store Connect and test credentials still work |
+
+Builds are **not** produced here. `release.yml` existed for that and never once
+worked: cloud signing could not mint a distribution identity for this account,
+so `xcodebuild -exportArchive` failed with `Cloud signing permission error` on
+its only real run — after quietly creating a throwaway development certificate
+against the account's quota. Xcode Cloud already produces shippable builds
+(255/256 shipped 2.0.0), so that workflow was deleted rather than repaired.
 
 App Store screenshots are **not** built here. They run on **Xcode Cloud**, which
 does the same suite roughly an order of magnitude faster than a GitHub runner
