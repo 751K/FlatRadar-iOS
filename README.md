@@ -1,94 +1,125 @@
 # FlatRadar for iOS
 
-荷兰多平台租房监控 [FlatRadar](https://flatradar.app) 的 iOS 客户端。SwiftUI，
-连接后端的 `/api/v1/*`。
+[![App Store](https://img.shields.io/badge/App_Store-Download-0D96F6?style=flat-square&logo=appstore&logoColor=white)](https://apps.apple.com/us/app/flarradar/id6769857080)
+[![iOS Tests](https://img.shields.io/github/actions/workflow/status/751K/FlatRadar-iOS/ios.yml?style=flat-square&label=tests)](https://github.com/751K/FlatRadar-iOS/actions/workflows/ios.yml)
+[![Platform](https://img.shields.io/badge/iOS-18.0%2B-000000?style=flat-square&logo=apple&logoColor=white)](https://developer.apple.com/ios/)
+[![SwiftUI](https://img.shields.io/badge/SwiftUI-Swift_5-FA7343?style=flat-square&logo=swift&logoColor=white)](https://developer.apple.com/xcode/swiftui/)
+[![Backend](https://img.shields.io/badge/backend-holland2stay--monitor-0057CC?style=flat-square&logo=github)](https://github.com/751K/holland2stay-monitor)
+[![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue?style=flat-square)](https://github.com/751K/holland2stay-monitor/blob/master/LICENSE)
 
-[App Store](https://apps.apple.com/us/app/flarradar/id6769857080)
+The iOS client for [FlatRadar](https://flatradar.app), a monitor for the Dutch
+rental market. It watches seven platforms — Holland2Stay, OurDomain, OurCampus,
+Xior, Magis, Plaza and Student Experience — and pushes a notification the moment
+a listing matches what you are looking for.
 
-后端、Web 前台与抓取管线在另一个仓库：
-[751K/holland2stay-monitor](https://github.com/751K/holland2stay-monitor)。
+The scraping, matching and notification pipeline lives in the backend repo,
+[751K/holland2stay-monitor](https://github.com/751K/holland2stay-monitor). This
+repo is the app that sits in front of it.
 
-## 跨仓库的那条线
+## What it does
 
-这个仓库和后端之间只有一份契约：后端仓库里的 `docs/openapi.json`。
+- **Dashboard** — supply and price trends across the platforms you follow.
+- **Browse** — listings, map and availability calendar. Three tabs on iPad,
+  one segmented tab on iPhone.
+- **Filters** — 13 dimensions (city, price, rooms, contract, energy label,
+  furnishing, …). Not every platform reports every dimension, so the app tells
+  you when a filter only narrows some of the platforms you have selected.
+- **Alerts** — APNs push for new matches, plus a live in-app feed over SSE.
+- **Deep links** — a notification opens straight to the listing, on the list or
+  on the map.
+- **Face ID / Touch ID** sign-in, guest browsing, and admin tools for
+  self-hosters.
 
-拆仓之前，改后端和改 iOS 是同一个 commit，接口对不对由编译和人眼一起兜着。
-现在不是了——后端加一个字段、改一个枚举，这边不会有任何反应，直到运行时。
-所以后端那侧有一条测试从 Flask 的 `app.url_map` 反推路由集合，双向比对
-`openapi.json`：后端多一条会红，spec 多一条也会红。**改动接口时以那份 spec
-为准**，它落后于后端时那条测试会先叫。
+Runs on iPhone and iPad. English, 简体中文, 繁體中文, Nederlands and Español.
 
-## 目录
+## Requirements
 
-```text
-FlatRadar.xcodeproj/         # 项目文件在仓库根
-FlatRadar/                   # App 源码
-├── FlatRadarApp.swift       #   入口、environment 注入
-├── Models/                  #   Codable 模型与展示辅助
-├── Networking/              #   APIClient / APIError / SSE / Keychain
-├── Stores/                  #   @Observable 状态与业务逻辑
-├── Navigation/              #   tab / path / deep link
-├── Push/                    #   APNs delegate 桥接
-├── Views/                   #   SwiftUI 界面
-├── FlatRadar.xctestplan     #   默认计划：单元测试 + UI 测试
-└── Screenshots.xctestplan   #   截图计划：5 种语言各一个 configuration
-FlatRadarTests/              # 单元测试
-FlatRadarUITests/            # UI 测试（含 App Store 截图自动化）
-ci_scripts/                  # Xcode Cloud 钩子——必须紧挨 .xcodeproj
-scripts/                     # 模拟器挑选、xcresult 解析、截图提取与校验（Python）
-tests/                       # scripts/ 与 CI 配置的 pytest
-tools/asc/                   # App Store Connect API 工具 + 官方 OpenAPI 规格
-tools/screenshots/           # 本地跑截图的封装
-tools/upload/                # 本地 archive + 上传
-```
+- iOS 18.0+
+- Xcode 26 (a **GM** release — Apple rejects builds made with a beta Xcode)
 
-## 开发
+## Build
 
 ```bash
+git clone https://github.com/751K/FlatRadar-iOS.git
+cd FlatRadar-iOS
 open FlatRadar.xcodeproj
 ```
 
-跑 `FlatRadar` scheme。默认 test plan 同时包含单元测试和 UI 测试。
+Run the `FlatRadar` scheme. The app talks to `flatradar.app` by default; point
+it at your own deployment from Settings.
 
-Python 侧：
+## Layout
 
-```bash
-python3 -m pytest
+```text
+FlatRadar/          App source — Models, Networking, Stores, Navigation, Push, Views
+FlatRadarTests/     Unit tests
+FlatRadarUITests/   UI tests, including the App Store screenshot automation
+scripts/            Simulator selection, xcresult parsing, screenshot extraction
+tests/              pytest for scripts/ and for the CI configuration itself
+tools/asc/          App Store Connect API tooling
+ci_scripts/         Xcode Cloud hooks — must sit next to the .xcodeproj
 ```
 
-这些测试守的是 CI 配置本身——比如「scheme 指向的 test plan 里到底有没有单元
-测试 target」。少了它们，`xcodebuild test` 可以一边报 Test Succeeded 一边一条
-都没跑。
+## Testing
+
+```bash
+xcodebuild test -project FlatRadar.xcodeproj -scheme FlatRadar \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro'
+python3 -m pytest      # scripts/ and the CI configuration
+```
+
+The pytest suite is not incidental. It guards the parts of the build that fail
+*quietly* — for example that the scheme's default test plan still contains the
+unit test target. Without that check `xcodebuild test` will happily print
+`Test Succeeded` after executing zero tests, which is what it did for a while.
 
 ## CI
 
-| 工作流 | 触发 | 做什么 |
+| Workflow | Trigger | What it does |
 |---|---|---|
-| `ios.yml` | 每次 push / PR | 单元测试 |
-| `screenshots.yml` | 手动 | 5 种语言 × 2 种设备的 App Store 截图 |
-| `release.yml` | 手动 | archive + 上传 TestFlight |
+| `ios.yml` | every push / PR | unit tests, and asserts they actually ran |
+| `screenshots.yml` | manual | App Store screenshots, 5 languages × 2 devices |
+| `release.yml` | manual | archive, validate, optionally upload to App Store Connect |
+| `asc-preflight.yml` | manual | checks the App Store Connect and test credentials still work |
 
-另有 **Xcode Cloud** 跑同一套截图，比 GitHub 的 runner 快一个量级（同一套七条
-用例：1 分 28 秒 vs 数十分钟）。它的凭据经 `ci_scripts/ci_post_clone.sh` 注入
-到 test plan——因为 Xcode Cloud 禁止用 `TEST_RUNNER_` 前缀命名环境变量，而
-`xcodebuild` 只转发带这个前缀的变量。那个脚本里写了完整缘由。
+**Xcode Cloud** runs the same screenshot suite roughly an order of magnitude
+faster than the GitHub runners (1m28s for seven cases against tens of minutes).
+Its credentials are injected into the test plan by `ci_scripts/ci_post_clone.sh`,
+because Xcode Cloud forbids environment variables named `TEST_RUNNER_*` while
+`xcodebuild` only forwards variables with exactly that prefix. The script
+explains the whole knot.
 
-## 仓库是公开的
+## The contract with the backend
 
-任何凭据都不进仓库。CI 用 GitHub Secrets / Xcode Cloud 的 Secret 环境变量；
-本地用 `~/.config/asc/`。截图测试拿不到凭据时自动退回访客模式，只是
-Notifications 那一屏拍不到。
+One file connects the two repos: `docs/openapi.json` in the backend.
 
-## 维护范围
+Before the split, changing an endpoint and changing the client were the same
+commit. They are not any more — the backend can add a field or rename an enum
+and nothing here reacts until runtime. So the backend derives its route set from
+the live Flask app and diffs it against that spec in both directions: a route
+the spec is missing fails, and a route the spec invents fails too. **Treat that
+spec as the source of truth**, and it will tell you when it falls behind.
 
-这个 App 在当前产品范围内功能完整，处于维护状态。新的跨平台行为先在后端的
-`docs/API.md` 定下来，再各端实现。
+## Security
 
-- 兼容新版 iOS / Xcode
-- 崩溃、导航、通知、接口契约的修复
-- App Store 元数据、隐私与法律文本
-- 与共享产品保持一致的小幅界面调整
-- 安全与依赖卫生
+The repo is public and holds no credentials. CI reads them from GitHub Secrets
+and Xcode Cloud secret environment variables; local tooling reads
+`~/.config/asc/`. When the screenshot tests find no credentials they fall back to
+guest mode rather than failing — which is convenient and also means an empty
+secret produces a full green run with one screen quietly missing, so
+`asc-preflight.yml` checks for exactly that.
 
-法律文本以后端接口为准，App 内的本地文案只作兜底。列表与图表模型要能容忍未知
-字段——后端新增字段不应该逼出一个 iOS 版本，除非界面要展示它。
+## Contributing
+
+The app is feature-complete for the current product scope and is maintained
+rather than actively expanded: compatibility with new iOS and Xcode releases,
+crash and contract fixes, App Store metadata, and small UI work that keeps
+parity with the other clients. New cross-platform behaviour is specified in the
+backend's `docs/API.md` first, then implemented on each client.
+
+Two conventions worth knowing before you send a patch:
+
+- Listing and chart models must tolerate unknown fields. A new backend field
+  should not require an iOS release unless the UI wants to show it.
+- Legal text comes from the backend; the copy bundled in the app is only a
+  fallback.
