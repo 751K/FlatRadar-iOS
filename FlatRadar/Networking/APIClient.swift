@@ -108,7 +108,7 @@ final class APIClient {
         return comps.url ?? baseURL.appendingPathComponent(path)
     }
 
-    private func request<T: Decodable>(
+    private func request<T: Decodable & Sendable>(
         _ method: String,
         _ path: String,
         body: (any Encodable)? = nil,
@@ -190,7 +190,7 @@ final class APIClient {
         return payload
     }
 
-    private static func decodeEnvelope<T: Decodable>(
+    private static func decodeEnvelope<T: Decodable & Sendable>(
         _ type: APIResponse<T>.Type,
         from data: Data
     ) async throws -> APIResponse<T> {
@@ -516,7 +516,7 @@ final class APIClient {
         let app_version: String
     }
 
-    struct FeedbackResponse: Decodable {
+    nonisolated struct FeedbackResponse: Decodable {
         let submitted: Bool
     }
 
@@ -614,11 +614,11 @@ private struct AnyEncodable: Encodable {
     }
 }
 
-struct RevokePayload: Decodable {
+nonisolated struct RevokePayload: Decodable {
     let revoked: Bool
 }
 
 /// For decoding /stats/public/charts response: {"charts": [...], "ok": true, "data": {...}}
-private struct ChartKeysList: Decodable {
+nonisolated private struct ChartKeysList: Decodable {
     let charts: [String]
 }

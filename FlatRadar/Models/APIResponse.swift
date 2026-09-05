@@ -161,7 +161,7 @@ enum ServerTime {
 
 /// Generic envelope matching backend {ok, data} / {ok, error} shape.
 /// Every /api/v1/* response decodes through this type.
-nonisolated struct APIResponse<T: Decodable>: Decodable {
+nonisolated struct APIResponse<T: Decodable & Sendable>: Decodable, Sendable {
     let ok: Bool
     let data: T?
     let error: APIErrorPayload?
@@ -195,7 +195,7 @@ nonisolated struct APIErrorPayload: Decodable {
 
 // MARK: - Paginated responses
 
-struct ListingsResponse: Decodable {
+nonisolated struct ListingsResponse: Decodable {
     let items: [Listing]
     let total: Int
     let limit: Int
@@ -203,7 +203,7 @@ struct ListingsResponse: Decodable {
     let filtered: Bool?
 }
 
-struct NotificationsResponse: Decodable {
+nonisolated struct NotificationsResponse: Decodable {
     let items: [NotificationItem]
     let total: Int
     let unread: Int
@@ -213,7 +213,7 @@ struct NotificationsResponse: Decodable {
 
 // MARK: - Me endpoints
 
-struct MeSummary: Decodable {
+nonisolated struct MeSummary: Decodable {
     let role: String
     let totalInDb: Int
     let new24hTotal: Int
@@ -233,7 +233,7 @@ struct MeSummary: Decodable {
     }
 }
 
-struct MeFilterResponse: Decodable {
+nonisolated struct MeFilterResponse: Decodable {
     let role: String
     let filter: ListingFilter
     let isEmpty: Bool
@@ -246,7 +246,7 @@ struct MeFilterResponse: Decodable {
 
 // MARK: - Mark read
 
-struct MarkReadResponse: Decodable {
+nonisolated struct MarkReadResponse: Decodable {
     let marked: Bool
 }
 
@@ -269,7 +269,7 @@ struct DeviceRegisterRequest: Encodable {
     }
 }
 
-struct DeviceRegisterResponse: Decodable {
+nonisolated struct DeviceRegisterResponse: Decodable {
     let deviceId: Int
     let env: String
     let platform: String
@@ -281,11 +281,11 @@ struct DeviceRegisterResponse: Decodable {
 }
 
 /// `/api/v1/devices` 列表返回；device_token 只回脱敏 hint，不会回明文。
-struct DeviceListResponse: Decodable {
+nonisolated struct DeviceListResponse: Decodable {
     let items: [DeviceInfo]
 }
 
-struct DeviceInfo: Decodable, Identifiable {
+nonisolated struct DeviceInfo: Decodable, Identifiable {
     let id: Int
     let deviceTokenHint: String
     let env: String
@@ -307,7 +307,7 @@ struct DeviceInfo: Decodable, Identifiable {
     }
 }
 
-struct DeviceDeleteResponse: Decodable {
+nonisolated struct DeviceDeleteResponse: Decodable {
     let deleted: Bool
 }
 
@@ -315,7 +315,7 @@ struct DeviceDeleteResponse: Decodable {
 ///
 /// **跨版本兼容**：自定义 `init(from:)` 让任一字段缺失都回退 `[]`。
 /// 老 backend 没有 `sources` 字段（P1 多源新加）时 iOS 不会 data error。
-struct FilterOptions: Decodable, Sendable {
+nonisolated struct FilterOptions: Decodable, Sendable {
     let cities: [String]
     let sources: [String]
     let occupancy: [String]
@@ -374,18 +374,18 @@ struct FilterOptions: Decodable, Sendable {
 }
 
 /// `POST /api/v1/auth/verify` 响应。密码正确才会返回，错误走 401 抛错路径。
-struct VerifyPasswordResponse: Decodable {
+nonisolated struct VerifyPasswordResponse: Decodable {
     let ok: Bool
 }
 
 /// `POST /api/v1/devices/test` 响应。
-struct DeviceTestPushResponse: Decodable {
+nonisolated struct DeviceTestPushResponse: Decodable {
     let sent: Int
     let total: Int
     let results: [DeviceTestPushResult]
 }
 
-struct DeviceTestPushResult: Decodable, Identifiable {
+nonisolated struct DeviceTestPushResult: Decodable, Identifiable {
     var id: String { deviceTokenHint }
     let deviceTokenHint: String
     let env: String
@@ -400,7 +400,7 @@ struct DeviceTestPushResult: Decodable, Identifiable {
 }
 
 /// `DELETE /api/v1/me` 响应
-struct AccountDeleteResponse: Decodable {
+nonisolated struct AccountDeleteResponse: Decodable {
     let deleted: Bool
     let userId: String
 
@@ -411,7 +411,7 @@ struct AccountDeleteResponse: Decodable {
 }
 
 /// `GET /api/v1/legal` 响应
-struct LegalResponse: Decodable {
+nonisolated struct LegalResponse: Decodable {
     let terms: String
     let privacy: String
     let updatedAt: String
@@ -423,7 +423,7 @@ struct LegalResponse: Decodable {
 }
 
 /// `POST /api/v1/auth/password` 响应
-struct ChangePasswordResponse: Decodable {
+nonisolated struct ChangePasswordResponse: Decodable {
     /// 改密码同时被撤销的"其他设备会话"数量；当前 token 不在内
     let revokedOtherSessions: Int
 

@@ -1,6 +1,6 @@
 import Foundation
 
-struct NotificationItem: Decodable, Identifiable, Sendable {
+nonisolated struct NotificationItem: Decodable, Identifiable, Sendable {
     let id: Int
     let createdAt: String
     let type: String
@@ -104,7 +104,10 @@ extension NotificationItem {
     ///
     /// 这是静态方法，decode 时由 ``init(from:)`` 调用一次存入 ``kind`` 存储属性，
     /// 之后所有 filter / group 操作都是 O(1) struct field read。
-    static func classifyKind(type: String, title: String, body: String) -> Kind {
+    ///
+    /// `nonisolated`：`init(from:)` 是 Decodable 的 nonisolated 见证，从那里
+    /// 调它。类型声明上的 `nonisolated` 盖不到 extension，得在这里单标。
+    nonisolated static func classifyKind(type: String, title: String, body: String) -> Kind {
         let t = type.lowercased().replacingOccurrences(of: "_", with: " ")
         let blob = "\(title) \(body)".lowercased()
 
@@ -143,24 +146,30 @@ extension NotificationItem {
     // 自 iOS 7 起对并发"解析/格式化"是线程安全的（只读不改 options），所以
     // 全局共享安全。注意：ISO 拆成两个（含/不含小数秒），避免运行时改
     // formatOptions（那会破坏共享）。
+    //
+    // `nonisolated`：SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor 会把这些
+    // static let 也推断成主 actor，而 parseCreatedDate 是 nonisolated
+    // （它服务于 Decodable 的 init(from:)），跨不过去。
+    // ISO8601DateFormatter 当前 SDK 尚未标 Sendable，单 nonisolated 不够，
+    // 用 (unsafe) —— 只读使用实际线程安全，理由同 ``ServerTime``。
 
-    fileprivate static let amsterdamTZ: TimeZone =
+    nonisolated fileprivate static let amsterdamTZ: TimeZone =
         TimeZone(identifier: "Europe/Amsterdam") ?? .current
 
-    private static let isoFractional: ISO8601DateFormatter = {
+    nonisolated(unsafe) private static let isoFractional: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f
     }()
 
-    private static let isoPlain: ISO8601DateFormatter = {
+    nonisolated(unsafe) private static let isoPlain: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime]
         return f
     }()
 
     /// 多格式兜底解析器（Europe/Amsterdam，en_US_POSIX 固定 locale）。
-    private static let fallbackParsers: [DateFormatter] = {
+    nonisolated private static let fallbackParsers: [DateFormatter] = {
         ["yyyy-MM-dd HH:mm:ss",
          "yyyy-MM-dd HH:mm",
          "yyyy-MM-dd'T'HH:mm:ss.SSS",
@@ -186,7 +195,8 @@ extension NotificationItem {
 
     /// 纯函数：解析 `createdAt` → Date。decode 时调一次，结果存进 ``parsedDate``。
     /// 用 Europe/Amsterdam 算相对年龄，避免本地时区漂移。
-    static func parseCreatedDate(_ createdAt: String) -> Date? {
+    /// `nonisolated` 的理由同 ``classifyKind(type:title:body:)``。
+    nonisolated static func parseCreatedDate(_ createdAt: String) -> Date? {
         let raw = createdAt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !raw.isEmpty else { return nil }
         if let d = isoFractional.date(from: raw) { return d }

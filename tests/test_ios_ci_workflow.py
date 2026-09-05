@@ -130,7 +130,11 @@ class TestWorkflow:
         return WORKFLOW.read_text(encoding="utf-8")
 
     def test_is_valid_yaml(self):
-        yaml = pytest.importorskip("yaml")
+        # 这里**不用** importorskip：缺 PyYAML 时它会安静跳过，而「ios.yml 是不是
+        # 合法 YAML」恰恰是这批测试里最该在 CI 上跑的一条——跳过等于没有。
+        # 依赖写在 requirements-dev.txt 里，装不上就该红。
+        import yaml
+
         assert yaml.safe_load(self._text())
 
     def test_pipefail_is_set(self):

@@ -17,7 +17,7 @@ struct LoginRequest: Encodable {
 
 // MARK: - Responses
 
-struct LoginResponse: Decodable {
+nonisolated struct LoginResponse: Decodable {
     let token: String
     let tokenID: Int
     let role: String
@@ -35,7 +35,7 @@ struct LoginResponse: Decodable {
     }
 }
 
-struct MeResponse: Decodable {
+nonisolated struct MeResponse: Decodable {
     let role: String
     let userID: String?
     let user: UserInfo?

@@ -52,10 +52,20 @@ jobs:
 
       # tests/ 下那几个 pytest 是对**仓库文件**的检查（pbxproj 的版本号与语言
       # 模式、AppIcon 的深色图标、截图上传前的体检、CI 配置本身），不需要模拟器。
-      # 它们此前一次都没在 CI 里跑过——44 条测试只在本地手跑时才有意义，而
+      # 它们此前一次都没在 CI 里跑过——40 多条测试只在本地手跑时才有意义，而
       # 「没人跑的测试」和「没有测试」是一回事。放在模拟器那一步之前，秒级失败。
+      #
+      # 必须建 venv：runner 上是 Homebrew 的 python3，自带 pytest 的概率为零
+      # （第一次加这步就撞上 "No module named pytest"），而直接 pip install
+      # 会被 PEP 668 的 externally-managed-environment 挡回来。
+      #
+      # pytest 在一条用例都没收集到时退出码是 5，同样会让这步失败——和下面
+      # 那条 "Assert tests actually ran" 是同一个判据：绿色必须有产出背书。
       - name: Run repo checks (pytest)
-        run: python3 -m pytest tests -q
+        run: |
+          python3 -m venv .ci-venv
+          .ci-venv/bin/pip install --quiet --disable-pip-version-check -r requirements-dev.txt
+          .ci-venv/bin/pytest tests -q
 
       # 不写死 "iPhone 16" 之类的名字：GitHub 换镜像时那个型号可能就没了，
       # 而报错是 "no destinations"，看上去像项目坏了。挑选逻辑在

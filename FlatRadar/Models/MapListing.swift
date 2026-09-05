@@ -77,7 +77,7 @@ nonisolated struct MapListing: Decodable, Identifiable, Hashable, Sendable {
 }
 
 /// `GET /api/v1/map` 响应包络。
-struct MapResponse: Decodable, Sendable {
+nonisolated struct MapResponse: Decodable, Sendable {
     let listings: [MapListing]
     let uncached: Int
 }
@@ -87,7 +87,7 @@ struct MapResponse: Decodable, Sendable {
 /// 三种「看不到」必须分开报——合并成一句「没找到」的话，「等管理员解析地址」
 /// 「这个链接作废了」「改一下筛选就能看到」在界面上长得一模一样，而用户能做的
 /// 事完全不同。
-struct MapLocateResult: Decodable, Sendable {
+nonisolated struct MapLocateResult: Decodable, Sendable {
     let ok: Bool
     let reason: String?
     let listing: MapListing?

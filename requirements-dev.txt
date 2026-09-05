@@ -1,3 +1,8 @@
-# scripts/ 下那几个 Python 工具的测试依赖。
-# 它们本身只用标准库——保持这样，CI 的 macOS runner 才不必额外装东西。
+# tests/ 与 tools/ 的依赖。
+#
+# 「只用标准库」那句话曾经是真的，但 tools/asc/ 从后端仓库搬过来之后就不是了：
+# asc_screenshots.py 要 PyJWT 签 App Store Connect 的 ES256 token。CI 里第一次
+# 跑 pytest 时，9 条测试直接 ModuleNotFoundError: No module named 'jwt'。
 pytest>=8.0
+PyJWT>=2.8      # tools/asc/asc_api.py：ASC 的 ES256 JWT
+PyYAML>=6.0     # tests/test_ios_ci_workflow.py：解析 ios.yml 本身

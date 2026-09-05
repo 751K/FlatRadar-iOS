@@ -1,6 +1,6 @@
 import Foundation
 
-struct Listing: Decodable, Identifiable, Hashable, Sendable {
+nonisolated struct Listing: Decodable, Identifiable, Hashable, Sendable {
     let id: String
     let name: String
     let status: String
@@ -290,7 +290,11 @@ extension Listing {
     }
 
     /// static：与实例无关的纯函数，供 init 预归一化键 + featureValue 归一化别名共用。
-    static func normalizeFeatureKey(_ key: String) -> String {
+    ///
+    /// `nonisolated`：`init(from:)` 见证的是 Decodable 的 nonisolated 要求，
+    /// 从那里调一个（被默认隔离推断成）主 actor 的函数，Swift 6 下是错误。
+    /// 类型声明上的 `nonisolated` 盖不到 extension，所以这里要单标一次。
+    nonisolated static func normalizeFeatureKey(_ key: String) -> String {
         key
             .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
             .replacingOccurrences(of: "_", with: " ")

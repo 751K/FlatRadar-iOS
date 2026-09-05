@@ -7,7 +7,7 @@ import Foundation
 /// CalendarListing 是日历专用 DTO：必含非空 ``availableFrom``（后端 SQL 已
 /// `WHERE available_from IS NOT NULL AND != ''`），其它字段稀疏。点击进
 /// 详情时走 ``ListingRoute.byId`` 让 ``ListingDetailView`` 自己 fetch 全字段。
-struct CalendarListing: Decodable, Identifiable, Hashable, Sendable {
+nonisolated struct CalendarListing: Decodable, Identifiable, Hashable, Sendable {
     let id: String
     let name: String
     let status: String
@@ -44,6 +44,6 @@ struct CalendarListing: Decodable, Identifiable, Hashable, Sendable {
     }()
 }
 
-struct CalendarResponse: Decodable, Sendable {
+nonisolated struct CalendarResponse: Decodable, Sendable {
     let listings: [CalendarListing]
 }

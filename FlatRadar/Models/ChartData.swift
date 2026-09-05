@@ -4,7 +4,7 @@ import Foundation
 typealias ChartKeysResponse = [String]
 
 /// From GET /stats/public/charts/<key>
-struct ChartData: Decodable, Sendable {
+nonisolated struct ChartData: Decodable, Sendable {
     let key: String
     let days: Int
     let data: [ChartEntry]
@@ -22,7 +22,7 @@ struct ChartData: Decodable, Sendable {
 ///   / type_dist / energy_dist → ``label``
 ///
 /// 这里用动态 key 解码：除 ``count`` 外，第一个字符串值就是 ``label``。
-struct ChartEntry: Decodable, Identifiable, Sendable {
+nonisolated struct ChartEntry: Decodable, Identifiable, Sendable {
     let label: String
     let count: Int
 

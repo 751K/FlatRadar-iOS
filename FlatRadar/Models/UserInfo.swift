@@ -1,7 +1,7 @@
 import Foundation
 
 /// From /auth/me -> user field (null for admin)
-struct UserInfo: Decodable, Sendable {
+nonisolated struct UserInfo: Decodable, Sendable {
     let id: String
     let name: String
     let enabled: Bool
