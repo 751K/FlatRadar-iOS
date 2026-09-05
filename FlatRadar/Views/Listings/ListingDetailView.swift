@@ -217,7 +217,7 @@ struct ListingDetailView: View {
                 if !primaryDetails(for: listing).isEmpty {
                     DetailSection(title: "Key Details") {
                         ForEach(primaryDetails(for: listing), id: \.title) { item in
-                            LabeledContent(item.title, value: item.value)
+                            DetailRow(label: item.title, value: item.value)
                         }
                     }
                 }
@@ -225,7 +225,7 @@ struct ListingDetailView: View {
                 if !secondaryDetails(for: listing).isEmpty {
                     DetailSection(title: "All Details") {
                         ForEach(secondaryDetails(for: listing), id: \.key) { key, value in
-                            LabeledContent(displayKey(key), value: displayValue(value))
+                            DetailRow(label: displayKey(key), value: displayValue(value))
                                 // 地址是这一屏唯一会被拷去别处用的东西（发给中介、
                                 // 贴进别的地图、查通勤）。长按复制。
                                 //
@@ -252,10 +252,10 @@ struct ListingDetailView: View {
                 if listing.firstSeen != nil || listing.lastSeen != nil {
                     DetailSection(title: "Monitoring") {
                         if let first = listing.firstSeen {
-                            LabeledContent("First seen", value: ServerTime.display(first))
+                            DetailRow(label: "First seen", value: ServerTime.display(first))
                         }
                         if let last = listing.lastSeen {
-                            LabeledContent("Last seen", value: ServerTime.display(last))
+                            DetailRow(label: "Last seen", value: ServerTime.display(last))
                         }
                     }
                 }
@@ -416,7 +416,42 @@ private struct DetailMetricCard: View {
     }
 }
 
+/// 详情页的一行「标签 + 值」。
+///
+/// 窄屏沿用 `LabeledContent`——标签贴左、值贴右，这是 iOS 上表单行的标准长相，
+/// 在 350pt 宽里两端离得很近，读起来没问题。
+///
+/// 宽屏改成**标签在上、值在下**。原因是横向铺开之后 `LabeledContent` 的两端会被
+/// 拉到很远：一行「Area ……………… 26 m²」中间空一大片，排成两列之后一行里有四个
+/// 锚点散在屏幕上，视线得先横扫再往下跳。竖着叠之后标签和值紧挨着，只剩一个
+/// 从上往下的方向，而且每格需要的宽度小了，同样的宽度能排下更多列。
+private struct DetailRow: View {
+    @Environment(\.horizontalSizeClass) private var hSizeClass
+
+    let label: String
+    let value: String
+
+    var body: some View {
+        if hSizeClass == .regular {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(label)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(value)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            LabeledContent(label, value: value)
+        }
+    }
+}
+
 private struct DetailSection<Content: View>: View {
+    /// 卡片实测宽度，由 onGeometryChange 填。0 时按单列排（首帧）。
+    @State private var width: CGFloat = 0
+
     let title: String
     let content: Content
 
@@ -429,13 +464,30 @@ private struct DetailSection<Content: View>: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
                 .font(.headline)
-            VStack(alignment: .leading, spacing: 8) {
+            // LazyVGrid 而不是 VStack：单列时两者等价（列数为 1、间距同样是 8），
+            // 宽屏时同一份 content 自动排成两列，四个用到 DetailSection 的区块
+            // （Key Details / All Details / Monitoring / Features）一起受益。
+            LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
                 content
             }
             .font(.subheadline)
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
             .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
+    }
+
+    /// 列数按**实测宽度**分档，不看 size class。
+    ///
+    /// iPad 竖屏和横屏都是 regular，但宽度差着近一倍（~790 / ~1465）；只看 size
+    /// class 的话两者列数一样，横屏要么太空、要么竖屏挤。
+    ///
+    /// 配合 `DetailRow` 的竖排：每格只要装得下标签和值本身，不再需要为「两端顶开」
+    /// 留一段空白，所以同样的宽度排得下更多列。
+    private var columns: [GridItem] {
+        let count = if width >= 1_200 { 3 } else if width >= 620 { 2 } else { 1 }
+        return Array(repeating: GridItem(.flexible(), spacing: 20, alignment: .leading),
+                     count: count)
     }
 }
