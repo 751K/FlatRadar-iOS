@@ -13,10 +13,26 @@
 # 本地那条路（tools/screenshots/run.sh）一直是这么做的，只是它自己管启动；
 # 云端这份把同样的事挪到 xcodebuild 之前。
 #
-# ⚠️ 尚未验证：xcodebuild 做并行测试时会**克隆**模拟器（产物文件名里见过
-# `Clone-2-of-…` 前缀，extract_screenshots.py 的注释里记着），而克隆出来的设备
-# 会不会继承状态栏覆盖，我没有证据。第一次跑完看截图上的时间就知道了：
-# 是 9:41 就成了，还是真实时间就说明这条路不通，得换成导出后再处理图片。
+# 覆盖是**持久化在设备上的**，跨重启还在（本地那条路末尾专门有一句
+# `status_bar clear` 去清它，正说明这一点）。所以设完就**关机**，把设备按它原本
+# 的状态交回给 xcodebuild，让它走自己的启动路径——我们只留下一份状态栏配置，
+# 不改变别的任何东西。
+#
+# 这不是在修某个已知故障，是少留一个变量：把一台**正在运行**的模拟器交给
+# xcodebuild（它做并行测试时还会克隆，产物文件名里见过 `Clone-2-of-…`）本来就是
+# 一种不常见的状态，而 9:41 完全不需要它。
+#
+# 记一下已经查清的两次失败，免得以后又怀疑到这个脚本头上：
+#
+#     293  无此脚本      11 分钟，70 张全过
+#     295  iPad 全挂     `.sidebarAdaptable` 横屏默认展开侧边栏，tab 不再是
+#                        button，截图套件找不到 —— 已由 defaultAdaptableTabBarPlacement 修掉
+#     299  iPhone 部分挂 后端在那个时间段不可用。失败录屏里登录页三个统计胶囊是
+#                        `0 live` / `-- ago` / `0 new today`，那几个数来自
+#                        /api/v1/stats/public/summary —— 全零就是没拿到数据，
+#                        App 自然停在登录页
+#
+# 两次都不是这个脚本引起的。9:41 本身在 295 的产物里已经验证生效。
 #
 # 这个脚本**绝不能让构建失败**：状态栏好不好看是锦上添花，为它挂掉整条流水线
 # 是本末倒置。所以每一步都吞掉错误，最后无条件 exit 0。
@@ -55,17 +71,22 @@ for runtime, devices in data.get('devices', {}).items():
   echo "› [status-bar] $name ($udid)"
   xcrun simctl boot "$udid" 2>/dev/null || true
   xcrun simctl bootstatus "$udid" -b >/dev/null 2>&1 || true
-  xcrun simctl status_bar "$udid" override \
-    --time "9:41" \
-    --dataNetwork wifi \
-    --wifiMode active \
-    --wifiBars 3 \
-    --cellularMode active \
-    --cellularBars 4 \
-    --batteryState charged \
-    --batteryLevel 100 2>/dev/null \
-    && echo "› [status-bar]   已覆盖" \
-    || echo "› [status-bar]   覆盖失败（不影响构建）"
+  if xcrun simctl status_bar "$udid" override \
+      --time "9:41" \
+      --dataNetwork wifi \
+      --wifiMode active \
+      --wifiBars 3 \
+      --cellularMode active \
+      --cellularBars 4 \
+      --batteryState charged \
+      --batteryLevel 100 2>/dev/null; then
+    echo "› [status-bar]   已覆盖"
+  else
+    echo "› [status-bar]   覆盖失败（不影响构建）"
+  fi
+
+  # 关机。覆盖留在设备上，xcodebuild 待会按自己的流程重新启动。
+  xcrun simctl shutdown "$udid" 2>/dev/null || true
 done
 
 exit 0
