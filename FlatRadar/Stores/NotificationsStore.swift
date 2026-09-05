@@ -53,8 +53,11 @@ final class NotificationsStore {
             unreadCount = resp.unread
             revision &+= 1
         } catch {
-            lastError = error as? APIError
-            errorMessage = error.localizedDescription
+            // 被取消不是失败——见 Error.isCancellation。
+            if !error.isCancellation {
+                lastError = error as? APIError
+                errorMessage = error.localizedDescription
+            }
         }
         // 关键：首屏一拿到第 1 页就结束 loading，立刻渲染。
         // "把所有未读页都补齐"放到后台非阻塞执行——之前 await 在这里，

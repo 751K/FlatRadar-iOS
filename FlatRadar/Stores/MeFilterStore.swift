@@ -33,7 +33,10 @@ final class MeFilterStore {
             lastResponse = resp
             return resp
         } catch {
-            errorMessage = error.localizedDescription
+            // 被取消不是失败——见 Error.isCancellation。
+            if !error.isCancellation {
+                errorMessage = error.localizedDescription
+            }
             #if DEBUG
             print("[MeFilterStore] save error: \(error)")
             #endif

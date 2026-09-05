@@ -156,6 +156,9 @@ final class AuthStore {
     ///
     /// 现在错误条 = 后端给的人话 message，登录/注册失败用户能立即知道为什么。
     private func recordError(_ error: Error) {
+        // 被取消不是失败——见 Error.isCancellation。登录 / 注册 / 改密 / 注销
+        // 五处 catch 都汇到这里，拦在这一处就够。
+        guard !error.isCancellation else { return }
         let api = error as? APIError
         lastError = api
         errorMessage = api?.failureReason ?? error.localizedDescription

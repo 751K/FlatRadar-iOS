@@ -33,7 +33,8 @@ final class AdminStore {
             let resp = try await client.adminListUsers()
             users = resp.items
         } catch {
-            errorMessage = error.localizedDescription
+            // 被取消不是失败——见 Error.isCancellation。
+            if !error.isCancellation { errorMessage = error.localizedDescription }
             #if DEBUG
             print("[AdminStore] fetchUsers error: \(error)")
             #endif
@@ -49,7 +50,7 @@ final class AdminStore {
             _ = try await client.adminToggleUser(id: id)
             await fetchUsers()
         } catch {
-            errorMessage = error.localizedDescription
+            if !error.isCancellation { errorMessage = error.localizedDescription }
         }
     }
 
@@ -60,7 +61,7 @@ final class AdminStore {
             _ = try await client.adminDeleteUser(id: id)
             users.removeAll { $0.id == id }
         } catch {
-            errorMessage = error.localizedDescription
+            if !error.isCancellation { errorMessage = error.localizedDescription }
         }
     }
 
@@ -74,7 +75,7 @@ final class AdminStore {
         do {
             monitorStatus = try await client.adminMonitorStatus()
         } catch {
-            errorMessage = error.localizedDescription
+            if !error.isCancellation { errorMessage = error.localizedDescription }
             #if DEBUG
             print("[AdminStore] fetchMonitorStatus error: \(error)")
             #endif
@@ -92,7 +93,7 @@ final class AdminStore {
             try? await Task.sleep(nanoseconds: 600_000_000)
             await fetchMonitorStatus()
         } catch {
-            errorMessage = error.localizedDescription
+            if !error.isCancellation { errorMessage = error.localizedDescription }
         }
     }
 

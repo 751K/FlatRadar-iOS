@@ -61,8 +61,11 @@ final class ListingsStore {
             lastUpdated = Date()
         } catch {
             guard myGen == fetchGeneration else { return }
-            lastError = error as? APIError
-            errorMessage = error.localizedDescription
+            // 被取消不是失败——见 Error.isCancellation。
+            if !error.isCancellation {
+                lastError = error as? APIError
+                errorMessage = error.localizedDescription
+            }
         }
         if myGen == fetchGeneration { isLoading = false }
     }

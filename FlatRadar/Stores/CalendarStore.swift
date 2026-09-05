@@ -33,8 +33,11 @@ final class CalendarStore {
             listings = resp.listings
             listingsByDay = Dictionary(grouping: listings, by: \.dayKey)
         } catch {
-            lastError = error as? APIError
-            errorMessage = error.localizedDescription
+            // 被取消不是失败——见 Error.isCancellation。
+            if !error.isCancellation {
+                lastError = error as? APIError
+                errorMessage = error.localizedDescription
+            }
             #if DEBUG
             print("[CalendarStore] fetch error: \(error)")
             #endif

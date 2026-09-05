@@ -213,8 +213,11 @@ final class MapStore {
             listings = resp.listings
             uncached = resp.uncached
         } catch {
-            lastError = error as? APIError
-            errorMessage = error.localizedDescription
+            // 被取消不是失败——见 Error.isCancellation。
+            if !error.isCancellation {
+                lastError = error as? APIError
+                errorMessage = error.localizedDescription
+            }
             #if DEBUG
             print("[MapStore] fetch error: \(error)")
             #endif

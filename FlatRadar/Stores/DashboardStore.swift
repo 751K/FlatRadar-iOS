@@ -32,6 +32,9 @@ final class DashboardStore {
                 #if DEBUG
                 print("[DashboardStore] fetchSummary attempt \(attempt + 1) failed: \(error.localizedDescription)")
                 #endif
+                // 被取消不是失败，而且重试也一定是取消——`defer` 会收掉
+                // isLoading，直接退出。见 Error.isCancellation。
+                if error.isCancellation { return }
                 if attempt == 1 {
                     lastError = error as? APIError
                     errorMessage = error.localizedDescription
