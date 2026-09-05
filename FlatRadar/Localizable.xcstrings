@@ -4337,6 +4337,7 @@
       }
     },
     "First seen" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -5004,6 +5005,7 @@
       }
     },
     "Last seen" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
