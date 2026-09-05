@@ -30,11 +30,7 @@ struct MainTabView: View {
             let useCompactTabs = shouldUseCompactTabs(width: proxy.size.width)
 
             ZStack {
-                if useCompactTabs {
-                    compactTabView
-                } else {
-                    wideTabView
-                }
+                tabView(compact: useCompactTabs)
                 keyboardShortcuts(compact: useCompactTabs)
             }
             .toolbarBackground(.ultraThinMaterial, for: .tabBar)
@@ -51,72 +47,97 @@ struct MainTabView: View {
         }
     }
 
-    // MARK: - iPhone: 4 tabs, Browse 内含 segmented picker
+    // MARK: - Tabs
 
-    private var compactTabView: some View {
-        TabView(selection: tab) {
+    /// 一份 tab 定义，两套形态。
+    ///
+    /// 以前是 `compactTabView` / `wideTabView` 两个各自完整的 TabView，靠
+    /// `if useCompactTabs` 二选一。iOS 18 的 `TabContent.hidden(_:)` 让同一个
+    /// TabView 能同时装下两套 tab 集合，按需隐藏其中几个——Dashboard / Alerts /
+    /// Settings 这三个原本要写两遍的，现在只写一遍。
+    ///
+    /// 判据仍然是**宽度**而不是 horizontal size class。Apple 文档里的等价例子用的
+    /// 是 size class，但那对这个 App 是错的：iPad 的 Stage Manager / Split View
+    /// 会在窗口已经窄到放不下六个 tab 时仍然报 regular。见 `shouldUseCompactTabs`。
+    ///
+    /// `accessibilityIdentifier` 现在挂在 **tab 自己**身上（`TabContent` 的修饰符），
+    /// 不再是 `.tabItem { Label(…).accessibilityIdentifier(…) }`。旧写法在 iPhone 上
+    /// 会被 UITabBar 吞掉——build 265 实测 `id=""`，而 iPad 那边是好的，
+    /// ScreenshotTests 至今为此分设备写两条查询路径。新 API 把 identifier 提到了
+    /// tab 层级，**有可能**把这个差异抹平；能不能真抹平要跑一次截图套件才知道。
+    @TabContentBuilder<AppTab>
+    private func tabs(compact: Bool) -> some TabContent<AppTab> {
+        Tab(value: AppTab.dashboard) {
             DashboardView()
-                .tabItem { Label("Dashboard", systemImage: "chart.bar.fill")
-                    .accessibilityIdentifier("tab-dashboard") }
-                .tag(AppTab.dashboard)
-
-            BrowseView()
-                .tabItem { Label("Browse", systemImage: "square.grid.2x2.fill")
-                    .accessibilityIdentifier("tab-browse") }
-                .tag(AppTab.browse)
-
-            if auth.role == .user || auth.role == .admin {
-                NotificationsView()
-                    .tabItem { Label("Alerts", systemImage: "bell.fill")
-                    .accessibilityIdentifier("tab-alerts") }
-                    .modifier(AlertsTabBadge())
-                    .tag(AppTab.notifications)
-            }
-
-            SettingsView()
-                .tabItem { Label("Settings", systemImage: "gear")
-                    .accessibilityIdentifier("tab-settings") }
-                .tag(AppTab.settings)
+        } label: {
+            Label("Dashboard", systemImage: "chart.bar.fill")
         }
+        .accessibilityIdentifier("tab-dashboard")
+
+        // 窄：List / Map / Calendar 收进 Browse 里的 segmented picker
+        Tab(value: AppTab.browse) {
+            BrowseView()
+        } label: {
+            Label("Browse", systemImage: "square.grid.2x2.fill")
+        }
+        .accessibilityIdentifier("tab-browse")
+        .hidden(!compact)
+
+        // 宽：三个展开成独立 tab。用 TabSection 分组——sidebarAdaptable 下
+        // 侧边栏里会显示 "Browse" 这个分组标题，比六个平铺的 tab 好读。
+        TabSection("Browse") {
+            Tab(value: AppTab.listings) {
+                listingsTab
+            } label: {
+                Label("Listings", systemImage: "list.bullet")
+            }
+            .accessibilityIdentifier("tab-listings")
+
+            Tab(value: AppTab.map) {
+                mapTab
+            } label: {
+                Label("Map", systemImage: "map.fill")
+            }
+            .accessibilityIdentifier("tab-map")
+
+            Tab(value: AppTab.calendar) {
+                calendarTab
+            } label: {
+                Label("Calendar", systemImage: "calendar")
+            }
+            .accessibilityIdentifier("tab-calendar")
+        }
+        .hidden(compact)
+
+        if auth.role == .user || auth.role == .admin {
+            Tab(value: AppTab.notifications) {
+                // badge 仍然挂在**内容视图**上，和迁移前一模一样。
+                // 不写成 `.badge(notifStore.unreadCount)`：那要在这里读 store，
+                // 而 AlertsTabBadge 存在的全部理由就是不让 unreadCount 的变化
+                // 打到 MainTabView.body 上（见文件顶部注释）。TabContent 没有
+                // 对应的 modifier 协议，所以保持原样是唯一不破坏隔离的写法。
+                NotificationsView()
+                    .modifier(AlertsTabBadge())
+            } label: {
+                Label("Alerts", systemImage: "bell.fill")
+            }
+            .accessibilityIdentifier("tab-alerts")
+        }
+
+        Tab(value: AppTab.settings) {
+            SettingsView()
+        } label: {
+            Label("Settings", systemImage: "gear")
+        }
+        .accessibilityIdentifier("tab-settings")
     }
 
-    // MARK: - iPad: 6 tabs，List/Map/Calendar 直接展开
-
-    private var wideTabView: some View {
+    private func tabView(compact: Bool) -> some View {
         TabView(selection: tab) {
-            DashboardView()
-                .tabItem { Label("Dashboard", systemImage: "chart.bar.fill")
-                    .accessibilityIdentifier("tab-dashboard") }
-                .tag(AppTab.dashboard)
-
-            listingsTab
-                .tabItem { Label("Listings", systemImage: "list.bullet")
-                    .accessibilityIdentifier("tab-listings") }
-                .tag(AppTab.listings)
-
-            mapTab
-                .tabItem { Label("Map", systemImage: "map.fill")
-                    .accessibilityIdentifier("tab-map") }
-                .tag(AppTab.map)
-
-            calendarTab
-                .tabItem { Label("Calendar", systemImage: "calendar")
-                    .accessibilityIdentifier("tab-calendar") }
-                .tag(AppTab.calendar)
-
-            if auth.role == .user || auth.role == .admin {
-                NotificationsView()
-                    .tabItem { Label("Alerts", systemImage: "bell.fill")
-                    .accessibilityIdentifier("tab-alerts") }
-                    .modifier(AlertsTabBadge())
-                    .tag(AppTab.notifications)
-            }
-
-            SettingsView()
-                .tabItem { Label("Settings", systemImage: "gear")
-                    .accessibilityIdentifier("tab-settings") }
-                .tag(AppTab.settings)
+            tabs(compact: compact)
         }
+        // iPhone 底部 tab bar 不变；iPad 变成顶部 tab bar，横屏可展开成侧边栏。
+        .tabViewStyle(.sidebarAdaptable)
     }
 
     // MARK: - iPad tab content
