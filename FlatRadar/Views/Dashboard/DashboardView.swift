@@ -1214,7 +1214,11 @@ struct ScaleButtonStyle: ButtonStyle {
 ///
 /// `closed` 用来复用同一条曲线画填充：曲线本身必须两处完全一致，各画一遍迟早
 /// 分叉，填充和描边就会错开一条缝。
-private struct Sparkline: Shape {
+// `nonisolated`：`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` 会把这个类型也放到
+// 主 actor 上，而 `Shape.path(in:)` 是 nonisolated 的要求——Xcode 27 起这条
+// 不匹配从警告升级成错误（#ConformanceIsolation）。路径计算是纯函数，不碰任何
+// 状态，显式退出隔离即可。同 ChartData / MapClustering 那一批。
+private nonisolated struct Sparkline: Shape {
     let data: [Int]
     var closed: Bool = false
 

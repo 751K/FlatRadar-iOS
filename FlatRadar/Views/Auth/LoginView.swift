@@ -825,7 +825,11 @@ struct LoginView: View {
 
 // MARK: - Mountain path shape
 
-private struct MountainPath: Shape {
+// `nonisolated`：`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` 会把这个类型也放到
+// 主 actor 上，而 `Shape.path(in:)` 是 nonisolated 的要求——Xcode 27 起这条
+// 不匹配从警告升级成错误（#ConformanceIsolation）。路径计算是纯函数，不碰任何
+// 状态，显式退出隔离即可。同 ChartData / MapClustering 那一批。
+private nonisolated struct MountainPath: Shape {
     let points: [(CGFloat, CGFloat)]
 
     func path(in rect: CGRect) -> Path {
