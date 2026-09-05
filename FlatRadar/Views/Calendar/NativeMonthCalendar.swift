@@ -192,6 +192,8 @@ struct NativeMonthCalendar: UIViewRepresentable {
                 calendarView.topAnchor.constraint(equalTo: topAnchor),
                 calendarView.bottomAnchor.constraint(equalTo: bottomAnchor),
             ])
+
+            registerForContentSizeChanges()
         }
 
         @available(*, unavailable)
@@ -224,15 +226,20 @@ struct NativeMonthCalendar: UIViewRepresentable {
         }
         private var attemptedRetry = false
 
-        override func traitCollectionDidChange(_ previous: UITraitCollection?) {
-            super.traitCollectionDidChange(previous)
-            // 字号变了网格上限也会变，重新量。
-            if previous?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory {
-                measurement = .pending
-                attemptedRetry = false
-                widthLimit.isActive = false
-                invalidateIntrinsicContentSize()
-                setNeedsLayout()
+        /// 字号变了网格上限也会变，重新量一遍。
+        ///
+        /// 用 `registerForTraitChanges` 而不是 `traitCollectionDidChange`——后者
+        /// iOS 17 就废弃了，而这个工程最低版本是 18。注册式的写法还省掉了原来
+        /// 那句手写的「这次变的是不是 contentSizeCategory」判断：注册时点名了
+        /// 是哪个 trait，回调只在它真的变了时才来。
+        private func registerForContentSizeChanges() {
+            registerForTraitChanges([UITraitPreferredContentSizeCategory.self]) {
+                (container: ClippingContainer, _: UITraitCollection) in
+                container.measurement = .pending
+                container.attemptedRetry = false
+                container.widthLimit.isActive = false
+                container.invalidateIntrinsicContentSize()
+                container.setNeedsLayout()
             }
         }
 

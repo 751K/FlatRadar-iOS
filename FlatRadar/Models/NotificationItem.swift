@@ -184,7 +184,7 @@ extension NotificationItem {
     }()
 
     /// "超过一周"时显示的具体日期（"MMM d"，跟随系统 locale）。
-    nonisolated(unsafe) private static let shortDateFormatter: DateFormatter = {
+    nonisolated private static let shortDateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)
         f.locale = .autoupdatingCurrent
@@ -227,7 +227,7 @@ extension NotificationItem {
         case today, yesterday, earlier
     }
 
-    nonisolated(unsafe) private static let amsterdamCalendar: Calendar = {
+    nonisolated private static let amsterdamCalendar: Calendar = {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = amsterdamTZ
         return cal

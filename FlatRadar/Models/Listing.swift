@@ -68,7 +68,7 @@ extension Listing {
     /// 解读，避免在做 "now() - first_seen" 计算时因为本地时区抖动出现 25h / -1h。
     nonisolated fileprivate static let amsterdamTZ: TimeZone = TimeZone(identifier: "Europe/Amsterdam") ?? .current
 
-    nonisolated(unsafe) private static let dateParser: DateFormatter = {
+    nonisolated private static let dateParser: DateFormatter = {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)
         f.locale = Locale(identifier: "en_US_POSIX")
@@ -77,7 +77,7 @@ extension Listing {
         return f
     }()
 
-    nonisolated(unsafe) private static let shortDateFormatter: DateFormatter = {
+    nonisolated private static let shortDateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)
         f.locale = .autoupdatingCurrent
@@ -92,7 +92,7 @@ extension Listing {
         return f
     }()
 
-    nonisolated(unsafe) private static let fallbackParsers: [DateFormatter] = {
+    nonisolated private static let fallbackParsers: [DateFormatter] = {
         let formats = [
             "yyyy-MM-dd HH:mm:ss",
             "yyyy-MM-dd HH:mm",

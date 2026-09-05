@@ -18,22 +18,30 @@
 import UIKit
 import XCTest
 
+/// `@MainActor` 标在**类**上，不是逐个方法上。
+///
+/// 原先只有 `testCapture*` 七个方法标了，helper（`launch` / `tabButton` /
+/// `buttonInventory` …）没标。这个 target 没开 `SWIFT_DEFAULT_ACTOR_ISOLATION`
+/// （那条只加在 app target 上），于是 helper 是 nonisolated 的，而它们碰的
+/// `XCUIApplication` / `XCUIElement` / `UIDevice.current` 全是主 actor 隔离的
+/// ——build 里九条并发警告都出自这里。整个类标一次就全消了。
+@MainActor
 final class ScreenshotTests: XCTestCase {
 
-    private var app: XCUIApplication!
+    /// 直接建，不在 `setUp` 里建、也不在 `tearDown` 里清。
+    ///
+    /// `setUpWithError` / `tearDownWithError` 是 XCTestCase 声明的 **nonisolated**
+    /// 方法，覆写时不能改成主 actor 隔离；而 `XCUIApplication` 的 init 和这个属性
+    /// 都是主 actor 隔离的，在那两个方法里碰它就会报并发警告。XCTestCase 本来就
+    /// 每个 test 方法新建一个实例，所以内联初始化和原来在 setUp 里建是同一回事。
+    private let app = XCUIApplication()
 
     override func setUpWithError() throws {
         continueAfterFailure = false
-        app = XCUIApplication()
-    }
-
-    override func tearDownWithError() throws {
-        app = nil
     }
 
     // MARK: - Captures
 
-    @MainActor
     func testCapture00_Login() throws {
         // UI_TEST_SHOW_LOGIN 阻止自动 guest，让 LoginView 留下
         launch(extra: ["UI_TEST_SHOW_LOGIN"])
@@ -53,7 +61,6 @@ final class ScreenshotTests: XCTestCase {
         snap(named: "00-Login")
     }
 
-    @MainActor
     func testCapture01_Dashboard() throws {
         launch(extra: ["UI_TEST_TAB=\(Tab.dashboard.launchName)"])
         waitForMainUI()
@@ -63,7 +70,6 @@ final class ScreenshotTests: XCTestCase {
         snap(named: "01-Dashboard")
     }
 
-    @MainActor
     func testCapture02_Listings() throws {
         let (args, tab) = browse("list", padTab: Tab.listings)
         launch(extra: args)
@@ -73,7 +79,6 @@ final class ScreenshotTests: XCTestCase {
         snap(named: "02-Listings")
     }
 
-    @MainActor
     func testCapture03_Map() throws {
         let (args, tab) = browse("map", padTab: Tab.map)
         launch(extra: args)
@@ -84,7 +89,6 @@ final class ScreenshotTests: XCTestCase {
         snap(named: "03-Map")
     }
 
-    @MainActor
     func testCapture04_Calendar() throws {
         let (args, tab) = browse("calendar", padTab: Tab.calendar)
         launch(extra: args)
@@ -94,7 +98,6 @@ final class ScreenshotTests: XCTestCase {
         snap(named: "04-Calendar")
     }
 
-    @MainActor
     func testCapture05_Notifications() throws {
         // 这一屏访客看不到——tab bar 里根本没有 Notifications。必须带凭据跑
         // （UI_TEST_USERNAME / UI_TEST_PASSWORD），否则下面的断言会直接失败，
@@ -114,7 +117,6 @@ final class ScreenshotTests: XCTestCase {
         snap(named: "05-Notifications")
     }
 
-    @MainActor
     func testCapture06_Settings() throws {
         launch(extra: ["UI_TEST_TAB=\(Tab.settings.launchName)"])
         waitForMainUI()
