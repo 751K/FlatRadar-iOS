@@ -137,6 +137,19 @@ struct NativeMonthCalendar: UIViewRepresentable {
     /// 实测量不出来（系统改了内部结构）时的兜底。取实测过的安全值：420 干净。
     static let fallbackMaxWidth: CGFloat = 420
 
+    /// 月网格在默认字号下的宽度：**391pt**（iPadOS 27 真机把视图层级打出来量的，
+    /// 见 afd7d85）。
+    ///
+    /// 给 SwiftUI 那边**排版**用，不是运行时生效的上限——真正生效的是
+    /// ``ClippingContainer`` 每次布局量出来的那个值。这里要的是反过来的一条：
+    /// **别把日历放进比它还窄的列里**。窄了的话容器的左右贴边约束会把日历压到
+    /// 容器宽度，网格溢出自身再被 `clipsToBounds` 切掉，右边几列日期就没了。
+    ///
+    /// 跟着 Dynamic Type 缩放：字号大网格也宽，下限得跟着抬。
+    static var nominalGridWidth: CGFloat {
+        UIFontMetrics.default.scaledValue(for: 391)
+    }
+
     /// 装 `UICalendarView` 的容器，负责量出月网格的最大宽度并把日历卡在那上面。
     ///
     /// 约束：上下贴边（必需）、水平居中（必需）、左右贴边（高优先级）、

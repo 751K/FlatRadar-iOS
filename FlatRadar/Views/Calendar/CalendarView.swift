@@ -57,33 +57,51 @@ struct CalendarView: View {
     /// 视图实测尺寸，用来判断横竖屏。
     @State private var size: CGSize = .zero
 
-    /// 横屏时把月历和当日房源左右分栏。
+    /// 把月历和当日房源左右分栏。
     ///
-    /// 竖排版本在竖屏下是对的，横屏下就不是：月历本身高度固定（约 350pt），
-    /// 横屏可用高度只有 393（iPhone）到 834（iPad），月历吃掉上半屏之后，
-    /// 当日房源那一列挤在下面一条缝里，而左右两侧大片空着。
+    /// 判据从「横屏」放宽成「放得下」
+    /// ------------------------------
+    /// 原来是 `width >= 700 && width > height`，只有横屏分栏。理由是横屏缺纵向
+    /// 空间：月历高度固定，吃掉上半屏之后当日房源挤在下面一条缝里。
     ///
-    /// 判据是**朝向**（宽 > 高）而不是绝对宽度：横屏下稀缺的是纵向空间，这跟
-    /// 屏幕多大无关，iPhone 横屏和 iPad 横屏是同一个问题。再加一个 700pt 的
-    /// 下限，保证分栏后每列还有 ~350pt 可用——iPad Split View 拖到一半时
-    /// （~570pt）分栏只会两边都挤。
-    private var isSideBySide: Bool { size.width >= 700 && size.width > size.height }
+    /// 但竖屏 iPad 是另一种浪费：月网格**宽度也是固定的**（默认字号 391pt，多给
+    /// 的只变成留白），所以 834 甚至 1024 的竖屏上，月历只占中间一小条，两侧
+    /// 大片空白，下面才是房源。分栏之后两边都用得上。
+    ///
+    /// 所以判据只剩「两列都放得下」：
+    ///
+    /// - 左栏 ≥ 网格宽 + 卡片左右留白（``calendarColumnFloor``）
+    /// - 右栏 ≥ 350pt，够放下一行「名字 + 地点 + 状态 + 价格」
+    ///
+    /// 默认字号下合计约 773pt。落点：iPhone 竖屏 393 不分栏、iPhone 横屏 852
+    /// 分栏（和以前一样）、iPad mini 竖屏 744 **不**分栏（分了右栏只剩 321pt）、
+    /// iPad 11 寸竖屏 834 和 13 寸竖屏 1024 分栏、Split View 半屏 570 不分栏。
+    private var isSideBySide: Bool { size.width >= calendarColumnFloor + 350 }
 
+    /// 左栏的下限：一整个月网格 + 卡片左右留白。
+    ///
+    /// 比这还窄的话月历不是缩小而是**被切掉**——见
+    /// ``NativeMonthCalendar/nominalGridWidth``。
+    private var calendarColumnFloor: CGFloat {
+        NativeMonthCalendar.nominalGridWidth + 2 * Self.cardHorizontalPadding
+    }
 
-    /// 分栏时月历占的宽度比例——月历 : 房源 = 2 : 3。
+    /// 分栏时左栏的宽度。
     ///
-    /// 月历那边是七列固定网格，宽度给多了只是把日期数字之间的空白拉开；房源那边
-    /// 是文字卡片，宽度直接换成每行能读到多少内容。所以该偏向房源。
+    /// 比例分两档：横屏 2:3（偏向房源），竖屏 1:1。竖屏给月历多一点是因为那边
+    /// 纵向不缺，两列等宽读起来最稳；横屏纵向紧张，房源列多拿一点能多显示一行。
     ///
-    /// 一开始给的是 3:2，偏向月历——理由是它是导航控件，点它才有右边。但月历
-    /// 拿到 500pt 以上的宽度并不会更好用：``UICalendarView`` 里那个月网格有**自己
-    /// 的最大宽度**，容器再宽，多出来的部分只会被分页滚动视图拿去露出相邻月份的
-    /// 日期（左右各几列灰数字）。所以宽度对月历是有上限收益的，对房源列不是。
-    ///
-    /// 一路收到过 1:2，那一档 iPhone 横屏只剩 ~250pt 画七列，偏挤。2:3 是回补
-    /// 的一档：iPhone 横屏 ~310pt（接近 iPhone 竖屏原本的月历宽度），iPad 横屏
-    /// 450–515pt。
-    private static let calendarWidthRatio: CGFloat = 2.0 / 5.0
+    /// 外面再套一个 ``calendarColumnFloor`` 的下限。这不是保守，是必需的：
+    /// 按比例算出来的值可能比网格还窄——iPhone 横屏 852×0.4 = 341，iPad mini
+    /// 竖屏 744×0.5 = 372，都不到 391。以前没这条，那两档其实是把月历切了一角，
+    /// 只是没人报过。
+    private var calendarColumnWidth: CGFloat {
+        let ratio: CGFloat = size.width > size.height ? 2.0 / 5.0 : 1.0 / 2.0
+        return max(size.width * ratio, calendarColumnFloor)
+    }
+
+    /// 月历卡的左右留白。左栏宽度要算进它，所以提成常量。
+    private static let cardHorizontalPadding: CGFloat = 16
 
     var body: some View {
         // 不再自带 NavigationStack；外层 BrowseView 提供。
@@ -97,7 +115,7 @@ struct CalendarView: View {
                     ScrollView {
                         calendarCard.padding(.vertical)
                     }
-                    .frame(width: size.width * Self.calendarWidthRatio)
+                    .frame(width: calendarColumnWidth)
 
                     Divider()
 
@@ -180,7 +198,7 @@ struct CalendarView: View {
         .background(Color(.secondarySystemGroupedBackground),
                     in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .frame(maxWidth: .infinity)   // 画完底再在列里居中
-        .padding(.horizontal, 16)
+        .padding(.horizontal, Self.cardHorizontalPadding)
     }
 
     /// 右栏（横屏）／下半部分（竖屏）：选中那天的房源，或者一句提示。
