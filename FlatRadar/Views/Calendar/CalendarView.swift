@@ -47,12 +47,21 @@ struct CalendarView: View {
         return c
     }()
 
-    /// 完整日期 "Wednesday, May 14, 2026"
+    /// 完整日期，跟随系统语言（en："Wednesday, May 14, 2026"，
+    /// zh-Hans："2026年5月14日星期三"）。
+    ///
+    /// **locale 是 `.autoupdatingCurrent`，不是 `en_US_POSIX`。** 原先锁的是
+    /// POSIX，于是右栏那行日期抬头在任何语言下都是英文——build 295 的中文截图
+    /// 里，一屏中文界面正中间戳着 "Monday, September 7, 2026"。
+    ///
+    /// `en_US_POSIX` 是给**解析**固定格式用的（保证 `dateFormat` 不被用户的
+    /// 区域设置改写），这个仓库里其余几处都是那种用法、都是对的；用在
+    /// `dateStyle` 这种**显示**形态上就成了「把界面钉死在英文」。
     private static let longDateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.calendar = cal
         f.timeZone = cal.timeZone
-        f.locale = Locale(identifier: "en_US_POSIX")
+        f.locale = .autoupdatingCurrent
         f.dateStyle = .full
         return f
     }()

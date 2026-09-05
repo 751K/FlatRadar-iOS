@@ -63,7 +63,34 @@ struct NativeMonthCalendar: UIViewRepresentable {
 
         if let range = availableRange {
             let interval = Self.monthSpan(range)
-            if view.availableDateRange != interval { view.availableDateRange = interval }
+            if view.availableDateRange != interval {
+                view.availableDateRange = interval
+                // **设范围会把可见月吸附到范围起点，而且那个吸附发生在这次调用
+                // 之后的布局里。**
+                //
+                // 所以同一轮里再设可见月是没用的——此刻读到的
+                // `visibleDateComponents` 还是吸附之前的值，我们会以为已经对了。
+                // build 295 的 iPhone 截图正卡在这上面：右栏抬头是
+                // "Monday, September 7, 2026"、"Today" 是禁用（anchor 在九月），
+                // 而网格显示的是 8 月——因为数据里最早的房源在 8 月，范围起点
+                // 就是 8 月 1 日。
+                //
+                // 上一轮我以为「选中某天会顺带滚到那个月」就够了（头文件那句
+                // "to be displayed in the calendar"），实测不够：吸附在它之后。
+                // 只能等布局跑完再拨回来。
+                //
+                // 只在**用户还没自己翻过月份**时拨（lastReportedMonth == nil），
+                // 否则一次刷新就会把他从正在看的月份拽走。
+                if context.coordinator.lastReportedMonth == nil {
+                    let wanted = Self.cal.dateComponents([.year, .month], from: visibleMonth)
+                    DispatchQueue.main.async { [weak view] in
+                        guard let view else { return }
+                        let now = view.visibleDateComponents
+                        guard now.year != wanted.year || now.month != wanted.month else { return }
+                        view.setVisibleDateComponents(wanted, animated: false)
+                    }
+                }
+            }
         }
 
         // **只响应外部发起的月份变化**（比如工具栏那个 Today 按钮），不要把用户
