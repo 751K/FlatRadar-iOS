@@ -13,6 +13,32 @@ Analytics——现有用户已经全部在 iOS 18 及以上。工程里六处 `I
 
 ---
 
+## 事后追记：2.1.0 实际变成了什么
+
+上面那三条是这份文档最初的全部内容。真正发生的事和它出入很大——2.1.0 已经是一个
+**「iPad 适配 + Xcode 27 迁移」**的版本，而这两件事一条都不在原计划里。
+
+已落地（按提交顺序）：
+
+- **Xcode 27 迁移**。两轮：`Shape` 的 conformance 隔离从警告升成错误；`Encodable`
+  DTO / 隐式合成的嵌套类型 / extension 成员共 50 处补 `nonisolated`——`833fb52`
+  那轮只做了 `Decodable` 那一半。测试 target 此前在 Xcode 27 下根本编不过。
+- **iOS 18 的 `Tab {}` builder**，iPad 换成 `sidebarAdaptable`。连带修了一个转屏
+  必崩的 bug（selection 指向隐藏 tab），修法是把 selection 改成派生值，配了
+  `FlatRadarTests/TabSelectionTests.swift` 守那条不变式。
+- **iPad 布局**：Dashboard 大数字卡排成一行 + Explore 三列、详情页标签在上值在下 +
+  三列、BrowseView 两套合一、地图控件按 HIG 档位分档、日历行留白。
+- **地图**：默认视野改 Amsterdam，弹卡档位改成按实测高度算。
+- **登录**：后端给的具体原因不再被通用标题吞掉（注册撞名只显示 "Conflict"）。
+
+这轮学到最贵的一课，写在 `MapLayout.ControlMetrics` 的注释里：**大屏多出来的空间，
+规范给的用法是放更多内容 / 分栏，不是把同样的东西印大。** 中途按设备把字号各放大
+一档，查 HIG 之后全撤了——iOS 和 iPadOS 共用同一套字阶，而"想要更大的字"是用户在
+系统设置里通过 Dynamic Type 表达的，按设备再加一档等于放大两次。分档只留给**尺寸
+和留白**：按钮直径走 Apple 的标准档位（Regular 44 / Large 52），留白可以自由加。
+
+---
+
 ## 1. 收集用户系统版本
 
 **状态：客户端已实现（2026-09-05），等后端落库。**
@@ -162,11 +188,72 @@ MKPointOfInterestCategory: .foodMarket, .school, .university,
 
 | | 状态 | 还差什么 |
 |---|---|---|
-| 1a. 系统版本上报 | **客户端已实现** | 后端落库 + spec 补 `os_version` 和 `language` |
-| 1b. 端上模型可用性上报 | 未做 | 要 iOS 26 SDK；等 1a 的管道验证过再加 |
+| 1a. 系统版本上报 | **客户端已实现并提交** | 全是后端的活：落库 + spec 补 `os_version` 和 `language` |
+| 1b. 端上模型可用性上报 | 未做 | 已不缺工具（Xcode 27 / iOS 27 SDK 在手），缺的是决定做不做 |
 | 2. AI 筛选 | 未做 | 等 1b 的数据——不知道多少人能用就没法判断值不值 |
-| 3. 地图 POI | 未做 | 无依赖，随时可做 |
+| 3. 地图 POI | **未做** | 无依赖，随时可做。**这是原计划里 iOS 这边唯一还欠的一条** |
+| — iPad 适配 | **大量已落地**（见上面追记） | 结构性的那半还没动，见下 |
+| — Xcode 27 迁移 | **已落地** | 无 |
+| — App 图标 | **诊断完成，未修** | 见下 |
 
-2.1.0 的现实范围是 **1a + 第 3 条**，1b 顺路，第 2 条本体留给 2.2.0——不是因为难，是因为数据回来之前没法判断它值不值。
+按原计划，2.1.0 在 iOS 这边只剩**第 3 条（地图 POI）**。1a 已经交出去等后端，
+第 2 条留给 2.2.0。但实际范围早就超出原计划了。
 
-一条贯穿的注意事项：写这些改动的那台机器**没装 Xcode**（只有 Command Line Tools），Swift 改动在本地既编不了也 typecheck 不了，唯一的验证是 GitHub Actions 上的 `ios.yml`。`tests/` 下的 pytest 能补一部分——比如 `test_encodable_dtos.py` 挡住「字段被 Encodable 安静丢掉」——但它替代不了编译器。在这种条件下改 Swift，宁可改得笨一点。
+## 两件悬着的事
+
+**一、App 图标：浅色和 tinted 烤了白圆角**
+
+三张变体里只有 `AppIcon-Dark.png` 是对的（满幅铺到边，四角 (17,28,46)→(28,78,126)
+跟渐变一致）。另外两张四角是**纯白 (255,255,255)**——圆角被烤进了 PNG，角外留白。
+系统本来会自己切圆角，等于切了两次，不做遮罩的场合（StoreKit 弹窗、App Store 页）
+直接看到白方角。
+
+浅色图标**不能带透明通道**（Apple 硬性要求），所以修法不是抠成透明，而是把背景
+渐变铺满整个 1024×1024、别烤圆角——`AppIcon-Dark.png` 现在就是这么做的。tinted
+那张还多一层问题：它该是**灰度**图（系统按用户选的颜色上色），现在是淡紫色且几乎
+没有对比度。
+
+为什么没被挡住：`tests/test_ios_dark_icon.py` 的 docstring 把这个失败模式写得很
+清楚（「四角会不会在系统切圆角后露出亮边」），但它**只测深色那一张**。同一个概念、
+同一份 PNG 解码器，浅色和 tinted 从来没进过测试范围。要么把测试扩到三张（写完会是
+红的，因为图确实坏了），要么先从设计源重新导出。
+
+**二、iPad 的结构性问题还没动**
+
+全 app **零个 `NavigationSplitView`**（29 处全是 `NavigationStack`）。横屏点一条
+房源，整块屏幕被详情页顶掉，左边的列表连同滚动位置一起消失；日历页月历占上面
+40%、下面空着大半屏。这一轮做的都是**同一列之内**的排版改进，没有动导航结构。
+
+真要做，代价是 `NavigationCoordinator` 的 `listingsPath: [ListingRoute]` 要从
+**路径模型**改成**选中模型**，而 deep link（`h2smonitor://listing/<id>`、推送点开）
+走的正是它——那是有真实用户在走的路径。这一步比这一轮做的任何一件都大。
+
+## 在这台机器上构建
+
+`xcode-select -p` 指向 `/Library/Developer/CommandLineTools`，`/Applications` 下也
+没有 Xcode.app，所以 `xcodebuild` 直接跑会报 "requires Xcode"。**别据此断定这台
+机器编不了**——Xcode 装在外置盘的一个 UUID 目录里：
+
+```bash
+export DEVELOPER_DIR=/Volumes/MacoutDsik/Applications/FE00CCDA-B55C-49E0-A6A9-D7E8A2E0A829/Xcode-beta.app/Contents/Developer
+xcodebuild build -project FlatRadar.xcodeproj -scheme FlatRadar \
+  -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO
+```
+
+`DEVELOPER_DIR` 是单条命令的临时覆盖，不用 sudo、不改系统设置。找它用
+`mdfind "kMDItemCFBundleIdentifier == 'com.apple.dt.Xcode'"`。
+
+两条约束：
+
+- **别传 `-derivedDataPath`。** 内置盘只剩约 5.6Gi，而工程已经把
+  `IDECustomDerivedDataLocation` 和 `SYMROOT` 都配在外置盘
+  （`/Volumes/MacoutDsik/Xcode/`）。指到别处会在内置盘上堆几百 MB。
+- **没装任何模拟器 runtime**，所以能编译（编译只要 SDK）但跑不了模拟器测试。
+  ⌘U 要跑的话，目标选 **My Mac (Designed for iPad)** 或真机——选模拟器一定失败。
+
+这个 Xcode 是 **beta（27.0）**。根 README 那条仍然成立：Apple 拒收 beta Xcode 打的
+包，出包走 Xcode Cloud 自己的工具链。beta 只用于本地验证和真机调试。
+
+`tests/` 下的 pytest 挡的是编译器看不见的那一类——字段被 Encodable 安静丢掉、
+tab identifier 两边写岔、README 和工程的最低版本漂移。它们和编译器互补，不互相
+替代。
