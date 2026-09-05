@@ -1,0 +1,76 @@
+{
+  "sourceLanguage" : "en",
+  "strings" : {
+    "NSFaceIDUsageDescription" : {
+      "comment" : "Face ID 权限弹窗。英文原文在 project.pbxproj 的 INFOPLIST_KEY_NSFaceIDUsageDescription 里，这里只放译文。",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Face ID lets you sign in to FlatRadar instantly without typing your password."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Face ID te permite iniciar sesión en FlatRadar al instante, sin escribir tu contraseña."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Met Face ID log je direct in op FlatRadar zonder je wachtwoord te typen."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用面容 ID 可以直接登录 FlatRadar，无需输入密码。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "使用 Face ID 可以直接登入 FlatRadar，不必輸入密碼。"
+          }
+        }
+      }
+    },
+    "NSLocationWhenInUseUsageDescription" : {
+      "comment" : "定位权限弹窗。英文原文在 project.pbxproj 的 INFOPLIST_KEY_NSLocationWhenInUseUsageDescription 里，这里只放译文。",
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "FlatRadar uses your location only to center the map near you."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "FlatRadar usa tu ubicación solo para centrar el mapa cerca de ti."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "FlatRadar gebruikt je locatie alleen om de kaart bij jou in de buurt te centreren."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "FlatRadar 仅使用你的位置来把地图移到你附近。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "FlatRadar 僅使用你的位置來把地圖移到你附近。"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

@@ -27,7 +27,16 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
-CATALOG = ROOT / "FlatRadar" / "Localizable.xcstrings"
+
+#: 所有字符串目录，不只 Localizable。
+#:
+#: `InfoPlist.xcstrings` 是 2026-09-06 补的：两条权限说明
+#: （NSFaceIDUsageDescription / NSLocationWhenInUseUsageDescription）此前只在
+#: project.pbxproj 的 INFOPLIST_KEY_* 里写着英文，**系统权限弹窗对所有语言都是
+#: 英文**。那个位置不经过任何目录，所以之前的扫描一次也没看见它。
+#:
+#: 用 glob 而不是写死两个文件名：以后再加目录（比如 widget 的）会自动纳入。
+CATALOGS = sorted((ROOT / "FlatRadar").rglob("*.xcstrings"))
 
 #: 这些 key 故意不翻译，不是漏了。
 #:
@@ -45,8 +54,8 @@ NOT_TRANSLATABLE = {
 }
 
 
-def _catalog() -> dict:
-    return json.loads(CATALOG.read_text())
+def _catalog(path: Path) -> dict:
+    return json.loads(path.read_text())
 
 
 def _target_languages(cat: dict) -> set[str]:
@@ -61,14 +70,23 @@ def _target_languages(cat: dict) -> set[str]:
     return langs - {cat.get("sourceLanguage", "en")}
 
 
-def test_catalog_is_valid_json():
-    cat = _catalog()
-    assert cat["strings"], "字符串目录是空的"
+def test_catalogs_exist():
+    names = {p.name for p in CATALOGS}
+    assert "Localizable.xcstrings" in names
+    assert "InfoPlist.xcstrings" in names, \
+        "InfoPlist.xcstrings 不见了——权限弹窗会退回英文"
+
+
+@pytest.mark.parametrize("path", CATALOGS, ids=lambda p: p.name)
+def test_catalog_is_valid_json(path):
+    cat = _catalog(path)
+    assert cat["strings"], f"{path.name} 是空的"
     assert cat.get("sourceLanguage") == "en"
 
 
-def test_every_user_facing_string_is_translated():
-    cat = _catalog()
+@pytest.mark.parametrize("path", CATALOGS, ids=lambda p: p.name)
+def test_every_user_facing_string_is_translated(path):
+    cat = _catalog(path)
     languages = _target_languages(cat)
     assert len(languages) >= 4, f"目标语言只有 {languages}，看着不对"
 
@@ -86,7 +104,7 @@ def test_every_user_facing_string_is_translated():
         if gap:
             missing[key] = gap
 
-    assert not missing, "以下文案缺译文（补进 Localizable.xcstrings，或加入 " \
+    assert not missing, f"{path.name} 里以下文案缺译文（补上，或加入 " \
         "NOT_TRANSLATABLE 白名单）：\n" + "\n".join(
             f"  {k!r} 缺 {v}" for k, v in sorted(missing.items())[:40])
 
@@ -97,8 +115,10 @@ def test_allowlist_has_no_stale_entries():
     不然它会悄悄失效：某个 key 改了文案之后，白名单还挡着一个已经不存在的
     旧 key，而新 key 缺译文却没人管。
     """
-    cat = _catalog()
-    stale = sorted(k for k in NOT_TRANSLATABLE if k not in cat["strings"])
+    keys: set[str] = set()
+    for path in CATALOGS:
+        keys |= set(_catalog(path)["strings"])
+    stale = sorted(k for k in NOT_TRANSLATABLE if k not in keys)
     assert not stale, f"白名单里这些 key 已经不在目录里了，删掉：{stale}"
 
 
@@ -113,6 +133,6 @@ def test_allowlist_has_no_stale_entries():
     ],
 )
 def test_known_mistranslations_do_not_come_back(key, lang, wrong):
-    cat = _catalog()
+    cat = _catalog(ROOT / "FlatRadar" / "Localizable.xcstrings")
     value = cat["strings"][key]["localizations"][lang]["stringUnit"]["value"]
     assert value != wrong, f"{key!r} 的 {lang} 又变回错误译法 {wrong!r} 了"

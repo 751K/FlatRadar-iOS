@@ -295,16 +295,36 @@ final class PlatformScopeTests: XCTestCase {
 
     // MARK: - sentenceList
 
+    /// **显式传 locale。** `sentenceList` 现在走 `ListFormatStyle`，默认跟随系统
+    /// 区域设置——不传的话这几条断言就取决于跑测试那台机器的设置，换台机器
+    /// （或者 CI 换个镜像）结果就变了，而失败信息只会说"字符串不相等"。
+    private let en = Locale(identifier: "en_US")
+
     func test_sentence_list_reads_as_english() {
-        XCTAssertEqual(PlatformScope.sentenceList([]), "")
-        XCTAssertEqual(PlatformScope.sentenceList(["A"]), "A")
-        XCTAssertEqual(PlatformScope.sentenceList(["A", "B"]), "A and B")
-        XCTAssertEqual(PlatformScope.sentenceList(["A", "B", "C"]), "A, B, and C")
-        XCTAssertEqual(PlatformScope.sentenceList(["A", "B", "C", "D"]), "A, B, C, and D")
+        XCTAssertEqual(PlatformScope.sentenceList([], locale: en), "")
+        XCTAssertEqual(PlatformScope.sentenceList(["A"], locale: en), "A")
+        XCTAssertEqual(PlatformScope.sentenceList(["A", "B"], locale: en), "A and B")
+        XCTAssertEqual(PlatformScope.sentenceList(["A", "B", "C"], locale: en), "A, B, and C")
+        XCTAssertEqual(PlatformScope.sentenceList(["A", "B", "C", "D"], locale: en),
+                       "A, B, C, and D")
     }
 
     /// 两项时用 "and" 而不是逗号 —— "A, B" 读起来像后面还漏了词。
     func test_two_items_are_joined_with_and_not_a_comma() {
-        XCTAssertFalse(PlatformScope.sentenceList(["A", "B"]).contains(","))
+        XCTAssertFalse(PlatformScope.sentenceList(["A", "B"], locale: en).contains(","))
+    }
+
+    /// 连接词跟着语言走，不是写死的英文 "and"。
+    ///
+    /// 这条是这次改动的**全部理由**：原实现把 `" and "` / `", and "` 硬编码在
+    /// 代码里，中文用户在筛选页看到的是「A and B」。
+    func test_conjunction_follows_the_locale() {
+        let zh = PlatformScope.sentenceList(["A", "B"],
+                                            locale: Locale(identifier: "zh_Hans_CN"))
+        XCTAssertFalse(zh.contains("and"), "中文不该出现英文的 and，实际是 \(zh)")
+
+        let nl = PlatformScope.sentenceList(["A", "B"],
+                                            locale: Locale(identifier: "nl_NL"))
+        XCTAssertTrue(nl.contains("en"), "荷兰语应该用 en 连接，实际是 \(nl)")
     }
 }

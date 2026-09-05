@@ -55,33 +55,39 @@ nonisolated enum PlatformScope {
             let effective = chosen.intersection(supported)
             if effective.isEmpty {
                 return Note(
-                    text: "None of the platforms you selected support this filter, "
-                        + "so it currently has no effect.",
+                    // 不能用 `"…" + "…"` 拼：字符串提取只认单个字面量，拼起来的
+                    // 那一半永远进不了 Localizable.xcstrings，所有语言都会看到英文
+                    // ——这三句原先正是这样。宁可让这行长一点。
+                    text: String(localized: "None of the platforms you selected support this filter, so it currently has no effect."),
                     isWarning: true)
             }
             if effective.count < chosen.count {
                 let list = effective.map { Platform.displayName($0) }.sorted()
                 return Note(
-                    text: "Of the platforms you selected, this only filters "
-                        + "\(sentenceList(list)). The rest are not affected.",
+                    text: String(localized: "Of the platforms you selected, this only filters \(sentenceList(list)). The rest are not affected."),
                     isWarning: false)
             }
             return nil
         }
 
         return Note(
-            text: "Only filters \(sentenceList(names)). "
-                + "Listings from other platforms are not affected.",
+            text: String(localized: "Only filters \(sentenceList(names)). Listings from other platforms are not affected."),
             isWarning: false)
     }
 
-    /// "A"、"A and B"、"A, B, and C" —— 逗号分隔在只有两项时读起来像漏了词。
-    static func sentenceList(_ items: [String]) -> String {
-        switch items.count {
-        case 0:  return ""
-        case 1:  return items[0]
-        case 2:  return "\(items[0]) and \(items[1])"
-        default: return items.dropLast().joined(separator: ", ") + ", and \(items[items.count - 1])"
-        }
+    /// "A"、"A and B"、"A, B, and C"。
+    ///
+    /// 交给 `ListFormatStyle`，不再手写。原来是写死的英文语法——`" and "`、
+    /// `", and "`——那等于把连接词硬编码成英文：中文该是「A、B和C」，西班牙语是
+    /// "A, B y C"，荷兰语是 "A, B en C"。这三种语言原先拿到的都是英文的 and。
+    ///
+    /// `locale` 显式传，默认跟随系统：不给默认值以外的入口的话，测试就只能依赖
+    /// 跑测试那台机器的区域设置，换台机器结果就变了。
+    static func sentenceList(_ items: [String],
+                             locale: Locale = .autoupdatingCurrent) -> String {
+        guard !items.isEmpty else { return "" }
+        var style: ListFormatStyle<StringStyle, [String]> = .list(type: .and)
+        style.locale = locale
+        return items.formatted(style)
     }
 }

@@ -8406,6 +8406,108 @@
         }
       }
     },
+    "None of the platforms you selected support this filter, so it currently has no effect." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "None of the platforms you selected support this filter, so it currently has no effect."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ninguna de las plataformas que has seleccionado admite este filtro, así que ahora mismo no tiene efecto."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Geen van de platforms die je hebt geselecteerd ondersteunt dit filter, dus het heeft nu geen effect."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你选中的平台都不支持这个筛选条件，所以它当前不起作用。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "你選中的平台都不支援這個篩選條件，所以它目前不起作用。"
+          }
+        }
+      }
+    },
+    "Of the platforms you selected, this only filters %@. The rest are not affected." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Of the platforms you selected, this only filters %@. The rest are not affected."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "De las plataformas que has seleccionado, esto solo filtra %@. Las demás no se ven afectadas."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Van de platforms die je hebt geselecteerd, filtert dit alleen %@. De rest wordt niet beïnvloed."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在你选中的平台里，这条筛选只对 %@ 生效，其余不受影响。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "在你選中的平台裡，這條篩選只對 %@ 生效，其餘不受影響。"
+          }
+        }
+      }
+    },
+    "Only filters %@. Listings from other platforms are not affected." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Only filters %@. Listings from other platforms are not affected."
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Solo filtra %@. Los anuncios de otras plataformas no se ven afectados."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filtert alleen %@. Advertenties van andere platforms worden niet beïnvloed."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只对 %@ 生效，其他平台的房源不受影响。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "只對 %@ 生效，其他平台的房源不受影響。"
+          }
+        }
+      }
+    },
     "Off" : {
       "localizations" : {
         "es" : {
