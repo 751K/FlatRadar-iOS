@@ -111,15 +111,21 @@ struct NativeMonthCalendar: UIViewRepresentable {
     ///
     /// 那个最大宽度没有 API 能问到（`systemLayoutSizeFitting` 压缩尺寸给的是
     /// 最小值，不是它）。以前靠常量兜：420 干净、460 / 640 露馅——换个字号或
-    /// 系统版本就不准。现在的做法是**先按外面给的宽度铺开一次，量出分页的步长**
-    /// （就是网格的最大宽度），再把宽度收到那个值上。量的过程在
+    /// 系统版本就不准。现在的做法是**先按外面给的宽度铺开一次，量出内部日期
+    /// 网格的实际宽度**，再把日历宽度收到那个值上。量的过程在
     /// ``ClippingContainer/layoutSubviews()`` 里，同一次布局里就把日历收窄，
     /// 不会闪一帧相邻月份。
     func sizeThatFits(_ proposal: ProposedViewSize,
                       uiView container: UIView,
                       context: Context) -> CGSize? {
         guard let offered = proposal.width, offered > 0 else { return nil }
-        let cap = (container as? ClippingContainer)?.widthCap ?? Self.fallbackMaxWidth
+        // 没量到之前 cap 是 nil，那就照单全收，让容器有机会铺开去量。
+        let cap: CGFloat
+        if let clipping = container as? ClippingContainer {
+            cap = clipping.widthCap ?? offered
+        } else {
+            cap = Self.fallbackMaxWidth
+        }
         let width = min(offered, cap)
         let fitted = container.systemLayoutSizeFitting(
             CGSize(width: width, height: UIView.layoutFittingCompressedSize.height),
@@ -137,9 +143,8 @@ struct NativeMonthCalendar: UIViewRepresentable {
     /// 宽度 ≤ 量到的页宽（必需，量到之前不激活）。容器比页宽窄时左右贴边生效，
     /// 日历跟着容器；容器比页宽宽时宽度约束压住，日历居中、两侧留白。
     ///
-    /// 怎么量：日历内部那个横向分页的滚动视图里，每页是一个月视图（collection
-    /// view 的 cell），相邻两页的 `minX` 之差就是页宽。只看到一页时取那一页的
-    /// 宽度。量到的值比日历当前宽度小，说明确实露了相邻月份，记下来。
+    /// 怎么量：见 ``gridWidth(in:)``——日期格那个 collection view 的宽度就是
+    /// 网格上限。量到的值比日历当前宽度小，说明多给的宽度只是留白，记下来。
     /// 这依赖系统内部的视图层级，所以量不出来时退回 ``fallbackMaxWidth``。
     final class ClippingContainer: UIView {
         let calendarView: UICalendarView
@@ -182,22 +187,21 @@ struct NativeMonthCalendar: UIViewRepresentable {
         override func layoutSubviews() {
             super.layoutSubviews()
             guard case .pending = measurement, bounds.width > 0 else { return }
-            // 子视图的布局排在父视图 layoutSubviews 之后，这时候内部的 cell 可能
-            // 还没摆好，先催一次。
+            // 子视图的布局排在父视图 layoutSubviews 之后，这时候内部的 collection
+            // view 可能还没摆好，先催一次。
             calendarView.layoutIfNeeded()
-            if let stride = Self.pageStride(in: calendarView) {
-                // 比日历自身还宽的"页"不是我们要找的（那是没露馅的情况，
-                // 学不到上限，也不需要）。
-                if stride + 1 < calendarView.bounds.width {
-                    measurement = .measured(stride)
-                    widthLimit.constant = stride
+            if let grid = Self.gridWidth(in: calendarView) {
+                // 网格和日历一样宽说明没给多，学不到上限，也不需要。
+                if grid + 1 < calendarView.bounds.width {
+                    measurement = .measured(grid)
+                    widthLimit.constant = grid
                     widthLimit.isActive = true
                     // 同一次布局里就收窄，别等下一帧。
                     super.layoutSubviews()
                     invalidateIntrinsicContentSize()   // 让 SwiftUI 重问 sizeThatFits
                 }
             } else if !attemptedRetry {
-                // 第一次布局时 cell 可能还没生成，下一轮 runloop 再量一次。
+                // 第一次布局时内部视图可能还没建好，下一轮 runloop 再量一次。
                 attemptedRetry = true
                 DispatchQueue.main.async { [weak self] in self?.setNeedsLayout() }
             } else {
@@ -219,25 +223,28 @@ struct NativeMonthCalendar: UIViewRepresentable {
             }
         }
 
-        /// 找日历里横向分页的滚动视图，返回它相邻两页的步长。
-        static func pageStride(in root: UIView) -> CGFloat? {
+        /// 找日历里画日期格的那个 `UICollectionView`，返回它的宽度，顺手打开裁剪。
+        ///
+        /// 真机上量到的层级（iPadOS 27，默认字号，给 684pt 宽）：
+        ///
+        ///     UICalendarView (684.5 × 498.5)
+        ///       _UICalendarHeaderView  x=146.75 w=391
+        ///       _UICalendarWeekdayView x=146.75 w=391
+        ///       UICollectionView       x=146.75 w=391  content=(2737 × 396.5)
+        ///         _UICalendarDateViewCell 55.5 × 78.5 …
+        ///
+        /// 三块内容都是 391pt 居中，多给的宽度只变成左右留白；高度给到 700pt
+        /// 网格也还是 391，所以这是固定上限，不随高度长。而 collection view
+        /// 默认**不裁剪**，相邻月份那一页的格子（offset ±391）就画到了它自己的
+        /// 边界外面——这就是"露出相邻月份"的来源。所以 391 才是网格的真实上限，
+        /// 420 看着干净只是因为露出来的 14pt 刚好是格子的空白边。
+        static func gridWidth(in root: UIView) -> CGFloat? {
             var queue: [UIView] = [root]
             while !queue.isEmpty {
                 let v = queue.removeFirst()
-                if let sv = v as? UIScrollView,
-                   sv.bounds.width > 0,
-                   sv.contentSize.width > sv.bounds.width + 1 {
-                    let pages = sv.subviews
-                        .filter { $0.frame.width > 100 && $0.frame.height > 100 }
-                        .map { $0.frame.minX }
-                        .sorted()
-                    if pages.count >= 2 {
-                        let gaps = zip(pages, pages.dropFirst()).map { $1 - $0 }.filter { $0 > 1 }
-                        if let g = gaps.min() { return g }
-                    }
-                    if let only = sv.subviews.first(where: { $0.frame.width > 100 && $0.frame.height > 100 }) {
-                        return only.frame.width
-                    }
+                if let cv = v as? UICollectionView, cv.bounds.width > 0 {
+                    cv.clipsToBounds = true
+                    return cv.bounds.width
                 }
                 queue.append(contentsOf: v.subviews)
             }

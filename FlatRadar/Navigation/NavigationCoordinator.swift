@@ -64,8 +64,22 @@ enum BrowseMode: String, Hashable, Sendable, CaseIterable, Identifiable {
 @MainActor
 @Observable
 final class NavigationCoordinator {
-    var selectedTab: AppTab = .dashboard
+    var selectedTab: AppTab = NavigationCoordinator.initialTab
     var selectedBrowseMode: BrowseMode = .list
+
+    /// 启动时落在哪个 tab。只有 DEBUG 包认启动参数 `-initialTab <AppTab.rawValue>`，
+    /// 给命令行验证用（`devicectl device process launch ... -initialTab calendar`），
+    /// 真机上没法远程点 tab 栏。发布包一律 dashboard。
+    private static var initialTab: AppTab {
+        #if DEBUG
+        let args = ProcessInfo.processInfo.arguments
+        if let i = args.firstIndex(of: "-initialTab"), i + 1 < args.count,
+           let tab = AppTab(rawValue: args[i + 1]) {
+            return tab
+        }
+        #endif
+        return .dashboard
+    }
     var listingsPath: [ListingRoute] = []
 
     /// deep link 里的 listing id 是否可信。
