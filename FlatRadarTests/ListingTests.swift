@@ -197,7 +197,7 @@ final class ListingTests: XCTestCase {
 
     /// 带小数秒（后端最常发的形态）。
     func test_firstSeen_parses_iso_with_fractional_seconds() throws {
-        let l = Self.listing(firstSeen: "2026-09-05T08:30:00.123Z")
+        let l = try Self.listing(firstSeen: "2026-09-05T08:30:00.123Z")
         let t = try XCTUnwrap(l.firstSeenDate).timeIntervalSince1970
         XCTAssertEqual(t, 1_788_597_000.123, accuracy: 0.01)
     }
@@ -206,14 +206,14 @@ final class ListingTests: XCTestCase {
     /// 掉进 DateFormatter 兜底，而那批格式串没有一个能吃掉末尾的 `Z`，于是
     /// 整条返回 nil——`isNew` 恒为 false、`ageText` 恒为 nil，静默地不对。
     func test_firstSeen_parses_iso_without_fractional_seconds() throws {
-        let l = Self.listing(firstSeen: "2026-09-05T08:30:00Z")
+        let l = try Self.listing(firstSeen: "2026-09-05T08:30:00Z")
         let t = try XCTUnwrap(l.firstSeenDate).timeIntervalSince1970
         XCTAssertEqual(t, 1_788_597_000, accuracy: 0.01)
     }
 
     /// 带时区偏移的也要认（+02:00 = 阿姆斯特丹夏令时）。
     func test_firstSeen_parses_iso_with_offset() throws {
-        let l = Self.listing(firstSeen: "2026-09-05T10:30:00+02:00")
+        let l = try Self.listing(firstSeen: "2026-09-05T10:30:00+02:00")
         let t = try XCTUnwrap(l.firstSeenDate).timeIntervalSince1970
         XCTAssertEqual(t, 1_788_597_000, accuracy: 0.01)
     }
@@ -221,22 +221,33 @@ final class ListingTests: XCTestCase {
     /// 没有时区的裸时间戳仍然走 DateFormatter 兜底，按阿姆斯特丹时区读。
     /// 这条守的是「换成 ISO8601FormatStyle 之后把兜底那条路弄丢了」。
     func test_firstSeen_falls_back_for_zoneless_timestamp() throws {
-        let l = Self.listing(firstSeen: "2026-09-05 10:30:00")
+        let l = try Self.listing(firstSeen: "2026-09-05 10:30:00")
         XCTAssertNotNil(l.firstSeenDate)
     }
 
     func test_firstSeen_garbage_is_nil() throws {
-        XCTAssertNil(Self.listing(firstSeen: "not a date").firstSeenDate)
-        XCTAssertNil(Self.listing(firstSeen: "").firstSeenDate)
+        XCTAssertNil(try Self.listing(firstSeen: "not a date").firstSeenDate)
+        XCTAssertNil(try Self.listing(firstSeen: "").firstSeenDate)
     }
 
-    private static func listing(firstSeen: String) -> Listing {
+    /// **`throws`，不是 `try!`。**
+    ///
+    /// 第一版写的是 `try!`——而那份 JSON 少了 `url`（`Listing.init(from:)` 里
+    /// 它是 `decode` 不是 `decodeIfPresent`），于是解码抛错、`try!` 直接让**测试
+    /// 进程崩掉**。崩了之后 xcodebuild 重启进程，超过两次就整批放弃：CI 上
+    /// 155 条只跑了 67 条，剩下的连红都没红，是"没跑"。
+    ///
+    /// 一条用例的数据写错就该只挂那一条。测试里的 `try!` 把「一条失败」放大成
+    /// 「整个套件不可信」。
+    private static func listing(firstSeen: String) throws -> Listing {
+        // 必填字段照 Listing.init(from:) 来：id / name / status / url / city
+        // 是 decode，其余都是 decodeIfPresent。
         let json = """
-        {"id":"x","name":"n","status":"Book","price_raw":"€1",
-         "city":"Amsterdam","first_seen":"\(firstSeen)"}
-        """.data(using: .utf8)!
-        // swiftlint:disable:next force_try
-        return try! JSONDecoder().decode(Listing.self, from: json)
+        {"id": "x", "name": "n", "status": "Book", "url": "",
+         "city": "Amsterdam", "features": [], "feature_map": {},
+         "first_seen": "\(firstSeen)"}
+        """
+        return try JSONDecoder().decode(Listing.self, from: Data(json.utf8))
     }
 
 }
