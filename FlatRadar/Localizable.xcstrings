@@ -618,6 +618,9 @@
         }
       }
     },
+    "%lld min" : {
+
+    },
     "%lld more excluded by city, platform, rent or area" : {
 
     },
@@ -2660,6 +2663,9 @@
           }
         }
       }
+    },
+    "Close" : {
+
     },
     "Color Scheme" : {
       "localizations" : {

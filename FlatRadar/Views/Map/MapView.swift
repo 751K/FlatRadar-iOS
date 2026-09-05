@@ -24,6 +24,22 @@ struct MapView: View {
     private var metrics: MapLayout.ControlMetrics { .of(hSizeClass) }
     private var isRegular: Bool { hSizeClass == .regular }
 
+    /// 地图可用宽度，由 onGeometryChange 填。
+    @State private var mapWidth: CGFloat = 0
+
+    /// 房源卡片是走右下角的浮层，还是走从底部升起的 sheet。
+    ///
+    /// 判据是**宽度**而不是 size class。iPad 竖屏和横屏都是 regular，但竖屏只有
+    /// 834pt——右边根本没有能放下一张 380pt 卡片还留得住地图的空地，浮层在那儿
+    /// 会挡掉小半张图，还不如 sheet 从底部升起来得干净。
+    ///
+    /// 1000 这个阈值跟 DashboardView 的 `wide` 是同一个：iPad 横屏 1194 过线、
+    /// 竖屏 834 不过线、iPhone 永远不过线。
+    ///
+    /// 控件尺寸那边继续用 size class（`isRegular`）：那问的是"这个窗口挤不挤"，
+    /// 竖屏 iPad 一样该给大按钮。两个问题，两个判据。
+    private var usesFloatingCard: Bool { mapWidth >= 1_000 }
+
     /// 弹卡内容的实测高度，由 onGeometryChange 填。0 表示还没量到。
     @State private var cardHeight: CGFloat = 0
 
@@ -105,22 +121,6 @@ struct MapView: View {
     /// 判断两个 region 是否跨过 log2 量化桶边界。
     /// 同桶内 cluster 不会变 → 不需要 withAnimation 包裹 currentRegion 更新，
     /// 避免每秒 60 次 withAnimation 带来的开销。
-    private static func bucketsDiffer(
-        _ a: MKCoordinateRegion, _ b: MKCoordinateRegion
-    ) -> Bool {
-        let qa = MapClustering.quantizeSpan(a.span.latitudeDelta)
-        let qb = MapClustering.quantizeSpan(b.span.latitudeDelta)
-        return qa != qb
-    }
-
-    var body: some View {
-        @Bindable var store = store
-
-        // 不再自带 NavigationStack；外层 BrowseView 提供。
-        ZStack(alignment: .top) {
-                Map(position: $camera, selection: $store.selectedID) {
-                    ForEach(clusters) { cluster in
-                        if cluster.isSingle, let l = cluster.single {
     // MARK: - 可达圈
 
     /// 选中一套房源时，在它周围画「10 分钟可达」的圈——步行一个、骑车一个。
@@ -267,6 +267,24 @@ struct MapView: View {
             : .excludingAll
     }
 
+    private static func bucketsDiffer(
+        _ a: MKCoordinateRegion, _ b: MKCoordinateRegion
+    ) -> Bool {
+        let qa = MapClustering.quantizeSpan(a.span.latitudeDelta)
+        let qb = MapClustering.quantizeSpan(b.span.latitudeDelta)
+        return qa != qb
+    }
+
+    var body: some View {
+        @Bindable var store = store
+
+        // 不再自带 NavigationStack；外层 BrowseView 提供。
+        ZStack(alignment: .top) {
+                Map(position: $camera, selection: $store.selectedID) {
+                    // 放在最前面：MapContent 按声明顺序叠，圈要压在图钉下面。
+                    walkingRings
+                    ForEach(clusters) { cluster in
+                        if cluster.isSingle, let l = cluster.single {
                             Annotation(l.name, coordinate: l.displayCoordinate) {
                                 pinView(for: l)
                                     .transition(.asymmetric(
@@ -281,12 +299,15 @@ struct MapView: View {
                                     .transition(.asymmetric(
                                         insertion: .scale(scale: 0.5).combined(with: .opacity),
                                         removal: .scale(scale: 0.5).combined(with: .opacity)))
-                    // 放在最前面：MapContent 按声明顺序叠，圈要压在图钉下面。
-                    walkingRings
                             }
                             .annotationTitles(.hidden)
                         }
                     }
+                }
+                .onChange(of: store.selectedID) { _, id in
+                    // 只在"选中了某一套"时更新锚点；取消选中（id == nil）不清，
+                    // 圈留在图上。
+                    if id != nil, let l = store.selected { ringsListing = l }
                 }
                 .onMapCameraChange(frequency: .continuous) { context in
                     // 关键：**只在跨 log2 桶时更新 currentRegion**。
@@ -304,11 +325,6 @@ struct MapView: View {
                         }
                         recomputeClusters()
                     }
-                .onChange(of: store.selectedID) { _, id in
-                    // 只在"选中了某一套"时更新锚点；取消选中（id == nil）不清，
-                    // 圈留在图上。
-                    if id != nil, let l = store.selected { ringsListing = l }
-                }
                 }
                 .onAppear { recomputeClusters() }
                 .onChange(of: store.listings.count) { _, _ in
@@ -336,8 +352,10 @@ struct MapView: View {
                 .ignoresSafeArea(edges: .bottom)
                 // 左上角：避开右上的 MapUserLocationButton/Compass/ScaleView
 
+                // 只在放不下浮层时走 sheet（iPhone、以及 iPad 竖屏）。
+                // 够宽时改成右下角的浮层——见 floatingCard。
                 .sheet(item: Binding(
-                    get: { store.selected },
+                    get: { usesFloatingCard ? nil : store.selected },
                     set: { _ in store.selectedID = nil }
                 )) { l in
                     // 卡片高度随房源变：标题可能换行，同址提示可能占两行。
@@ -383,8 +401,10 @@ struct MapView: View {
         // 控件全部沉到底部。浮在地图中上部时它们既盖住内容、又离拇指最远——
         // 单手拿 iPhone 时够不着。用 safeAreaInset 而不是 overlay：它会自动落在
         // tab bar 之上，不必去猜 tab bar 有多高，换机型/换系统版本也不会错位。
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { mapWidth = $0 }
         .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
         .overlay(alignment: .top) { topNotice }
+        .overlay(alignment: .bottomTrailing) { floatingCard }
         // 必须**居中**。放进上面那个 ZStack(alignment: .top) 的话会跟 topBar
         // 叠在一起——真机上第一版就是这样：计数、三个圆钮、chip 条全部压在
         // 说明卡上面，一个字都读不清。
@@ -615,6 +635,13 @@ struct MapView: View {
                     Task { await store.refresh() }
                 }
                 .disabled(store.isLoading)
+                // 只在圈还画着时出现——没有圈的时候放一个"清除圈"的按钮是噪音。
+                if ringsListing != nil {
+                    mapControlButton(systemName: "circle.dashed",
+                                     label: "Clear walking radius") {
+                        withAnimation(.easeInOut(duration: 0.2)) { ringsListing = nil }
+                    }
+                }
                 if isRegular { Spacer(minLength: 8) }
             }
             .padding(.horizontal, MapLayout.horizontalInset)
@@ -623,6 +650,38 @@ struct MapView: View {
         }
         }
         .padding(.bottom, 8)
+    }
+
+    /// 够宽时（iPad 横屏）的房源卡片：浮在右下角，而不是从底部升起一张 sheet。
+    ///
+    /// sheet 在 iPad 上会占掉下半屏，而这张图上最该看的东西恰恰在图钉周围——
+    /// 步行可达圈、圈里有没有超市和车站。卡片一升起来就把它们盖住了，用户得先
+    /// 关掉卡片才能看图、再点开才能看价格，来回切。
+    ///
+    /// 右下角是这一屏唯一的空地：顶部是浮动 tab bar，左下角是计数胶囊 + 三个圆钮
+    /// + 状态 chip 条。挂在 `.safeAreaInset(edge: .bottom)` 之后，所以浮层落在
+    /// chip 条上方，不会压住它。
+    ///
+    /// 放不下的时候继续走 sheet：iPhone 和 iPad 竖屏都没有"空地"可言，占掉下半屏
+    /// 是合理的取舍，而且从底部升起、可拖拽是那些尺寸上的标准交互。
+    @ViewBuilder
+    private var floatingCard: some View {
+        if usesFloatingCard, let l = store.selected {
+            ScrollView {
+                listingCard(l, showsClose: true)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(maxWidth: 380, maxHeight: 540)
+            // 用项目统一的 liquidGlass 而不是裸 .regularMaterial：地图上其余浮层
+            // （圆钮、计数胶囊、chip）走的都是它，材质只是它在 iOS 26 以下的降级
+            // 路径。直接写 material 会让这张卡在 iOS 26 上跟旁边的控件不是一种
+            // 质感。
+            .liquidGlass(RoundedRectangle(cornerRadius: 22, style: .continuous))
+            .shadow(color: .black.opacity(0.16), radius: 16, y: 6)
+            .padding(.trailing, MapLayout.horizontalInset)
+            .padding(.bottom, 12)
+            .transition(.move(edge: .trailing).combined(with: .opacity))
+        }
     }
 
     /// 定位提示条单独留在顶部——它是要读的文字，不是要点的控件。
@@ -635,13 +694,6 @@ struct MapView: View {
         }
     }
 
-                // 只在圈还画着时出现——没有圈的时候放一个"清除圈"的按钮是噪音。
-                if ringsListing != nil {
-                    mapControlButton(systemName: "circle.dashed",
-                                     label: "Clear walking radius") {
-                        withAnimation(.easeInOut(duration: 0.2)) { ringsListing = nil }
-                    }
-                }
     /// 筛完一套不剩时的说明卡。
     ///
     /// 原因**从实际数据算出来**，不写死。此前这里硬写了一句「多数已出租或预留」，
@@ -826,7 +878,7 @@ struct MapView: View {
     // MARK: - Bottom card
 
     @ViewBuilder
-    private func listingCard(_ l: MapListing) -> some View {
+    private func listingCard(_ l: MapListing, showsClose: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             // ── 标题 ──────────────────────────────────────────────
             // 平台徽标从标题旁边挪到了下面那行。挤在标题右边时，长房源名会被它
@@ -838,6 +890,24 @@ struct MapView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 4)
                 statusBadge(l.status)
+                // 关闭按钮排在状态徽章**后面**，而不是浮在卡片右上角。
+                // 浮着的话它会盖在徽章上——"Occupied" 这种长一点的状态直接被
+                // 压掉半个词。排进同一行由布局保证互不重叠。
+                //
+                // 只有浮层需要它：sheet 有拖拽指示条，下滑就能关。
+                if showsClose {
+                    Button {
+                        store.selectedID = nil
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.footnote.weight(.bold))
+                            .foregroundStyle(.secondary)
+                            .padding(7)
+                            .background(.thinMaterial, in: Circle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Close")
+                }
             }
 
             // 平台 + 地点。地点为空、或者已经被房源名包含时就不重复——
