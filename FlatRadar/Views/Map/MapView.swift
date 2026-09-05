@@ -6,7 +6,7 @@ import SwiftUI
 ///
 /// MapKit + SwiftUI（iOS 17+ API）
 /// -------------------------------
-/// - ``Map(position:)`` 维护 camera 位置，初始锚定在 Eindhoven 附近
+/// - ``Map(position:)`` 维护 camera 位置，初始锚定在 Amsterdam 附近
 ///   （Holland2Stay 大部分房源所在城市）
 /// - ``Annotation`` 自定义 pin，颜色按状态区分（available/lottery/unavailable）
 /// - ``Map(selection:)`` 双向绑 ``store.selectedID``，点 pin 选中 → sheet 弹卡
@@ -49,11 +49,17 @@ struct MapView: View {
     /// 浮在地图上，浮层得让开它。那个分支删掉之后再没人传别的值，收成常量。
     private let overlayTopPadding: CGFloat = 12
 
-    // 初始视野：Eindhoven 中心，约 60km 直径
-    @State private var camera = MapCameraPosition.region(
-        MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: 51.4416, longitude: 5.4697),
-            span: MKCoordinateSpan(latitudeDelta: 0.55, longitudeDelta: 0.55)))
+    /// 初始视野：Amsterdam 中心，约 60km 直径。
+    ///
+    /// 抽成一个常量而不是写两遍：`camera` 和 `currentRegion` 的初值必须一致
+    /// （后者是 clustering 推 cell 大小的依据，不一致的话首帧的聚类是按另一个
+    /// 视野算的）。原来两处各写一份同样的坐标，改一处漏一处不会报错，只会让
+    /// 第一批聚类气泡的大小对不上。
+    private static let defaultRegion = MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 52.3676, longitude: 4.9041),
+        span: MKCoordinateSpan(latitudeDelta: 0.55, longitudeDelta: 0.55))
+
+    @State private var camera = MapCameraPosition.region(MapView.defaultRegion)
     @State private var showRefreshError = false
     @State private var showLocationError = false
     @State private var showFilters = false
@@ -61,10 +67,7 @@ struct MapView: View {
     @State private var focusConsumed = false
 
     /// 当前 visible region；onMapCameraChange 实时刷新。clustering 依赖它推 cell 大小。
-    /// 初值与 camera 初值一致（Eindhoven 60km）。
-    @State private var currentRegion = MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 51.4416, longitude: 5.4697),
-        span: MKCoordinateSpan(latitudeDelta: 0.55, longitudeDelta: 0.55))
+    @State private var currentRegion = MapView.defaultRegion
 
     /// 当前 cluster 列表（由 listings + currentRegion 决定）。
     /// **@State 缓存**：之前是 computed property，任何 MapStore 字段变化（包括
