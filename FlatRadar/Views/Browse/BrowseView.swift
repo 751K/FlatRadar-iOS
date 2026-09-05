@@ -52,10 +52,8 @@ struct BrowseView: View {
                 for: .navigationBar
             )
             .toolbar {
-                if !usesInlineModePicker {
-                    ToolbarItem(placement: .topBarLeading) {
-                        compactModeMenu
-                    }
+                ToolbarItem(placement: .topBarLeading) {
+                    compactModeMenu
                 }
             }
             .navigationDestination(for: ListingRoute.self) { route in
@@ -74,51 +72,35 @@ struct BrowseView: View {
         }
     }
 
-    @ViewBuilder
+    /// List / Map / Calendar 三个模式共用一个 ZStack。
+    ///
+    /// 曾经分 iPad / iPhone 两套：iPad 走一个浮在地图上的 segmented picker，
+    /// iPhone 走 nav bar 里的下拉菜单。改用 sidebarAdaptable 之后 iPad 的 tab bar
+    /// 变成了顶部的浮动胶囊，那个 picker 就贴在它下面——两排选择器叠在一起，
+    /// 第二排还在解释第一排里的一个条目，很难看。
+    ///
+    /// 而且那条分支本来就没有存在的理由了：Browse 这个 tab 只在窄窗口
+    /// （`MainTabView` 里 `.hidden(!compact)`，宽度 < 920）才出现，宽屏 iPad 上
+    /// List / Map / Calendar 是三个独立的顶层 tab，根本走不到这里。所以
+    /// `usesInlineModePicker`（判据是 `idiom == .pad`）真正生效的场合只有
+    /// "窄窗口的 iPad"——那正是该跟 iPhone 一致的场合。
+    ///
+    /// 两套合成一套，模式切换统一走 nav bar 里的 `compactModeMenu`。
     private var content: some View {
-        if usesInlineModePicker {
-            // iPad：MapView 首次进入 map 后保活。不要在 Browse 第一次打开
-            // list/calendar 时就创建隐藏地图，否则 MapKit 初始化会让首帧卡一下。
-            ZStack(alignment: .top) {
-                if shouldRenderMap {
-                    MapView(overlayTopPadding: 132)
-                        .ignoresSafeArea(edges: .top)
-                        .opacity(coord.selectedBrowseMode == .map ? 1 : 0)
-                        .allowsHitTesting(coord.selectedBrowseMode == .map)
-                }
+        // "按需创建，创建后保活"：Listing 首次打开不背着一个隐藏 MapKit 实例
+        // 一起启动，切回 map 又不闪。List / Calendar 视图本身有不透明的
+        // systemGroupedBackground，盖住下面的 map。
+        ZStack {
+            if shouldRenderMap {
+                MapView()
+                    .opacity(coord.selectedBrowseMode == .map ? 1 : 0)
+                    .allowsHitTesting(coord.selectedBrowseMode == .map)
+            }
 
-                if coord.selectedBrowseMode == .map {
-                    modePicker(maxWidth: 360)
-                        .padding(.horizontal, 28)
-                        .padding(.top, 8)
-                } else {
-                    VStack(spacing: 8) {
-                        modePicker(maxWidth: 360)
-                            .padding(.horizontal, 28)
-                            .padding(.top, 8)
-                        nonMapContent
-                    }
+            if coord.selectedBrowseMode != .map {
+                nonMapContent
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background(Color(.systemGroupedBackground))
-                }
-            }
-        } else {
-            // iPhone：同样是"按需创建，创建后保活"。这样 Listing 首次打开
-            // 不背着一个隐藏 MapKit 实例一起启动，切回 map 又不闪。
-            // List / Calendar 视图本身有不透明 systemGroupedBackground，盖住下面
-            // 的 map，视觉上感受跟之前一致。
-            ZStack {
-                if shouldRenderMap {
-                    MapView()
-                        .opacity(coord.selectedBrowseMode == .map ? 1 : 0)
-                        .allowsHitTesting(coord.selectedBrowseMode == .map)
-                }
-
-                if coord.selectedBrowseMode != .map {
-                    nonMapContent
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .background(Color(.systemGroupedBackground))
-                }
             }
         }
     }
@@ -137,10 +119,6 @@ struct BrowseView: View {
         case .calendar: CalendarView()
         case .map:      EmptyView()   // outer condition guarantees unreachable
         }
-    }
-
-    private var usesInlineModePicker: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad
     }
 
     private var compactModeMenu: some View {
@@ -171,16 +149,5 @@ struct BrowseView: View {
         // 整个 Menu 朗读："Mode, <current>, pop-up button"
         .accessibilityLabel("Browse mode")
         .accessibilityValue(coord.selectedBrowseMode.label)
-    }
-
-    private func modePicker(maxWidth: CGFloat) -> some View {
-        @Bindable var coord = coord
-        return Picker("Mode", selection: $coord.selectedBrowseMode) {
-            ForEach(BrowseMode.allCases) { mode in
-                Label(mode.label, systemImage: mode.systemImage).tag(mode)
-            }
-        }
-        .pickerStyle(.segmented)
-        .frame(maxWidth: maxWidth)
     }
 }
