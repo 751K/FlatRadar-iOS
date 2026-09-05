@@ -221,6 +221,22 @@ final class ScreenshotTests: XCTestCase {
            !u.isEmpty, !p.isEmpty {
             args += ["UI_TEST_USER=\(u)", "UI_TEST_PASS=\(p)"]
         }
+        // iPad 一律横屏。
+        //
+        // 这个 App 的 iPad 布局是**为横屏做的**：Dashboard 左右分栏（左边大数字卡
+        // + Explore，右边 Your matches）、日历左右分栏、大数字卡排成一行。这些的
+        // 判据都是 `width > height`，竖屏一个都不触发——build 293 那批 iPad 截图
+        // 全是竖屏，等于把这一版做的东西一样没拍到。
+        //
+        // 在 `app.launch()` **之前**设，让 App 直接以横屏启动：启动后再转会有一段
+        // 旋转动画要等，而且这个工程在转屏跨 `shouldUseCompactTabs` 阈值时崩过
+        // （见 MainTabView 的注释），能不转就不转。
+        //
+        // iPhone 不动：竖屏是它的正常形态。
+        if isPad {
+            XCUIDevice.shared.orientation = .landscapeLeft
+        }
+
         // 语言不在这里设——由 Screenshots.xctestplan 的 configuration 决定。
         //
         // 原先是读 UI_TEST_LOCALE 再拼 -AppleLanguages。那条路踩过一个坑：

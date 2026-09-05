@@ -37,6 +37,9 @@ struct CalendarView: View {
     @State private var anchor: Date = Self.startOfMonth(for: Date())
     @State private var selectedDay: Date?
     @State private var showRefreshError = false
+    /// 自动选中只做一次。不加这道门的话，用户翻月份（会清掉 selectedDay）之后
+    /// 碰上一次刷新，就会被拽回自动选的那天。
+    @State private var didAutoSelect = false
 
     private static let cal: Calendar = {
         var c = Calendar(identifier: .gregorian)
@@ -155,6 +158,12 @@ struct CalendarView: View {
             if store.listings.isEmpty {
                 await store.fetch()
             }
+            autoSelectFirstDayWithListings()
+        }
+        // 预热路径：数据可能在这个视图出现之前就到了，那时上面的 .task 里
+        // listings 已经非空、不会再 fetch，但选中还没做过。
+        .onChange(of: store.listings.count) { _, _ in
+            autoSelectFirstDayWithListings()
         }
         .onChange(of: store.errorMessage) { _, new in
             showRefreshError = new != nil && !store.listings.isEmpty
@@ -167,6 +176,40 @@ struct CalendarView: View {
         } message: {
             Text(store.errorMessage ?? "")
         }
+    }
+
+    /// 拿到数据后自动选中**一个有房源的日子**。
+    ///
+    /// 修的是 build 293 截图里同时暴露的两件事：
+    ///
+    /// 1. **月份不对。** 截图上日历停在 8 月，而右上角 "Today" 是禁用态——那个
+    ///    按钮的禁用条件正是「anchor 就是当前月」，也就是说 anchor 在 9 月而
+    ///    `UICalendarView` 显示 8 月，视图和状态脱节了。推测是设
+    ///    `availableDateRange` 时 UIKit 把可见月吸附到了范围起点（数据最早在
+    ///    8 月），而 `NativeMonthCalendar` 里那道「只在 lastReportedMonth 变了
+    ///    才 setVisibleDateComponents」的守卫没接住这次吸附。
+    /// 2. **右栏空着。** 没有选中日 → 右栏只有一句 "Tap a day…"，横屏分栏后
+    ///    大半屏是空的。
+    ///
+    /// 一次修两件：选中某天会让 `setSelected` 把日历滚到那天所在的月（头文件：
+    /// "Sets the selected date to be displayed in the calendar"），月份跟着对；
+    /// 右栏也有内容了。
+    ///
+    /// **`anchor` 一起设**，不靠 delegate 回写：程序触发的滚动不一定会走
+    /// `didChangeVisibleDateComponentsFrom`（它的文档写的是 "from user
+    /// interaction"），不显式同步的话就会重演上面那个脱节。
+    ///
+    /// 选哪天：今天或今天之后**第一个**有房源的日子；全都在过去就选最后一个。
+    /// 不选「房源最多的那天」——那样每次刷新可能跳到不同的月份，用户会莫名其妙。
+    private func autoSelectFirstDayWithListings() {
+        guard !didAutoSelect, selectedDay == nil, !store.listings.isEmpty else { return }
+        let days = Set(store.listings.compactMap(\.date).map(Self.cal.startOfDay))
+            .sorted()
+        guard let pick = days.first(where: { $0 >= Self.cal.startOfDay(for: Date()) })
+                ?? days.last else { return }
+        didAutoSelect = true
+        selectedDay = pick
+        anchor = Self.startOfMonth(for: pick)
     }
 
     // MARK: - 月历
