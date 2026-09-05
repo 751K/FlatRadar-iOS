@@ -93,13 +93,21 @@ struct CalendarView: View {
     /// （~570pt）分栏只会两边都挤。
     private var isSideBySide: Bool { size.width >= 700 && size.width > size.height }
 
-    /// 分栏时月历占的宽度比例——月历 : 房源 = 3 : 2。
+
+    /// 分栏时月历占的宽度比例——月历 : 房源 = 2 : 3。
     ///
     /// 月历那边是七列固定网格，宽度给多了只是把日期数字之间的空白拉开；房源那边
-    /// 是文字卡片，宽度直接换成每行能读到多少内容。所以理论上该偏向房源。3:2 是
-    /// 定下来的取舍：月历仍然是这一屏的主体（它是导航控件，点它才有右边），
-    /// 房源那栏拿到的绝对宽度在横屏下已经够放下名字 + 地点 + 状态 + 价格一整行。
-    private static let calendarWidthRatio: CGFloat = 3.0 / 5.0
+    /// 是文字卡片，宽度直接换成每行能读到多少内容。所以该偏向房源。
+    ///
+    /// 一开始给的是 3:2，偏向月历——理由是它是导航控件，点它才有右边。但月历
+    /// 拿到 500pt 以上的宽度并不会更好用：``UICalendarView`` 里那个月网格有**自己
+    /// 的最大宽度**，容器再宽，多出来的部分只会被分页滚动视图拿去露出相邻月份的
+    /// 日期（左右各几列灰数字）。所以宽度对月历是有上限收益的，对房源列不是。
+    ///
+    /// 一路收到过 1:2，那一档 iPhone 横屏只剩 ~250pt 画七列，偏挤。2:3 是回补
+    /// 的一档：iPhone 横屏 ~310pt（接近 iPhone 竖屏原本的月历宽度），iPad 横屏
+    /// 450–515pt。
+    private static let calendarWidthRatio: CGFloat = 2.0 / 5.0
 
     var body: some View {
         // 不再自带 NavigationStack；外层 BrowseView 提供。
@@ -181,14 +189,22 @@ struct CalendarView: View {
     /// 大面板用实体表面而不是玻璃——玻璃在大面积上会把自己的内容也搅浑
     /// （地图那张说明卡踩过）。
     private var calendarCard: some View {
-        VStack(spacing: 14) {
-            monthHeader
-            weekdayHeader
-            daysGrid
-        }
-        .padding(.vertical, 16)
+        // UICalendarView 自带月份标题和前后箭头，所以它替换的是原来的
+        // monthHeader + weekdayHeader + daysGrid 三块。
+        NativeMonthCalendar(
+            selectedDay: $selectedDay,
+            visibleMonth: $anchor,
+            availableRange: store.dateRange,
+            countForDay: { store.listings(on: $0).count }
+        )
+        // 宽度上限由 NativeMonthCalendar.sizeThatFits 自己卡（它会问视图愿意多宽），
+        // 这里不再写死一个数——写死过 420（太窄）和 640（会露出相邻月份）。
+        .padding(.vertical, 8)
+        // 卡片底**贴着日历本身**，不是撑满整列。顺序反过来的话（先撑满再画底）
+        // 卡片会横跨整个左栏，而里面的日历只占中间 420pt，两边各空一截。
         .background(Color(.secondarySystemGroupedBackground),
                     in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .frame(maxWidth: .infinity)   // 画完底再在列里居中
         .padding(.horizontal, 16)
     }
 
