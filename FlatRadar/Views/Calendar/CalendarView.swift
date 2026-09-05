@@ -17,6 +17,19 @@ import SwiftUI
 struct CalendarView: View {
     @Environment(CalendarStore.self) private var store
     @Environment(NavigationCoordinator.self) private var coord
+    @Environment(\.horizontalSizeClass) private var hSizeClass
+
+    /// 宽屏（iPad）把日历下方的房源行**留白**放大一档。
+    ///
+    /// 只动间距，不动字号。曾经连字号一起放大（subheadline → title3 那一类），
+    /// 查 HIG 之后撤了：iOS 和 iPadOS 共用同一套字阶（默认 17pt / 最小 11pt 是
+    /// 同一行），按设备加一档会和 Dynamic Type 打架——想要更大的字是用户在系统
+    /// 设置里表达的。
+    ///
+    /// 留白不属于字阶，加大是安全的，也确实是这一行在 iPad 上显得扁的原因之一。
+    /// 但要认清它治不了根：那一屏真正的问题是日历占上面 40%、下面空着大半，
+    /// 属于布局结构，不是行高。
+    private var isRegular: Bool { hSizeClass == .regular }
 
     @State private var anchor: Date = Self.startOfMonth(for: Date())
     @State private var selectedDay: Date?
@@ -328,9 +341,9 @@ struct CalendarView: View {
 
     @ViewBuilder
     private func listingRow(_ l: CalendarListing) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
+        HStack(alignment: .top, spacing: isRegular ? 16 : 12) {
+            VStack(alignment: .leading, spacing: isRegular ? 6 : 4) {
+                HStack(spacing: isRegular ? 8 : 6) {
                     Text(l.name)
                         .font(.subheadline.weight(.medium))
                         .lineLimit(2)
@@ -360,8 +373,8 @@ struct CalendarView: View {
                     .foregroundStyle(.tertiary)
             }
         }
-        .padding(.vertical, 10)
-        .padding(.horizontal, 14)
+        .padding(.vertical, isRegular ? 16 : 10)
+        .padding(.horizontal, isRegular ? 18 : 14)
         .liquidGlass(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
