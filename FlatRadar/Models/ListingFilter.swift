@@ -148,8 +148,8 @@ nonisolated struct ListingFilter: Codable, Equatable, Sendable {
             parts.append(allowedSources.map(Self.sourceShortText).joined(separator: ", "))
         }
         if !allowedEnergy.isEmpty { parts.append("Energy ≥ \(allowedEnergy)") }
-        if !allowedTypes.isEmpty { parts.append(Self.brief(allowedTypes)) }
-        if !allowedOccupancy.isEmpty { parts.append(Self.brief(allowedOccupancy, label: "Occupancy")) }
+        if !allowedTypes.isEmpty { parts.append(Self.brief(allowedTypes, display: FeatureText.displayType)) }
+        if !allowedOccupancy.isEmpty { parts.append(Self.brief(allowedOccupancy, label: "Occupancy", display: FeatureText.displayOccupancy)) }
         if !allowedTenant.isEmpty { parts.append(Self.brief(allowedTenant, label: "Tenant")) }
         if !allowedContract.isEmpty { parts.append(Self.brief(allowedContract, label: "Contract")) }
         if !allowedFinishing.isEmpty { parts.append(Self.brief(allowedFinishing)) }
@@ -182,8 +182,8 @@ nonisolated struct ListingFilter: Codable, Equatable, Sendable {
             }
         }
         if !allowedEnergy.isEmpty { chips.append(.text("Energy ≥ \(allowedEnergy)")) }
-        if !allowedTypes.isEmpty { chips.append(.text(Self.brief(allowedTypes))) }
-        if !allowedOccupancy.isEmpty { chips.append(.text(Self.brief(allowedOccupancy, label: "Occupancy"))) }
+        if !allowedTypes.isEmpty { chips.append(.text(Self.brief(allowedTypes, display: FeatureText.displayType))) }
+        if !allowedOccupancy.isEmpty { chips.append(.text(Self.brief(allowedOccupancy, label: "Occupancy", display: FeatureText.displayOccupancy))) }
         if !allowedTenant.isEmpty { chips.append(.text(Self.brief(allowedTenant, label: "Tenant"))) }
         if !allowedContract.isEmpty { chips.append(.text(Self.brief(allowedContract, label: "Contract"))) }
         if !allowedFinishing.isEmpty { chips.append(.text(Self.brief(allowedFinishing))) }
@@ -197,8 +197,13 @@ nonisolated struct ListingFilter: Codable, Equatable, Sendable {
     /// 取值走 ``FeatureText/display(_:)`` 统一首字母大写——摘要和筛选页看到的
     /// 必须是同一个写法，否则设置页写着 "Tenant: student only"、点进去列表里
     /// 是 "Student only"，像两个来源。
-    static nonisolated func brief(_ values: [String], label: String? = nil) -> String {
-        let shown = values.prefix(2).map(FeatureText.display).joined(separator: ", ")
+    /// - Parameter display: 值 → 显示文案。默认统一的 `FeatureText.display`；
+    ///   房型和入住人数各有按维度定制的规则（见 `FeatureText.displayType` /
+    ///   `displayOccupancy`），摘要上也得跟筛选页显示成同一句话，否则同一个
+    ///   选项在两屏上叫两个名字。
+    static nonisolated func brief(_ values: [String], label: String? = nil,
+                                  display: (String) -> String = FeatureText.display) -> String {
+        let shown = values.prefix(2).map(display).joined(separator: ", ")
         let rest = values.count - min(2, values.count)
         let body = rest > 0 ? "\(shown) +\(rest)" : shown
         return label.map { "\($0): \(body)" } ?? body

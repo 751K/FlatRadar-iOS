@@ -163,8 +163,12 @@ extension Listing {
         featureValue(matching: ["contract", "rental agreement", "agreement"])
     }
 
+    /// 房型的**显示**形态。走 `FeatureText.displayType` 剥掉尾部括号注释
+    /// （`"Loft (open bedroom area)"` → `"Loft"`）。筛选用的值不经这里，
+    /// 仍然是后端原字符串。
     nonisolated var typeText: String? {
         featureValue(matching: ["type", "property type", "apartment type"])
+            .map(FeatureText.displayType)
     }
 
     nonisolated var buildingText: String? {

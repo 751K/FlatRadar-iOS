@@ -31,6 +31,11 @@ struct FilterChoiceList: View {
     /// 该维度取值本身需要解释时补一句。目前只有 Types 用得上——见 ``FilterEditView``。
     var hint: LocalizedStringKey?
 
+    /// 这一维度怎么把后端原值变成显示文案。默认统一走 `FeatureText.display`；
+    /// 房型传 `FeatureText.displayType`（要多剥一层括号注释，而那个剥离不能
+    /// 通用——见该方法的注释）。
+    var display: (String) -> String = FeatureText.display
+
     @State private var query = ""
 
     /// 候选 + 用户已选但候选里没有的值。后者排在末尾，不参与搜索排序。
@@ -49,7 +54,7 @@ struct FilterChoiceList: View {
         guard !q.isEmpty else { return allChoices }
         return allChoices.filter {
             $0.localizedCaseInsensitiveContains(q)
-                || FeatureText.display($0).localizedCaseInsensitiveContains(q)
+                || display($0).localizedCaseInsensitiveContains(q)
         }
     }
 
@@ -111,7 +116,7 @@ struct FilterChoiceList: View {
                 VStack(alignment: .leading, spacing: 2) {
                     // 只改显示。勾选、比对、回传用的都是后端原值——把
                     // "student only" 大写后存回去，后端白名单就匹配不上了。
-                    Text(verbatim: FeatureText.display(choice))
+                    Text(verbatim: display(choice))
                         .foregroundStyle(.primary)
                     if stale.contains(choice) {
                         Text("No current listings use this value")

@@ -304,7 +304,8 @@ struct FilterEditView: View {
                 selection: binding(dim.path),
                 appliesTo: options.dimSources[dim.backendKey] ?? [],
                 selectedSources: draft.allowedSources,
-                hint: dim.hint(choices))
+                hint: dim.hint(choices),
+                display: dim.display)
         } label: {
             HStack {
                 Text(dim.title)
@@ -464,6 +465,9 @@ private struct FilterDim {
     let choices: (FilterOptions) -> [String]
     let path: WritableKeyPath<ListingFilter, [String]>
 
+    /// 这一维度的显示函数。默认 `FeatureText.display`，房型多剥一层括号注释。
+    var display: (String) -> String = FeatureText.display
+
     /// 取值本身需要解释时补一句，否则 nil。
     ///
     /// 只有 Types 用得上：Holland2Stay 的房型字段是 ``no_of_rooms``，取值直接
@@ -487,7 +491,8 @@ private struct FilterDim {
         choices: { $0.neighborhoods }, path: \.allowedNeighborhoods)
     static let types = FilterDim(
         backendKey: "type", title: "Types",
-        choices: { $0.types }, path: \.allowedTypes)
+        choices: { $0.types }, path: \.allowedTypes,
+        display: FeatureText.displayType)
     static let finishing = FilterDim(
         backendKey: "finishing", title: "Finishing",
         choices: { $0.finishing }, path: \.allowedFinishing)
@@ -496,7 +501,8 @@ private struct FilterDim {
         choices: { $0.tenant }, path: \.allowedTenant)
     static let occupancy = FilterDim(
         backendKey: "occupancy", title: "Occupancy",
-        choices: { $0.occupancy }, path: \.allowedOccupancy)
+        choices: { $0.occupancy }, path: \.allowedOccupancy,
+        display: FeatureText.displayOccupancy)
     static let contract = FilterDim(
         backendKey: "contract", title: "Contract",
         choices: { $0.contract }, path: \.allowedContract)

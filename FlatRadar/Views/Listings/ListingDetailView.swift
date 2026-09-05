@@ -225,7 +225,7 @@ struct ListingDetailView: View {
                 if !secondaryDetails(for: listing).isEmpty {
                     DetailSection(title: "All Details") {
                         ForEach(secondaryDetails(for: listing), id: \.key) { key, value in
-                            DetailRow(label: displayKey(key), value: displayValue(value))
+                            DetailRow(label: displayKey(key), value: displayValue(value, forKey: key))
                                 // 地址是这一屏唯一会被拷去别处用的东西（发给中介、
                                 // 贴进别的地图、查通勤）。长按复制。
                                 //
@@ -380,8 +380,8 @@ struct ListingDetailView: View {
     }
 
     /// 值的显示形态：统一首字母大写。规则见 ``FeatureText/display(_:)``。
-    private func displayValue(_ value: String) -> String {
-        FeatureText.display(value)
+    private func displayValue(_ value: String, forKey key: String) -> String {
+        FeatureText.display(value, forKey: key)
     }
 
     private func statusColor(for listing: Listing) -> Color {

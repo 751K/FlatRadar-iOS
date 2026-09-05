@@ -670,7 +670,8 @@ private struct ListingFilterSheet: View {
                         Text("No types available").font(.subheadline).foregroundStyle(.secondary)
                     } else if options.types.count > 6 {
                         DisclosureGroup(isExpanded: $showTypes) {
-                            multiSelectRows(choices: options.types, selection: $selectedTypes)
+                            multiSelectRows(choices: options.types, selection: $selectedTypes,
+                                        display: FeatureText.displayType)
                         } label: {
                             HStack {
                                 Text(selectedTypes.isEmpty ? "All Types" : "\(selectedTypes.count) selected")
@@ -678,7 +679,8 @@ private struct ListingFilterSheet: View {
                             }
                         }
                     } else {
-                        multiSelectRows(choices: options.types, selection: $selectedTypes)
+                        multiSelectRows(choices: options.types, selection: $selectedTypes,
+                                        display: FeatureText.displayType)
                     }
                 } header: {
                     Label("Type", systemImage: "house.lodge")
@@ -778,7 +780,14 @@ private struct ListingFilterSheet: View {
     }
 
     @ViewBuilder
-    private func multiSelectRows(choices: [String], selection: Binding<[String]>) -> some View {
+    /// - Parameter display: 后端原值 → 显示文案。默认原样（这张表历来直接显示
+    ///   原值）；房型传 `FeatureText.displayType` 剥掉尾部括号注释。勾选和回传
+    ///   用的仍然是原值。
+    private func multiSelectRows(
+        choices: [String],
+        selection: Binding<[String]>,
+        display: @escaping (String) -> String = { $0 }
+    ) -> some View {
         ForEach(choices, id: \.self) { c in
             Toggle(isOn: Binding(
                 get: { selection.wrappedValue.contains(c) },
@@ -792,7 +801,7 @@ private struct ListingFilterSheet: View {
                     }
                 }
             )) {
-                Text(c)
+                Text(verbatim: display(c))
             }
         }
     }
