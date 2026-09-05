@@ -333,6 +333,21 @@ struct LoginView: View {
             }
             .padding(.horizontal, 22)
             .padding(.top, 70)
+            // **占满整幅宽度、内容靠左。**
+            //
+            // 这个 VStack 虽然写着 `alignment: .leading`，但那只管**它内部**几行
+            // 之间的对齐；它自己的宽度是由最宽的那行（标题 ~440pt）撑出来的。
+            // 外面是 `ZStack(alignment: .bottom)`——.bottom 在水平方向就是居中，
+            // 于是整块被摆到了正中间。
+            //
+            // iPhone 上看不出来，因为标题本来就比屏宽还宽，VStack 铺满了；
+            // iPad 上（竖屏 834、横屏 1194+）富余出几百 pt，logo / 标题 / 三个
+            // 胶囊整体飘到中间，而下面 "CONTINUE AS" 那一栏是靠左的，两边对不上。
+            //
+            // 22 这个左边距和 contentSection 的 18 + "CONTINUE AS" 自己的
+            // leading 4 相加正好相等，所以铺满靠左之后标题和那行小标签是**同一条
+            // 左边线**。
+            .frame(maxWidth: .infinity, alignment: .leading)
             .frame(height: 350)
         }
         .frame(height: 350)
