@@ -83,30 +83,37 @@ struct MainTabView: View {
         .accessibilityIdentifier("tab-browse")
         .hidden(!compact)
 
-        // 宽：三个展开成独立 tab。用 TabSection 分组——sidebarAdaptable 下
-        // 侧边栏里会显示 "Browse" 这个分组标题，比六个平铺的 tab 好读。
-        TabSection("Browse") {
-            Tab(value: AppTab.listings) {
-                listingsTab
-            } label: {
-                Label("Listings", systemImage: "list.bullet")
-            }
-            .accessibilityIdentifier("tab-listings")
-
-            Tab(value: AppTab.map) {
-                mapTab
-            } label: {
-                Label("Map", systemImage: "map.fill")
-            }
-            .accessibilityIdentifier("tab-map")
-
-            Tab(value: AppTab.calendar) {
-                calendarTab
-            } label: {
-                Label("Calendar", systemImage: "calendar")
-            }
-            .accessibilityIdentifier("tab-calendar")
+        // 宽：三个平铺成独立 tab。
+        //
+        // 曾经把它们包进 `TabSection("Browse")`，想让侧边栏里多一层分组标题。
+        // 那是错的：sidebarAdaptable 的**顶部 tab bar** 会把整个 section 折叠成
+        // 一个叫 "Browse" 的条目，三个子 tab 只有展开侧边栏才够得着——横屏 iPad
+        // 上等于把 Listings / Map / Calendar 藏了起来。
+        //
+        // TabSection 是给「次级、可折叠、数量会变」的那类分组用的（Apple 的例子
+        // 是播放列表）。这三个是并列的主视图，平铺才对。
+        Tab(value: AppTab.listings) {
+            listingsTab
+        } label: {
+            Label("Listings", systemImage: "list.bullet")
         }
+        .accessibilityIdentifier("tab-listings")
+        .hidden(compact)
+
+        Tab(value: AppTab.map) {
+            mapTab
+        } label: {
+            Label("Map", systemImage: "map.fill")
+        }
+        .accessibilityIdentifier("tab-map")
+        .hidden(compact)
+
+        Tab(value: AppTab.calendar) {
+            calendarTab
+        } label: {
+            Label("Calendar", systemImage: "calendar")
+        }
+        .accessibilityIdentifier("tab-calendar")
         .hidden(compact)
 
         if auth.role == .user || auth.role == .admin {
