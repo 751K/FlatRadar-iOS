@@ -41,6 +41,20 @@ struct DashboardView: View {
     @State private var tenantTopThree: [ChartEntry] = []
     @State private var weekGrowthCached: String? = nil
 
+    /// Dashboard **自己**的导航栈。
+    ///
+    /// Your matches 里点一套房，以前走 `coord.openListing(id:)`——那个方法会
+    /// `selectedTab = .listings` 再把路径塞进 Listings 那个栈里，所以详情页是在
+    /// **另一个 tab** 里打开的，返回键自然回到 Listings，回不到 Dashboard。
+    ///
+    /// 那个行为对深链接和「在地图上查看」是对的（它们本来就要换 tab），对这里
+    /// 不对：从 Dashboard 点进去就该在 Dashboard 里返回。所以这里 push 到自己
+    /// 的栈上。
+    ///
+    /// 注：`RecentActivitySheet`（New · 24h / Changes 两个 sheet）里点房源仍然
+    /// 走 `coord.openListing`——它得先 dismiss 自己，dismiss 之后没有栈可 push。
+    @State private var listingPath: [ListingRoute] = []
+
     /// 分栏时左栏（大数字卡 + Explore）的实测高度，用来把右栏那张卡拉到同样高。
     ///
     /// 为什么要量而不是让它自己撑：HStack 里写 `maxHeight: .infinity` 在
@@ -60,7 +74,7 @@ struct DashboardView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $listingPath) {
             GeometryReader { proxy in
                 ScrollView {
                     VStack(alignment: .leading, spacing: 0) {
@@ -79,6 +93,9 @@ struct DashboardView: View {
                 .refreshable { await refresh() }
                 .background(Color(.systemGroupedBackground))
                 .navigationBarTitleDisplayMode(.inline)
+                .navigationDestination(for: ListingRoute.self) { route in
+                    ListingDetailView(route: route)
+                }
                 .task { await refresh() }
                 .sheet(item: $activeChart) { detail in
                     ChartDetailView(chartKey: detail.key,
@@ -636,7 +653,8 @@ struct DashboardView: View {
             } else {
                 ForEach(matchedPreviews.prefix(previewCount)) { listing in
                     Button {
-                        coord.openListing(id: listing.id)
+                        // push 到 Dashboard 自己的栈，不换 tab——见 listingPath。
+                        listingPath.append(.byId(listing.id, titleHint: listing.name))
                     } label: {
                         if stacked {
                             matchPreviewRow(listing)
@@ -691,9 +709,9 @@ struct DashboardView: View {
             }
             .foregroundStyle(.secondary)
             .frame(maxWidth: .infinity,
-                   minHeight: Self.stackedRowHeight - 24,
+                   minHeight: Self.stackedRowHeight - 28,
                    alignment: .leading)
-            .padding(.vertical, 12).padding(.horizontal, 14)
+            .padding(.vertical, 14).padding(.horizontal, 16)
             .background(Color(.systemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
         } else {
             VStack(alignment: .leading, spacing: 4) {
@@ -744,7 +762,16 @@ struct DashboardView: View {
                             .lineLimit(1)
                             .truncationMode(.tail)
                     }
-                    Spacer(minLength: 0)
+                    Spacer(minLength: 8)
+                    // 起租日。横排那张小卡一直有（副信息最后一行），摊平成一行时
+                    // 被漏掉了——它和价格一样是决定"要不要点进去"的字段，不能省。
+                    // 靠右单独放，不混进左边那串副信息里。
+                    if let from = listing.availableShortText {
+                        Text(from)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
                 }
             }
 
@@ -752,10 +779,10 @@ struct DashboardView: View {
                 .font(.footnote)
                 .foregroundStyle(.tertiary)
         }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 14)
+        .padding(.vertical, 14)
+        .padding(.horizontal, 16)
         .frame(maxWidth: .infinity,
-               minHeight: Self.stackedRowHeight - 24,
+               minHeight: Self.stackedRowHeight - 28,
                alignment: .leading)
         .background(Color(.systemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
     }
@@ -782,7 +809,7 @@ struct DashboardView: View {
     /// 竖排一条预览的标称高度（含上下内边距）和条间距。
     /// ``stackedPreviewCount(cardHeight:)`` 按这两个数反推能放几条，所以它们和
     /// ``matchPreviewRow(_:)`` / ``matchesBody`` 里的实际值必须是同一个。
-    private static let stackedRowHeight: CGFloat = 64
+    private static let stackedRowHeight: CGFloat = 78
     private static let stackedRowSpacing: CGFloat = 10
 
     /// 卡里除预览条以外吃掉的高度：上下内边距 30 + 标题 28 + 间距 12
