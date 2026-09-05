@@ -355,6 +355,10 @@ struct DashboardView: View {
                         statsCard(availableWidth: leftWidth, wide: true)
                         exploreSection(availableWidth: leftWidth, showsMore: false)
                     }
+                    // 宽度写死在**被量的这块**上，不只写在外层。量出来的高度是
+                    // 「这块在这个宽度下有多高」——宽度要是被别的东西定成了别的
+                    // 值，Explore 的网格会换个高度，量到的数就对不上右栏了。
+                    .frame(width: leftWidth)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
                         leftColumnHeight = $0
                     }
