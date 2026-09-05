@@ -41,6 +41,16 @@ struct DashboardView: View {
     @State private var tenantTopThree: [ChartEntry] = []
     @State private var weekGrowthCached: String? = nil
 
+    /// 分栏时左栏（大数字卡 + Explore）的实测高度，用来把右栏那张卡拉到同样高。
+    ///
+    /// 为什么要量而不是让它自己撑：HStack 里写 `maxHeight: .infinity` 在
+    /// ScrollView 里是无界的，会把无穷大一路提给子视图算尺寸（Dashboard 的
+    /// sparkline 踩过这个，见 statsCard 竖排分支的注释）。量出来是个具体数，
+    /// 没有这个风险。
+    ///
+    /// 不会形成循环：右栏多高不影响左栏，左栏高度只由自己的内容决定。
+    @State private var leftColumnHeight: CGFloat = 0
+
     struct ChartDetail: Identifiable {
         let id = UUID()
         let key: String
@@ -324,8 +334,12 @@ struct DashboardView: View {
                     exploreSection(availableWidth: leftWidth)
                 }
                 .frame(width: leftWidth)
+                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                    leftColumnHeight = $0
+                }
 
-                matchesSection(me, availableWidth: rightWidth, stacked: true)
+                matchesSection(me, availableWidth: rightWidth, stacked: true,
+                               minCardHeight: leftColumnHeight)
                     .frame(width: rightWidth)
             }
         } else {
@@ -530,9 +544,12 @@ struct DashboardView: View {
     /// 一条 ~478pt 的列里会变成三张 116pt 的小卡挤在顶上，下面几百 pt 全空着。
     /// 竖排版本把数字提到上面当标题，预览改成一行一条铺满列宽，正好把列填起来，
     /// 顺带能多显示两条（横排最多 5 条要 1180pt，这里 5 条只要够高）。
+    /// `minCardHeight`：分栏时把卡拉到和左栏一样高，底边对齐 Explore 的底边。
+    /// 0 表示还没量到（第一帧），那就先按内容高度画。
     private func matchesSection(_ me: MeSummary,
                                 availableWidth: CGFloat,
-                                stacked: Bool = false) -> some View {
+                                stacked: Bool = false,
+                                minCardHeight: CGFloat = 0) -> some View {
         let previewCount = stacked ? 5 : matchPreviewCount(for: availableWidth)
 
         return VStack(spacing: 0) {
@@ -552,13 +569,21 @@ struct DashboardView: View {
             VStack(alignment: .leading, spacing: 12) {
                 if stacked { matchesHeader(me, stacked: true) }
                 matchesBody(me, previewCount: previewCount, stacked: stacked)
+                // 拉高之后内容留在顶上，多出来的高度落在这里。
+                if stacked { Spacer(minLength: 0) }
             }
             .padding(15)
+            // minHeight 而不是 height：内容要是比左栏还高（大字号 / 更多预览），
+            // 让它自己长出去，别被切。alignment 顶对齐，多的高度全落在下面。
+            .frame(minHeight: stacked && minCardHeight > 0 ? minCardHeight : nil,
+                   alignment: .top)
             .background(Color(.secondarySystemGroupedBackground))
             .clipShape(RoundedRectangle(cornerRadius: 20))
             .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.secondary.opacity(0.12), lineWidth: 1))
             .padding(.horizontal, 20)
-            .padding(.bottom, 26)
+            // 分栏时不留底部间距：卡的底边就是这一栏的底边，要和左栏的
+            // Explore 底边平齐。
+            .padding(.bottom, stacked ? 0 : 26)
         }
     }
 
