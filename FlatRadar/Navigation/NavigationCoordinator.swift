@@ -72,14 +72,38 @@ final class NavigationCoordinator {
     /// 真机上没法远程点 tab 栏。发布包一律 dashboard。
     private static var initialTab: AppTab {
         #if DEBUG
-        let args = ProcessInfo.processInfo.arguments
-        if let i = args.firstIndex(of: "-initialTab"), i + 1 < args.count,
-           let tab = AppTab(rawValue: args[i + 1]) {
+        if let tab = debugArgument("-initialTab").flatMap(AppTab.init(rawValue:)) {
             return tab
         }
         #endif
         return .dashboard
     }
+
+    init() {
+        #if DEBUG
+        // `-switchTabAfter <秒>:<tab>`：启动 N 秒后自动切到某个 tab，复现"先在
+        // 别的页面待一会儿再点过去"的路径（比如 Dashboard 预热完 map 数据再进
+        // 地图）。给 xctrace 录 Time Profiler 用，真机上没法远程点 tab。
+        if let spec = Self.debugArgument("-switchTabAfter") {
+            let parts = spec.split(separator: ":", maxSplits: 1).map(String.init)
+            if parts.count == 2, let secs = Double(parts[0]),
+               let tab = AppTab(rawValue: parts[1]) {
+                Task { @MainActor [weak self] in
+                    try? await Task.sleep(for: .seconds(secs))
+                    self?.selectedTab = tab
+                }
+            }
+        }
+        #endif
+    }
+
+    #if DEBUG
+    private static func debugArgument(_ flag: String) -> String? {
+        let args = ProcessInfo.processInfo.arguments
+        guard let i = args.firstIndex(of: flag), i + 1 < args.count else { return nil }
+        return args[i + 1]
+    }
+    #endif
     var listingsPath: [ListingRoute] = []
 
     /// deep link 里的 listing id 是否可信。
