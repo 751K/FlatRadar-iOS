@@ -344,32 +344,41 @@ struct DashboardView: View {
         if isTwoColumn(size), auth.isUser, let me = store.meSummary {
             let leftWidth = size.width * (1 - Self.matchesColumnRatio)
             let rightWidth = size.width - leftWidth
-            HStack(alignment: .top, spacing: 0) {
-                VStack(alignment: .leading, spacing: 0) {
-                    // 量的范围**到最后一张 Explore 卡为止**，不含
-                    // "More breakdowns ›"。右栏对齐的是那排卡的底边——按钮是
-                    // 一条居中的文字链接，跟它对齐等于右栏比左边的卡多出去
-                    // 一截，看着像没对上。所以按钮排在被量的这块外面。
+            // "More breakdowns ›" 排在 **HStack 外面**，不在左栏里。
+            //
+            // 它在左栏里的时候，HStack 的高度 = 两列的较大值 = 左栏（含按钮）。
+            // 右栏那张卡用的是 `minHeight`，而只给 minHeight 的 frame 在被提议
+            // 更多高度时是**可以长的**——于是它被撑到了 HStack 的高度，也就是
+            // 连按钮那 38pt 一起吃了进去。表现就是右栏底边卡在 "More breakdowns"
+            // 那一行上，而不是最后一张 Explore 卡的底边。
+            //
+            // 把按钮挪出 HStack 之后，HStack 的高度就等于「大数字卡 + Explore
+            // 网格」本身——就算卡还是被撑满，撑到的也正好是要对齐的那条线。
+            // 这比"算准高度"更可靠：不依赖我把 minHeight 的伸缩语义想对。
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .top, spacing: 0) {
                     VStack(alignment: .leading, spacing: 0) {
                         // wide 直接给 true：门槛已经保证 leftWidth ≥ 700。
                         statsCard(availableWidth: leftWidth, wide: true)
                         exploreSection(availableWidth: leftWidth, showsMore: false)
                     }
-                    // 宽度写死在**被量的这块**上，不只写在外层。量出来的高度是
-                    // 「这块在这个宽度下有多高」——宽度要是被别的东西定成了别的
-                    // 值，Explore 的网格会换个高度，量到的数就对不上右栏了。
+                    // 宽度写死在**被量的这块**上：量出来的高度是「这块在这个宽度
+                    // 下有多高」，宽度要是变了，Explore 网格会换个高度，量到的数
+                    // 就对不上右栏。
                     .frame(width: leftWidth)
                     .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
                         leftColumnHeight = $0
                     }
 
-                    exploreMoreButton.padding(.top, 18)
+                    matchesSection(me, availableWidth: rightWidth, stacked: true,
+                                   minCardHeight: leftColumnHeight)
+                        .frame(width: rightWidth)
                 }
-                .frame(width: leftWidth)
 
-                matchesSection(me, availableWidth: rightWidth, stacked: true,
-                               minCardHeight: leftColumnHeight)
-                    .frame(width: rightWidth)
+                // 仍然摆在左栏正下方居中，不是整屏居中。
+                exploreMoreButton
+                    .frame(width: leftWidth)
+                    .padding(.top, 18)
             }
         } else {
             statsCard(availableWidth: size.width, wide: statsIsWide(size))
