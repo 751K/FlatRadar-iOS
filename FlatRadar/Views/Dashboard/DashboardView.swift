@@ -329,14 +329,22 @@ struct DashboardView: View {
             let rightWidth = size.width - leftWidth
             HStack(alignment: .top, spacing: 0) {
                 VStack(alignment: .leading, spacing: 0) {
-                    // wide 直接给 true：门槛已经保证 leftWidth ≥ 700。
-                    statsCard(availableWidth: leftWidth, wide: true)
-                    exploreSection(availableWidth: leftWidth)
+                    // 量的范围**到最后一张 Explore 卡为止**，不含
+                    // "More breakdowns ›"。右栏对齐的是那排卡的底边——按钮是
+                    // 一条居中的文字链接，跟它对齐等于右栏比左边的卡多出去
+                    // 一截，看着像没对上。所以按钮排在被量的这块外面。
+                    VStack(alignment: .leading, spacing: 0) {
+                        // wide 直接给 true：门槛已经保证 leftWidth ≥ 700。
+                        statsCard(availableWidth: leftWidth, wide: true)
+                        exploreSection(availableWidth: leftWidth, showsMore: false)
+                    }
+                    .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
+                        leftColumnHeight = $0
+                    }
+
+                    exploreMoreButton.padding(.top, 18)
                 }
                 .frame(width: leftWidth)
-                .onGeometryChange(for: CGFloat.self) { $0.size.height } action: {
-                    leftColumnHeight = $0
-                }
 
                 matchesSection(me, availableWidth: rightWidth, stacked: true,
                                minCardHeight: leftColumnHeight)
@@ -550,7 +558,9 @@ struct DashboardView: View {
                                 availableWidth: CGFloat,
                                 stacked: Bool = false,
                                 minCardHeight: CGFloat = 0) -> some View {
-        let previewCount = stacked ? 5 : matchPreviewCount(for: availableWidth)
+        let previewCount = stacked
+            ? stackedPreviewCount(cardHeight: minCardHeight)
+            : matchPreviewCount(for: availableWidth)
 
         return VStack(spacing: 0) {
             // 分栏时标题收进卡里。
@@ -680,8 +690,10 @@ struct DashboardView: View {
                 Text("⋯⋯").font(.system(size: 11)).foregroundStyle(.secondary)
             }
             .foregroundStyle(.secondary)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 10).padding(.horizontal, 12)
+            .frame(maxWidth: .infinity,
+                   minHeight: Self.stackedRowHeight - 24,
+                   alignment: .leading)
+            .padding(.vertical, 12).padding(.horizontal, 14)
             .background(Color(.systemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
         } else {
             VStack(alignment: .leading, spacing: 4) {
@@ -708,26 +720,26 @@ struct DashboardView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(listing.name)
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: 15, weight: .semibold))
                         .lineLimit(1)
                         .truncationMode(.tail)
                     Spacer(minLength: 8)
                     Text(listing.priceRaw ?? "—")
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.system(size: 17, weight: .bold))
                         .lineLimit(1)
                 }
 
                 HStack(spacing: 5) {
                     Circle()
                         .fill(matchStatusColor(listing))
-                        .frame(width: 5, height: 5)
+                        .frame(width: 6, height: 6)
                     Text(matchStatusLabel(listing))
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(matchStatusColor(listing))
                         .lineLimit(1)
                     if let detail = matchRowDetail(listing) {
                         Text("· \(detail)")
-                            .font(.system(size: 11))
+                            .font(.system(size: 12))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .truncationMode(.tail)
@@ -737,12 +749,14 @@ struct DashboardView: View {
             }
 
             Image(systemName: "chevron.right")
-                .font(.caption2)
+                .font(.footnote)
                 .foregroundStyle(.tertiary)
         }
-        .padding(.vertical, 10)
-        .padding(.horizontal, 12)
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.vertical, 12)
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity,
+               minHeight: Self.stackedRowHeight - 24,
+               alignment: .leading)
         .background(Color(.systemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
     }
 
@@ -763,6 +777,34 @@ struct DashboardView: View {
             parts.append(place)
         }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// 竖排一条预览的标称高度（含上下内边距）和条间距。
+    /// ``stackedPreviewCount(cardHeight:)`` 按这两个数反推能放几条，所以它们和
+    /// ``matchPreviewRow(_:)`` / ``matchesBody`` 里的实际值必须是同一个。
+    private static let stackedRowHeight: CGFloat = 64
+    private static let stackedRowSpacing: CGFloat = 10
+
+    /// 卡里除预览条以外吃掉的高度：上下内边距 30 + 标题 28 + 间距 12
+    /// + 数字块 46 + 数字块到第一条的间距 10。
+    private static let stackedChromeHeight: CGFloat = 126
+
+    /// 最多显示几条——不能超过 ``fetchMatchedPreviews()`` 拉回来的条数。
+    private static let maxMatchedPreviews = 12
+
+    /// 竖排时按卡高反推能放下几条。
+    ///
+    /// 卡是被拉到左栏那么高的，高度是已知的，所以条数不该写死：11 寸横屏能放
+    /// 9 条，写死 5 条就白扔三百多 pt。
+    ///
+    /// 用标称行高算，不量实际高度——量的话「条数 → 卡高 → 条数」会绕成一个环。
+    /// 代价是大字号下实际行高会超过标称值，卡片跟着长出左栏一点；卡用的是
+    /// `minHeight` 不是 `height`，长得出去，不会被切。
+    private func stackedPreviewCount(cardHeight: CGFloat) -> Int {
+        guard cardHeight > 0 else { return 5 }   // 还没量到，先按老数量画一帧
+        let forRows = cardHeight - Self.stackedChromeHeight + Self.stackedRowSpacing
+        let fits = Int(forRows / (Self.stackedRowHeight + Self.stackedRowSpacing))
+        return min(max(fits, 3), Self.maxMatchedPreviews)
     }
 
     private func matchPreviewCount(for width: CGFloat) -> Int {
@@ -886,7 +928,10 @@ struct DashboardView: View {
         return 116
     }
 
-    private func exploreSection(availableWidth: CGFloat) -> some View {
+    /// `showsMore`：带不带底下那条 "More breakdowns ›"。
+    /// 分栏时按钮由 ``dashboardBody(_:)`` 单独排在被测高的区块外面，见那里的注释。
+    private func exploreSection(availableWidth: CGFloat,
+                                showsMore: Bool = true) -> some View {
         VStack(spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Explore")
@@ -909,17 +954,23 @@ struct DashboardView: View {
                 tenantMiniCard(height: h)
             }
             .padding(.horizontal, 20)
-            .padding(.bottom, 18)
+            .padding(.bottom, showsMore ? 18 : 0)
 
-            Button {
-                coord.selectedTab = .browse; coord.selectedBrowseMode = .list
-            } label: {
-                Text("More breakdowns ›")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.blue)
+            if showsMore {
+                exploreMoreButton
             }
-            .frame(maxWidth: .infinity)
         }
+    }
+
+    private var exploreMoreButton: some View {
+        Button {
+            coord.selectedTab = .browse; coord.selectedBrowseMode = .list
+        } label: {
+            Text("More breakdowns ›")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.blue)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Mini cards
@@ -1274,7 +1325,10 @@ struct DashboardView: View {
 
     private func fetchMatchedPreviews() async {
         do {
-            let resp = try await APIClient.shared.getListings(limit: 5, offset: 0)
+            // 竖排右栏最多能显示 maxMatchedPreviews 条，拉够那么多。横排用不到
+            // 这么多（最宽也只显示 5 条），多出来的只是没画，不影响。
+            let resp = try await APIClient.shared.getListings(
+                limit: Self.maxMatchedPreviews, offset: 0)
             matchedPreviews = resp.items
         } catch {
             matchedPreviews = []
