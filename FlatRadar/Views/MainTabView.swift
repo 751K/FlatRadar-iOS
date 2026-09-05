@@ -195,8 +195,27 @@ struct MainTabView: View {
         TabView(selection: tabSelection(compact: compact)) {
             tabs(compact: compact)
         }
-        // iPhone 底部 tab bar 不变；iPad 变成顶部 tab bar，横屏可展开成侧边栏。
+        // iPhone 底部 tab bar 不变；iPad 变成顶部 tab bar，可展开成侧边栏。
         .tabViewStyle(.sidebarAdaptable)
+        // **默认落在顶部 tab bar，而不是侧边栏。**
+        //
+        // `.sidebarAdaptable` 在 iPad **横屏**下默认展开成侧边栏。那不是我们要的：
+        // 侧边栏吃掉约 320pt，而这个 App 的横屏布局（Dashboard 左右分栏、日历
+        // 左右分栏）正是靠那点宽度换来的——侧边栏一开，左栏就掉回窄形态。
+        //
+        // 这条是 build 295 逼出来的。那次把 iPad 截图改成横屏之后 35 张全挂，
+        // 失败信息里的按钮清单说得很清楚：
+        //
+        //     tabBars=0
+        //     id="ToggleSidebar" label="Ocultar barra lateral"   ← 「隐藏侧边栏」
+        //
+        // 也就是说界面确实起来了（清单里 Dashboard 的内容一应俱全），只是 tab
+        // 变成了侧边栏里的行、不再是 `app.buttons` 里带 `tab-` identifier 的按钮，
+        // 截图套件 60 秒等不到，七条 × 五语言全部超时。竖屏时默认是顶部 tab bar，
+        // 所以 build 293 没暴露。
+        //
+        // `.automatic` 交给系统按朝向决定，`.tabBar` 是明确要求「一律用顶部」。
+        .defaultAdaptableTabBarPlacement(.tabBar)
     }
 
     // MARK: - iPad tab content
