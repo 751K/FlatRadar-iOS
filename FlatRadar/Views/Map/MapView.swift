@@ -19,13 +19,35 @@ import SwiftUI
 struct MapView: View {
     @Environment(MapStore.self) private var store
     @Environment(NavigationCoordinator.self) private var coord
+    @Environment(\.horizontalSizeClass) private var hSizeClass
+
+    private var metrics: MapLayout.ControlMetrics { .of(hSizeClass) }
+    private var isRegular: Bool { hSizeClass == .regular }
+
+    /// 弹卡内容的实测高度，由 onGeometryChange 填。0 表示还没量到。
+    @State private var cardHeight: CGFloat = 0
+
+    /// 弹卡的「小」档位。
+    ///
+    /// 曾经写死 `.fraction(0.42)`，而卡片高度是变的——标题可能换行、同址提示可能
+    /// 占两行、没有 Website 时少一个按钮。所以固定分数必然一边留白一边裁掉：
+    /// 0.4 时下半截是空的，收到 0.34 又把标题切了，0.42 则是 Directions / Website
+    /// 那一行被切掉一截。
+    ///
+    /// 改成按实测高度给档位，这一类问题就没有了。量不到时退回原来的分数。
+    private var cardDetent: PresentationDetent {
+        guard cardHeight > 0 else { return .fraction(0.42) }
+        // +36 抵掉 sheet 自己的拖拽指示条和上下留白，不加最后一行会贴着边。
+        // 上限 560：卡片很高时"小"档位不该几乎占满屏，那样就没有小档位的意义了。
+        return .height(min(cardHeight + 36, 560))
+    }
     @State private var locationProvider = UserLocationProvider()
 
-    let overlayTopPadding: CGFloat
-
-    init(overlayTopPadding: CGFloat = 12) {
-        self.overlayTopPadding = overlayTopPadding
-    }
+    /// 地图浮层（筛选条、focus 提示）距顶部的间距。
+    ///
+    /// 曾经是 init 参数，唯一的覆盖点是 BrowseView 的 iPad 分支——那里 picker
+    /// 浮在地图上，浮层得让开它。那个分支删掉之后再没人传别的值，收成常量。
+    private let overlayTopPadding: CGFloat = 12
 
     // 初始视野：Eindhoven 中心，约 60km 直径
     @State private var camera = MapCameraPosition.region(
@@ -170,15 +192,18 @@ struct MapView: View {
                     // （scrollBounceBehavior(.basedOnSize)），装不下也丢不了内容。
                     ScrollView {
                         listingCard(l)
+                            // iOS 18 的 onGeometryChange：把卡片的**实际**高度报
+                            // 上来，档位直接贴着内容，不用再靠调分数去猜。
+                            .onGeometryChange(for: CGFloat.self) { proxy in
+                                proxy.size.height
+                            } action: { cardHeight = $0 }
                     }
                     .scrollBounceBehavior(.basedOnSize)
-                        // 收紧到贴着内容。0.4 时卡片下半截是空的——空白本身不是
-                        // 留白，是"这里本来还该有东西"。
-                        .presentationDetents([.fraction(0.42), .large])
+                        .presentationDetents([cardDetent, .large])
                         // 小尺寸下地图仍可拖动：这是张地图，卡片弹出来不该把
-                        // 它锁死。
+                        // 它锁死。上界必须跟档位是同一个值，写死的分数对不上。
                         .presentationBackgroundInteraction(
-                            .enabled(upThrough: .fraction(0.42)))
+                            .enabled(upThrough: cardDetent))
                         .presentationDragIndicator(.visible)
                 }
 
@@ -263,9 +288,11 @@ struct MapView: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
-                .font(.system(size: 17, weight: .semibold))
-                // 44×44 命中 iOS HIG 最小可点击区域，之前 42×42 差 2pt。
-                .frame(width: 44, height: 44)
+                .font(.system(size: metrics.symbolSize, weight: .semibold))
+                // 窄屏 44×44 命中 iOS HIG 最小可点击区域（之前 42×42 差 2pt）；
+                // 宽屏放大到 56——最小值是"挤不下更大的"时的下限，iPad 上没有
+                // 这个约束，照着下限画只会又小又难点。见 MapLayout.ControlMetrics。
+                .frame(width: metrics.diameter, height: metrics.diameter)
                 .liquidGlass(Circle(), interactive: true)
         }
         .buttonStyle(.plain)
@@ -416,9 +443,15 @@ struct MapView: View {
             //
             // chip 是这里最常动的一格（切个状态看一眼），贴着 tab bar 放在最下
             // 就是离拇指最近的位置；三个圆钮用得少，让一层给它。
+            // 窄屏：计数在左、三个圆钮靠右——单手握 iPhone 时圆钮落在拇指
+            // 自然的落点上，中间用 Spacer 顶开。
+            //
+            // 宽屏：圆钮改为紧挨着计数胶囊一起靠左。iPad 上把它们推到右边意味着
+            // 跨越一千多点去够，两端各一堆控件，视线也要来回扫；左侧成组之后
+            // 计数、圆钮、下面的 chip 条对齐在同一条左边界上。
             HStack(spacing: 10) {
                 countBadge
-                Spacer(minLength: 8)
+                if !isRegular { Spacer(minLength: 8) }
                 mapControlButton(systemName: "line.3.horizontal.decrease.circle",
                                  label: "Filter listings") { showFilters = true }
                 mapControlButton(systemName: "location.fill",
@@ -428,6 +461,7 @@ struct MapView: View {
                     Task { await store.refresh() }
                 }
                 .disabled(store.isLoading)
+                if isRegular { Spacer(minLength: 8) }
             }
             .padding(.horizontal, MapLayout.horizontalInset)
 
@@ -583,8 +617,8 @@ struct MapView: View {
                     .foregroundStyle(.secondary)
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, metrics.badgePaddingH)
+        .padding(.vertical, metrics.badgePaddingV)
         // 不开 interactive：它只是个读数，按下去会形变的话看起来像能点。
         .liquidGlass(Capsule())
         .accessibilityElement(children: .combine)
@@ -727,7 +761,13 @@ struct MapView: View {
 
                     if let url = URL(string: l.url), !l.url.isEmpty {
                         Link(destination: url) {
-                            Label("Website", systemImage: "safari")
+                            // .fill 版：旁边的 View Details 和 Directions 都是
+                            // 实心 .circle.fill，裸 safari 是空心线条，三个并排时
+                            // 就它一个是另一种画法。safari.fill 查过系统的
+                            // CoreGlyphs 清单确实存在（2019 年起）——这个文件上面
+                            // 那条注释就是为符号名写错栽的，名字错了不报错也不崩，
+                            // 只是什么都不画。
+                            Label("Website", systemImage: "safari.fill")
                                 .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.bordered)

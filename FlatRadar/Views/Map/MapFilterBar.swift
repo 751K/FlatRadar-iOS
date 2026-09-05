@@ -10,6 +10,53 @@ import SwiftUI
 /// 哪天 tab bar 的内缩变了，改这一处。
 enum MapLayout {
     static let horizontalInset: CGFloat = 20
+
+    /// 地图浮动控件的尺寸，按可用宽度分两档。
+    ///
+    /// iPhone 上的 44×44 是 **HIG 的最小可点击区域**——那是"再大就挤不下了"
+    /// 的下限，不是舒适值。iPad 上横向有一千多点，继续用这个下限，按钮既小又
+    /// 离手远，实际很难点中。
+    ///
+    /// 判据用 horizontal size class 而不是屏幕宽度：这里要回答的是"这个窗口挤
+    /// 不挤"，而 Split View 下把 iPad 拖窄时 size class 会变 compact，那时候确实
+    /// 该退回小尺寸。这跟 MainTabView 里用宽度是两个问题——那边要防的是 Stage
+    /// Manager 下 size class 仍报 regular 但装不下六个 tab。
+    struct ControlMetrics {
+        let diameter: CGFloat
+        let symbolSize: CGFloat
+        let chipPaddingH: CGFloat
+        let chipPaddingV: CGFloat
+        let badgePaddingH: CGFloat
+        let badgePaddingV: CGFloat
+
+        // 只分档**尺寸和留白**，不分档字号。
+        //
+        // 曾经这里还有 chipFontSize / badgeFont 一组，宽屏各放大一档。查过 HIG
+        // 之后撤掉了：Apple 的默认/最小字号表里 iOS 和 iPadOS 是**同一行**
+        // （默认 17pt、最小 11pt），Dynamic Type 的字号表标题也是 "iOS, iPadOS
+        // Dynamic Type sizes"——一张表管两个平台，没有 iPad 专属字阶。
+        //
+        // 更要紧的是按设备加一档会和 Dynamic Type 打架：想要更大的字是**用户**
+        // 在系统设置里表达的，已经调大过的人会被放大两次。大屏多出来的空间，
+        // 规范给的用法是放更多内容 / 分栏，不是把同样的东西印大。
+        //
+        // 直径 44 / 52 取的是 Apple 的标准按钮档位（Mini 28 · Small 32 ·
+        // Regular 44 · Large 52 · Extra large 64）。44 是 HIG 明写的最小命中
+        // 区域下限，52 是上面一档；中间的 56 不在这组里，是拍出来的。
+        static let compact = ControlMetrics(
+            diameter: 44, symbolSize: 17,
+            chipPaddingH: 13, chipPaddingV: 9,
+            badgePaddingH: 12, badgePaddingV: 8)
+
+        static let regular = ControlMetrics(
+            diameter: 52, symbolSize: 20,
+            chipPaddingH: 17, chipPaddingV: 12,
+            badgePaddingH: 16, badgePaddingV: 11)
+
+        static func of(_ sizeClass: UserInterfaceSizeClass?) -> ControlMetrics {
+            sizeClass == .regular ? .regular : .compact
+        }
+    }
 }
 
 /// 地图筛选：状态 chip 条 + 其余条件的 sheet。
@@ -23,6 +70,9 @@ enum MapLayout {
 /// 「这张图七成是租不到的」这件事就只能靠用户自己数。
 struct MapStatusChips: View {
     @Environment(MapStore.self) private var store
+    @Environment(\.horizontalSizeClass) private var hSizeClass
+
+    private var metrics: MapLayout.ControlMetrics { .of(hSizeClass) }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -55,10 +105,14 @@ struct MapStatusChips: View {
                     .fill(on ? kind.color : Color.secondary.opacity(0.55))
                     .frame(width: 8, height: 8)
                 Text(kind.label)
-                    .font(.system(size: 14.5, weight: on ? .semibold : .medium))
+                    // 语义字体：原来是写死的 14.5pt，绕过了 Dynamic Type——
+                    // 用户把系统字号调大，这条 chip 纹丝不动。
+                    .font(.subheadline)
+                    .fontWeight(on ? .semibold : .medium)
                     .fixedSize()
                 Text("\(count)")
-                    .font(.system(size: 12.5, weight: .bold))
+                    .font(.caption)
+                    .fontWeight(.bold)
                     .monospacedDigit()
                     .fixedSize()
                     .padding(.horizontal, 6)
@@ -72,8 +126,8 @@ struct MapStatusChips: View {
             // 一档去凑，凑到最后是「颜色太浓」和「数字看不见」。文字上色没有这个
             // 问题——色相由状态决定，对比度由系统的中性玻璃保证，两件事解耦。
             .foregroundStyle(on ? kind.color : Color.secondary)
-            .padding(.horizontal, 13)
-            .padding(.vertical, 9)
+            .padding(.horizontal, metrics.chipPaddingH)
+            .padding(.vertical, metrics.chipPaddingV)
             .liquidGlass(Capsule(), interactive: true)
             .opacity(on ? 1 : 0.8)
         }
