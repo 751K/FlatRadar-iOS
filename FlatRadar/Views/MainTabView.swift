@@ -21,8 +21,60 @@ struct MainTabView: View {
     @Environment(AuthStore.self) private var auth
     @Environment(NavigationCoordinator.self) private var coord
 
-    private var tab: Binding<AppTab> {
-        Binding(get: { coord.selectedTab }, set: { coord.selectedTab = $0 })
+    /// TabView 的 selection。
+    ///
+    /// **getter 必须保证返回的 tab 在当前形态下是可见的。** 这不是洁癖，是崩溃修复：
+    ///
+    /// iPad Pro 11 寸竖屏 834pt、横屏 1194pt，转屏正好跨过 `shouldUseCompactTabs`
+    /// 的 920。翻转的瞬间 `.browse` 从可见变隐藏，而 `coord.selectedTab` 要等
+    /// `.onChange(of: useCompactTabs)` 里的 `normalizeSelection` 才会被改写——那
+    /// 发生在视图更新之后。中间那一帧 TabView 的 selection 指着一个
+    /// `.hidden(true)` 的 tab，iOS 18 的 TabView 在这里直接 abort。
+    ///
+    /// 迁移之前不存在这个窗口：compact / wide 是两个各自完整的 TabView，
+    /// `if useCompactTabs` 切换时整个 TabView 被换掉，新 selection 落在一个全新的
+    /// TabView 上。合并成一个 TabView 之后，"tab 集合变化"和"selection 变化"成了
+    /// 两个独立的时刻，中间就有了缝。
+    ///
+    /// 所以不靠 onChange 去追平，而是让 getter 现算：selection 是**派生值**，
+    /// 缝就不存在了。`normalizeSelection` 仍然保留，它负责把规范化后的值写回
+    /// coordinator（deep link、键盘快捷键、下次启动都读那个值）。
+    private func tabSelection(compact: Bool) -> Binding<AppTab> {
+        Binding(
+            get: { Self.visibleTab(coord.selectedTab,
+                                   compact: compact,
+                                   browseMode: coord.selectedBrowseMode) },
+            set: { newValue in
+                coord.selectedTab = newValue
+                // 宽窗口下点 Listings / Map / Calendar 时同步 browseMode，
+                // 这样转回竖屏时 Browse 里落在同一个模式上，不用等 onChange。
+                switch newValue {
+                case .listings: coord.selectedBrowseMode = .list
+                case .map:      coord.selectedBrowseMode = .map
+                case .calendar: coord.selectedBrowseMode = .calendar
+                default:        break
+                }
+            }
+        )
+    }
+
+    /// 把任意 tab 映射成当前形态下**可见**的那一个。纯函数，没有副作用。
+    /// `nonisolated` + 非 private：它是纯函数，而且是 TabSelectionTests 守的东西。
+    nonisolated static func visibleTab(_ tab: AppTab,
+                                       compact: Bool,
+                                       browseMode: BrowseMode) -> AppTab {
+        if compact {
+            switch tab {
+            case .listings, .map, .calendar: return .browse
+            default:                         return tab
+            }
+        }
+        guard tab == .browse else { return tab }
+        switch browseMode {
+        case .list:     return .listings
+        case .map:      return .map
+        case .calendar: return .calendar
+        }
     }
 
     var body: some View {
@@ -140,7 +192,7 @@ struct MainTabView: View {
     }
 
     private func tabView(compact: Bool) -> some View {
-        TabView(selection: tab) {
+        TabView(selection: tabSelection(compact: compact)) {
             tabs(compact: compact)
         }
         // iPhone 底部 tab bar 不变；iPad 变成顶部 tab bar，横屏可展开成侧边栏。
