@@ -75,7 +75,15 @@ struct MapView: View {
     /// 浮在地图上，浮层得让开它。那个分支删掉之后再没人传别的值，收成常量。
     private let overlayTopPadding: CGFloat = 12
 
-    /// 初始视野：Amsterdam 中心，约 60km 直径。
+    /// 初始视野：Amsterdam 市区。
+    ///
+    /// 0.14° 纬 ≈ 15.5km，0.22° 经在北纬 52.37 上 ≈ 15km——正好罩住
+    /// 北边 NDSM 到南边 Zuidas / Amstelveen、西边 Sloterdijk 到东边 IJburg。
+    /// 原来是 0.55°（≈61km），那个范围一直拉到乌得勒支和哈勒姆，阿姆本身缩在
+    /// 中间一小块里，房源全挤成几个聚合泡。
+    ///
+    /// 经纬两个 delta 给的是**各自要罩住的范围**，MapKit 会按视图宽高比取够大的
+    /// 那个，所以横竖屏都不会切掉城区。
     ///
     /// 抽成一个常量而不是写两遍：`camera` 和 `currentRegion` 的初值必须一致
     /// （后者是 clustering 推 cell 大小的依据，不一致的话首帧的聚类是按另一个
@@ -83,7 +91,7 @@ struct MapView: View {
     /// 第一批聚类气泡的大小对不上。
     private static let defaultRegion = MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 52.3676, longitude: 4.9041),
-        span: MKCoordinateSpan(latitudeDelta: 0.55, longitudeDelta: 0.55))
+        span: MKCoordinateSpan(latitudeDelta: 0.14, longitudeDelta: 0.22))
 
     @State private var camera = MapCameraPosition.region(MapView.defaultRegion)
     @State private var showRefreshError = false
