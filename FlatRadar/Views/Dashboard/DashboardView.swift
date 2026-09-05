@@ -61,11 +61,11 @@ struct DashboardView: View {
                         } else {
                             headerRow
                             liveBadge
-                            statsCard
+                            statsCard(availableWidth: proxy.size.width)
                             if auth.isUser, let me = store.meSummary {
                                 matchesSection(me, availableWidth: proxy.size.width)
                             }
-                            exploreSection
+                            exploreSection(availableWidth: proxy.size.width)
                         }
                     }
                     .padding(.bottom, 24)
@@ -276,74 +276,61 @@ struct DashboardView: View {
 
     // MARK: - Stats card
 
-    private var statsCard: some View {
-        let s = store.summary
-        let weekGrowth = weekGrowthText
-        return VStack(spacing: 0) {
-            // Top: big number + sparkline
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("TOTAL LISTINGS")
-                        .font(.system(size: 13, weight: .heavy))
-                        .foregroundStyle(.secondary)
-                        .tracking(1.5)
-                    Text("\(s?.total ?? 0)")
-                        .font(.system(size: 58, weight: .heavy))
-                        .monospacedDigit()
-                        .tracking(-2)
-                    if let wg = weekGrowth {
-                        HStack(spacing: 4) {
-                            Image(systemName: "arrow.up")
-                                .font(.caption2.weight(.bold))
-                            Text("+\(wg)")
-                            Text("this week")
-                                .foregroundStyle(.secondary)
-                        }
-                        .font(.subheadline)
-                        .foregroundStyle(.green)
+    /// 顶部大数字卡。
+    ///
+    /// 宽屏（≥1000pt，iPad 横屏）把「大数字 / 三个小数 / 迷你曲线」排成**一行**。
+    /// 竖排版本在 iPhone 上是对的，但横屏 iPad 上大数字贴最左、曲线贴最右，中间
+    /// 空出 ~800pt；下面三个小数又被 `maxWidth: .infinity` 拉开到跨越整块屏幕。
+    /// 横过来之后这些空隙变成了卡片本身的宽度，卡高也少了一半。
+    ///
+    /// 1000 这个阈值：iPad 横屏 1194、竖屏 834。竖屏放不下一行（大数字块
+    /// ~200 + 三个小数 ~330 + 曲线 ~130 + 间距，接近 800 已经很挤），所以竖屏
+    /// 继续走竖排，只是曲线会撑开一些。
+    private func statsCard(availableWidth: CGFloat) -> some View {
+        let wide = availableWidth >= 1_000
+        return Group {
+            if wide {
+                HStack(alignment: .center, spacing: 0) {
+                    statsHeadline
+                    statsDivider
+                    statsMiniRow(spread: false)
+                    // 曲线吃掉剩下的全部宽度，而不是固定 220 再拿 Spacer 顶开。
+                    // 那段空白本来就没在表达任何东西，交给趋势线之后横屏上它是
+                    // 这张卡里信息量最大的一块。SparklineView 是纯 Shape，拉宽
+                    // 只会让 7 天的走势更清楚。
+                    statsSparkline
+                        .frame(maxWidth: .infinity, minHeight: 70, maxHeight: 70)
+                        .padding(.leading, 32)
+                }
+                .padding(20)
+            } else {
+                VStack(spacing: 0) {
+                    HStack(alignment: .top) {
+                        statsHeadline
+                        Spacer(minLength: 16)
+                        statsSparkline
+                            // 竖排时也别写死 130：iPad 竖屏有富余，让曲线占到
+                            // 该占的宽度，那段空白本来就没在表达任何东西。
+                            //
+                            // ⚠️ 顺序不能反：**先定死尺寸，再撑高度居中**。
+                            // 写成 `.frame(maxHeight: .infinity)` 在前的话，这里
+                            // 外层是 ScrollView（纵向无界），无穷大的高度会一路
+                            // 提给 SparklineView 的 Shape 去算路径，后面那个
+                            // `.frame(height: 70)` 是收不回来的——原来的写法把
+                            // width/height 放在第一位就是为了这个。
+                            .frame(width: availableWidth >= 700 ? 320 : 130,
+                                   height: 70)
+                            .frame(maxHeight: .infinity, alignment: .center)
                     }
-                }
-                Spacer()
-                SparklineView(data: chartDailyNew?.data.map(\.count) ?? [])
-                    .frame(width: 130, height: 70)
-                    // HStack 是 .top 对齐，左边那列（标题 + 58pt 数字 + 涨幅）
-                    // 比曲线高一截，曲线就贴在最上面。撑满高度再居中，让它对着
-                    // 大数字而不是对着标题。
-                    //
-                    // 用 maxHeight 而不是写死 padding：左列高度会随涨幅那行在不在
-                    // 而变，写死的偏移量迟早对不上。
-                    .frame(maxHeight: .infinity, alignment: .center)
-                    .opacity(chartDailyNew == nil ? 0 : 1)
-            }
-            .padding(20)
+                    .padding(20)
 
-            Divider().padding(.horizontal, 20)
+                    Divider().padding(.horizontal, 20)
 
-            // Bottom: 3 mini stats —— 三个 tap 行为分别匹配：
-            //   24h  → 实际房源列表（最 actionable）
-            //   7d   → 7 日趋势 chart + 每日 breakdown
-            //   Changes → 状态变化趋势 chart（用户可见的 notification 不包含
-            //             status_change 事件，无法重建变化的房源列表）
-            HStack(spacing: 0) {
-                miniStat(num: s?.new24h ?? 0, desc: "New · 24h") {
-                    activeRecentMode = .newPast24h
-                }
-                Rectangle().fill(.secondary.opacity(0.2)).frame(width: 2, height: 36)
-                    .padding(.horizontal, 14)
-                miniStat(num: s?.new7d ?? 0, desc: "New · 7d") {
-                    openMiniChart(key: "daily_new",
-                                  title: "New listings",
-                                  subtitle: "Last 7 days",
-                                  days: 7)
-                }
-                Rectangle().fill(.secondary.opacity(0.2)).frame(width: 2, height: 36)
-                    .padding(.horizontal, 14)
-                miniStat(num: s?.changes24h ?? 0, desc: "Changes") {
-                    activeRecentMode = .changesPast24h
+                    statsMiniRow(spread: true)
+                        .padding(.vertical, 14)
+                        .padding(.horizontal, 20)
                 }
             }
-            .padding(.vertical, 14)
-            .padding(.horizontal, 20)
         }
         .background(Color(.secondarySystemGroupedBackground))
         .clipShape(RoundedRectangle(cornerRadius: 22))
@@ -353,7 +340,78 @@ struct DashboardView: View {
         .padding(.bottom, 24)
     }
 
-    private func miniStat(num: Int, desc: String, onTap: @escaping () -> Void) -> some View {
+    /// TOTAL LISTINGS + 大数字 + 本周涨幅。
+    private var statsHeadline: some View {
+        let s = store.summary
+        return VStack(alignment: .leading, spacing: 6) {
+            Text("TOTAL LISTINGS")
+                .font(.system(size: 13, weight: .heavy))
+                .foregroundStyle(.secondary)
+                .tracking(1.5)
+            Text("\(s?.total ?? 0)")
+                .font(.system(size: 58, weight: .heavy))
+                .monospacedDigit()
+                .tracking(-2)
+            if let wg = weekGrowthText {
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.up")
+                        .font(.caption2.weight(.bold))
+                    Text("+\(wg)")
+                    Text("this week")
+                        .foregroundStyle(.secondary)
+                }
+                .font(.subheadline)
+                .foregroundStyle(.green)
+            }
+        }
+        .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var statsSparkline: some View {
+        SparklineView(data: chartDailyNew?.data.map(\.count) ?? [])
+            .opacity(chartDailyNew == nil ? 0 : 1)
+    }
+
+    /// 宽屏一行排布里，大数字和三个小数之间的竖分隔。
+    private var statsDivider: some View {
+        Rectangle().fill(.secondary.opacity(0.2))
+            .frame(width: 2, height: 44)
+            .padding(.horizontal, 24)
+    }
+
+    /// 三个小数。
+    ///
+    /// `spread`：竖排时每个占等分宽度（`maxWidth: .infinity`），横排时按内容
+    /// 收紧——否则它们会把大数字和曲线挤到屏幕两端，就是改之前那个样子。
+    private func statsMiniRow(spread: Bool) -> some View {
+        let s = store.summary
+        return HStack(spacing: 0) {
+            // 三个 tap 行为分别匹配：
+            //   24h  → 实际房源列表（最 actionable）
+            //   7d   → 7 日趋势 chart + 每日 breakdown
+            //   Changes → 状态变化趋势 chart（用户可见的 notification 不包含
+            //             status_change 事件，无法重建变化的房源列表）
+            miniStat(num: s?.new24h ?? 0, desc: "New · 24h", spread: spread) {
+                activeRecentMode = .newPast24h
+            }
+            Rectangle().fill(.secondary.opacity(0.2)).frame(width: 2, height: 36)
+                .padding(.horizontal, 14)
+            miniStat(num: s?.new7d ?? 0, desc: "New · 7d", spread: spread) {
+                openMiniChart(key: "daily_new",
+                              title: "New listings",
+                              subtitle: "Last 7 days",
+                              days: 7)
+            }
+            Rectangle().fill(.secondary.opacity(0.2)).frame(width: 2, height: 36)
+                .padding(.horizontal, 14)
+            miniStat(num: s?.changes24h ?? 0, desc: "Changes", spread: spread) {
+                activeRecentMode = .changesPast24h
+            }
+        }
+    }
+
+    private func miniStat(num: Int, desc: String, spread: Bool = true,
+                          onTap: @escaping () -> Void) -> some View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("\(num)")
@@ -364,7 +422,7 @@ struct DashboardView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
+            .frame(maxWidth: spread ? .infinity : nil, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -531,7 +589,42 @@ struct DashboardView: View {
 
     // MARK: - Explore section
 
-    private var exploreSection: some View {
+    /// Explore 区的列数。
+    ///
+    /// 原本写死两列。iPhone 上对，iPad 横屏（内容宽 ~1150pt）上就是两根 570pt
+    /// 宽的柱子——卡高固定 116pt，越宽越像被拉长的横条。六张卡，3×2 比 2×3 更
+    /// 匀称，也比 6×1 留得住每张卡里那三列统计的可读宽度。
+    private func exploreColumns(for width: CGFloat) -> Int {
+        if width >= 1_000 { return 3 }
+        return 2
+    }
+
+    /// Explore 卡的高度。
+    ///
+    /// 按**列宽**算而不是屏宽——iPad 竖屏 834pt 是 2 列，每张 ~392pt，比横屏
+    /// 3 列的 ~378pt 还宽。只看屏宽会漏掉竖屏那一档，而它恰恰是最扁的。
+    ///
+    /// 不按比例硬撑：卡里那条 6pt 进度条加一行统计是固定高度，多出来的高度会
+    /// 落在 header 与 content 之间的 Spacer 上（见 exploreCard 的注释：所有
+    /// chart 视觉落在卡下半部同一条带）。撑太高只会把中间那段空白拉长，所以
+    /// 分档抬，不连续缩放。
+    /// 卡里图形的缩放系数。
+    ///
+    /// 六张卡里的图形尺寸（堆叠条 6pt、竖条最高 36pt、横条 5pt）都是照着 116pt
+    /// 那一档调死的。卡长高之后它们不跟着长，多出来的高度全落进 header 与
+    /// content 之间的 Spacer——结果就是标题和图之间一大片空白，卡看着更空而不是
+    /// 更充实。按卡高等比放大，让多出来的高度回到图上。
+    private func chartScale(for height: CGFloat) -> CGFloat { height / 116 }
+
+    private func exploreCardHeight(for width: CGFloat) -> CGFloat {
+        let columns = CGFloat(exploreColumns(for: width))
+        let columnWidth = (width - 40 - 10 * (columns - 1)) / columns
+        if columnWidth >= 300 { return 170 }
+        if columnWidth >= 230 { return 140 }
+        return 116
+    }
+
+    private func exploreSection(availableWidth: CGFloat) -> some View {
         VStack(spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Explore")
@@ -542,13 +635,16 @@ struct DashboardView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 12)
 
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
-                sourceMiniCard
-                statusMiniCard
-                priceMiniCard
-                typeMiniCard
-                energyMiniCard
-                tenantMiniCard
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10),
+                                     count: exploreColumns(for: availableWidth)),
+                      spacing: 10) {
+                let h = exploreCardHeight(for: availableWidth)
+                sourceMiniCard(height: h)
+                statusMiniCard(height: h)
+                priceMiniCard(height: h)
+                typeMiniCard(height: h)
+                energyMiniCard(height: h)
+                tenantMiniCard(height: h)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 18)
@@ -579,6 +675,7 @@ struct DashboardView: View {
         title: String,
         tapKey: String,
         tapTitle: String,
+        height: CGFloat,
         @ViewBuilder content: () -> Content
     ) -> some View {
         Button {
@@ -597,7 +694,7 @@ struct DashboardView: View {
                 content()
             }
             .padding(14)
-            .frame(height: 116)
+            .frame(height: height)
             .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16))
             .overlay(RoundedRectangle(cornerRadius: 16).strokeBorder(.secondary.opacity(0.1), lineWidth: 1))
             .contentShape(Rectangle())
@@ -605,8 +702,8 @@ struct DashboardView: View {
         .buttonStyle(ScaleButtonStyle())
     }
 
-    private var statusMiniCard: some View {
-        exploreCard(title: "By status", tapKey: "status_dist", tapTitle: "By Status") {
+    private func statusMiniCard(height: CGFloat) -> some View {
+        exploreCard(title: "By status", tapKey: "status_dist", tapTitle: "By Status", height: height) {
             if !statusBuckets.isEmpty {
                 // statusBuckets 是 [available, lottery, unavailable] 三元，
                 // 由 recomputeDerivedCharts() 在 chartStatus 变化时算一次。
@@ -633,7 +730,7 @@ struct DashboardView: View {
                             }
                         }
                     }
-                    .frame(height: 6).clipShape(Capsule())
+                    .frame(height: 6 * chartScale(for: height)).clipShape(Capsule())
 
                     HStack(alignment: .firstTextBaseline) {
                         VStack(spacing: 2) {
@@ -657,8 +754,8 @@ struct DashboardView: View {
         }
     }
 
-    private var sourceMiniCard: some View {
-        exploreCard(title: "By platform", tapKey: "source_dist", tapTitle: "By Platform") {
+    private func sourceMiniCard(height: CGFloat) -> some View {
+        exploreCard(title: "By platform", tapKey: "source_dist", tapTitle: "By Platform", height: height) {
             if !sourceBuckets.isEmpty {
                 let total = max(sourceBuckets.reduce(0) { $0 + $1.count }, 1)
                 // 颜色按**平台**取，不再按下标取模。三个平台时 palette[idx % 3]
@@ -677,7 +774,7 @@ struct DashboardView: View {
                             }
                         }
                     }
-                    .frame(height: 6)
+                    .frame(height: 6 * chartScale(for: height))
                     .clipShape(Capsule())
 
                     HStack {
@@ -711,8 +808,8 @@ struct DashboardView: View {
         }
     }
 
-    private var priceMiniCard: some View {
-        exploreCard(title: "By price", tapKey: "price_dist", tapTitle: "By Price") {
+    private func priceMiniCard(height: CGFloat) -> some View {
+        exploreCard(title: "By price", tapKey: "price_dist", tapTitle: "By Price", height: height) {
             if !priceSortedAsc.isEmpty {
                 let sorted = priceSortedAsc   // cached
                 let maxCount = sorted.map(\.count).max() ?? 1
@@ -722,7 +819,7 @@ struct DashboardView: View {
                         ForEach(sorted.prefix(9)) { entry in
                             RoundedRectangle(cornerRadius: 2)
                                 .fill(.blue.opacity(0.55))
-                                .frame(height: max(4, ratio(entry.count, maxCount) * 36))
+                                .frame(height: max(4, ratio(entry.count, maxCount) * 36 * chartScale(for: height)))
                         }
                     }
                     HStack {
@@ -736,8 +833,8 @@ struct DashboardView: View {
         }
     }
 
-    private var typeMiniCard: some View {
-        exploreCard(title: "By type", tapKey: "type_dist", tapTitle: "By Type") {
+    private func typeMiniCard(height: CGFloat) -> some View {
+        exploreCard(title: "By type", tapKey: "type_dist", tapTitle: "By Type", height: height) {
             if !typeTopThree.isEmpty {
                 let merged = typeTopThree   // cached top-3 (bucketed + sorted)
                 let maxCount = merged.map(\.count).max() ?? 1
@@ -754,7 +851,7 @@ struct DashboardView: View {
                                     .fill(.blue.opacity(0.6))
                                     .frame(width: proxy.size.width * ratio(entry.count, maxCount))
                             }
-                            .frame(height: 5)
+                            .frame(height: 5 * chartScale(for: height))
                             Text("\(entry.count)")
                                 .font(.system(size: 11, weight: .bold))
                                 .frame(width: 26, alignment: .trailing)
@@ -765,8 +862,8 @@ struct DashboardView: View {
         }
     }
 
-    private var energyMiniCard: some View {
-        exploreCard(title: "By energy", tapKey: "energy_dist", tapTitle: "By Energy") {
+    private func energyMiniCard(height: CGFloat) -> some View {
+        exploreCard(title: "By energy", tapKey: "energy_dist", tapTitle: "By Energy", height: height) {
             if !energyMerged.isEmpty {
                 let merged = energyMerged   // cached
                 let maxCount = merged.map(\.count).max() ?? 1
@@ -777,7 +874,7 @@ struct DashboardView: View {
                             RoundedRectangle(cornerRadius: 2)
                                 .fill(energyBarColor(entry.label))
                                 .frame(maxWidth: .infinity)
-                                .frame(height: max(4, ratio(entry.count, maxCount) * 32))
+                                .frame(height: max(4, ratio(entry.count, maxCount) * 32 * chartScale(for: height)))
                         }
                     }
                     HStack(spacing: 4) {
@@ -793,8 +890,8 @@ struct DashboardView: View {
         }
     }
 
-    private var tenantMiniCard: some View {
-        exploreCard(title: "By tenant", tapKey: "tenant_dist", tapTitle: "By Tenant") {
+    private func tenantMiniCard(height: CGFloat) -> some View {
+        exploreCard(title: "By tenant", tapKey: "tenant_dist", tapTitle: "By Tenant", height: height) {
             if !tenantTopThree.isEmpty {
                 let maxCount = tenantTopThree.map(\.count).max() ?? 1
 
@@ -810,7 +907,7 @@ struct DashboardView: View {
                                     .fill(.blue.opacity(0.6))
                                     .frame(width: proxy.size.width * ratio(entry.count, maxCount))
                             }
-                            .frame(height: 5)
+                            .frame(height: 5 * chartScale(for: height))
                             Text("\(entry.count)")
                                 .font(.system(size: 11, weight: .bold))
                                 .frame(width: 24, alignment: .trailing)
