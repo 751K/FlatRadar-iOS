@@ -63,11 +63,7 @@ final class PushStore {
     /// 设备当前语言，取 primary language code（"en" / "zh" / ...）。
     /// 上报给后端的 ``/api/v1/devices/register``，用于 APNs 双语推送。
     static var currentLanguage: String {
-        if #available(iOS 16, *) {
-            return Locale.current.language.languageCode?.identifier ?? "en"
-        } else {
-            return Locale.current.languageCode ?? "en"
-        }
+        Locale.current.language.languageCode?.identifier ?? "en"
     }
 
     // MARK: - Setup
@@ -80,6 +76,10 @@ final class PushStore {
             Task { @MainActor in
                 await self?.handleDeviceToken(data)
             }
+    ///
+    /// 曾经带一个 `if #available(iOS 16, *)` 的分支，回退到已废弃的
+    /// `Locale.current.languageCode`。最低支持版本升到 18.0 之后那条分支
+    /// 永远不会执行，连同它里面那个废弃 API 一起删掉。
         }
         PushDelegate.shared?.onRegistrationError = { [weak self] err in
             Task { @MainActor in
