@@ -725,10 +725,32 @@ struct LoginView: View {
     /// 当前应该在哪个角色的卡片里显示内联错误。
     /// - 只在卡片展开 && 该 mode 不是 guest && AuthStore 有错时显示
     /// - guest 模式没有密码字段，错误也没什么位置可放（理论上 guest 不会失败）
+    ///
+    /// **具体原因优先，通用标题兜底。** 这里只有一行位置，而 `errorDescription`
+    /// 是通用标题（`.conflict` → 就是一个词 "Conflict"），`errorMessage` 才是
+    /// 后端给的具体说明。`AuthStore.recordError` 的注释也是这么写的：
+    /// 「errorMessage 优先取后端给的具体原因（failureReason）」。
+    ///
+    /// 曾经写成 `lastError?.errorDescription ?? errorMessage`，顺序反了。而
+    /// `lastError` 对任何 APIError 都非 nil，所以后端的具体说明**永远走不到
+    /// 屏幕上**：注册撞名（409）显示 "Conflict"，密码错误显示 "Login Failed"，
+    /// 限流显示 "Too Many Requests"——每一条都把真正有用的那句话换成了一个词。
+    ///
+    /// 注册撞名那条尤其要紧：`/auth/login` 对「没这个人」和「密码错」返回同一个
+    /// 401（后端刻意不区分，防用户名枚举），所以登录失败时客户端只能问一句
+    /// 「要不要建号」。用户点了之后后端用 409 明确说了名字被占用——歧义就是在
+    /// 这一步才消除的，那句话被吞掉，用户就永远推不出「密码打错了」。
+    ///
+    /// 别的地方（ListingsView / MapView 等）用 `errorDescription` 是对的：
+    /// 那些是 ContentUnavailableView 的**标题**槽，具体说明另有 description 位置。
+    /// 这里没有第二个位置。
     private func inlineLoginError(for mode: LoginMode) -> String? {
         guard expandedRole == mode, mode != .guest else { return nil }
-        guard let err = auth.lastError?.errorDescription ?? auth.errorMessage,
-              !err.isEmpty else { return nil }
+        // 后端可能给回空字符串，那种情况下退回标题，别让错误整个消失。
+        let specific = auth.errorMessage?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let err = (specific?.isEmpty == false ? specific : nil)
+            ?? auth.lastError?.errorDescription
+        guard let err, !err.isEmpty else { return nil }
         return err
     }
 
