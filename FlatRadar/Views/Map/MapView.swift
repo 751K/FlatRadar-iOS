@@ -113,6 +113,19 @@ struct MapView: View {
     /// 叠加多个 detached 任务、用旧 region 的结果覆盖新结果。
     @State private var clusterTask: Task<Void, Never>?
 
+    /// 首批 cluster 有没有落过地。见 ``recomputeClusters()`` 里的事务处理。
+    @State private var hasPopulatedClusters = false
+
+    /// pin / 气泡的出入场动画。首批填充那一次由事务关掉，见
+    /// ``recomputeClusters()``。
+    private static let pinTransition: AnyTransition = .asymmetric(
+        insertion: .scale(scale: 0.4).combined(with: .opacity),
+        removal: .scale(scale: 0.4).combined(with: .opacity))
+
+    private static let bubbleTransition: AnyTransition = .asymmetric(
+        insertion: .scale(scale: 0.5).combined(with: .opacity),
+        removal: .scale(scale: 0.5).combined(with: .opacity))
+
     private func recomputeClusters() {
         // 在主线程取值类型快照（store.listings 是 [MapListing] Sendable，
         // region 只取两个 Double delta），聚类计算丢到后台 detached 跑——
@@ -132,7 +145,27 @@ struct MapView: View {
                 )
             }.value
             if Task.isCancelled { return }
-            clusters = result
+
+            // **首批填充不给动画。**
+            //
+            // 数据到位那一刻 clusters 从 0 条变成两百来条，每个 pin 身上都挂着
+            // `.scale + .opacity` 的 insertion transition，于是两百多个 MapKit
+            // 宿主视图同时播放缩放淡入——每个 pin 还带阴影（一次离屏合成），
+            // 这批开销在 CPU 曲线上看不见，表现就是首次打开地图卡好几秒。
+            // 后面的变化（筛选、跨缩放桶重聚类）只动少数几个 pin，动画有意义，
+            // 照常。
+            //
+            // 用事务而不是「拿一个 @State 标记去切 .transition」：那两个写入会被
+            // SwiftUI 合并进同一次更新，body 看到的标记已经是 true，门关不上。
+            // `disablesAnimations` 挂在这一次状态变更本身上，与标记的时序无关。
+            if hasPopulatedClusters {
+                clusters = result
+            } else {
+                var tx = Transaction()
+                tx.disablesAnimations = true
+                withTransaction(tx) { clusters = result }
+                hasPopulatedClusters = true
+            }
         }
     }
 
@@ -305,18 +338,14 @@ struct MapView: View {
                         if cluster.isSingle, let l = cluster.single {
                             Annotation(l.name, coordinate: l.displayCoordinate) {
                                 pinView(for: l)
-                                    .transition(.asymmetric(
-                                        insertion: .scale(scale: 0.4).combined(with: .opacity),
-                                        removal: .scale(scale: 0.4).combined(with: .opacity)))
+                                    .transition(Self.pinTransition)
                             }
                             .tag(l.id)
                         } else {
                             Annotation("\(cluster.count) listings",
                                        coordinate: cluster.coordinate) {
                                 clusterBubble(for: cluster)
-                                    .transition(.asymmetric(
-                                        insertion: .scale(scale: 0.5).combined(with: .opacity),
-                                        removal: .scale(scale: 0.5).combined(with: .opacity)))
+                                    .transition(Self.bubbleTransition)
                             }
                             .annotationTitles(.hidden)
                         }
