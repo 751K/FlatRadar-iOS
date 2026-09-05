@@ -36,6 +36,7 @@ struct FlatRadarApp: App {
     @State private var adminStore = AdminStore()
     @State private var pushStore = PushStore()
     @State private var coffeeStore = CoffeeStore()
+    @State private var reviewStore = ReviewPromptStore()
     @State private var coordinator = NavigationCoordinator()
 
     /// User-overridden color scheme. "system" = follow OS.
@@ -55,6 +56,7 @@ struct FlatRadarApp: App {
                 .environment(adminStore)
                 .environment(pushStore)
                 .environment(coffeeStore)
+                .environment(reviewStore)
                 .environment(coordinator)
                 .task {
                     // 0. 注册 MetricKit：上一次 launch 间 OS 收集的崩溃/卡顿
@@ -99,6 +101,17 @@ struct FlatRadarApp: App {
                 // SSE 实时通知：登录 + 前台时连，登出 / 后台时断
                 .onChange(of: scenePhase) { _, newPhase in
                     syncStreamState(scenePhase: newPhase)
+                    // 「用过几天」在这里记。放前台切换而不是 App 启动：用户
+                    // 常常不退 App，只是切出去再切回来——只在冷启动记的话，
+                    // 连用一周可能只算一天。
+                    //
+                    // 通知状态顺带一起传：ReviewPromptStore 拿不到 PushStore，
+                    // 而这里两个都在手上。
+                    if newPhase == .active {
+                        reviewStore.noteActiveDay(
+                            hasNotifications: pushStore.permissionStatus == .authorized
+                                || pushStore.permissionStatus == .provisional)
+                    }
                 }
                 .onChange(of: authStore.isAuthenticated) { _, newValue in
                     syncStreamState(scenePhase: scenePhase)

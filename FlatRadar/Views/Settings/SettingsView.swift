@@ -6,6 +6,8 @@ struct SettingsView: View {
     @Environment(AuthStore.self) private var auth
     @Environment(PushStore.self) private var push
     @Environment(CoffeeStore.self) private var coffee
+    @Environment(ReviewPromptStore.self) private var review
+    @Environment(\.requestReview) private var requestReview
     @AppStorage("server_url") private var serverURL: String = APIClient.defaultServerHost
     @AppStorage("color_scheme") private var colorScheme: String = "system"
     @State private var editedURL = ""
@@ -383,6 +385,12 @@ struct SettingsView: View {
                         } label: {
                             Text("Send Feedback")
                         }
+                        // 手动入口必须是 **链接**，不能是 `requestReview()`。
+                        // Apple 明确禁止把系统评分框挂在按钮上；
+                        // `?action=write-review` 直接打开撰写评论界面。
+                        Link(destination: ReviewPromptStore.writeReviewURL) {
+                            Text("Rate FlatRadar")
+                        }
                     }
                 }
             }
@@ -411,7 +419,17 @@ struct SettingsView: View {
                 get: { coffee.showThanks },
                 set: { coffee.showThanks = $0 }
             )) {
-                Button("You're welcome!") {}
+                // 打赏成功是最强的正向信号，比任何启发式都准，所以这一路不看
+                // 「用过几天 / 看过几条」的门槛（见 ReviewPromptPolicy）。
+                //
+                // 问的时机是**致谢弹窗被关掉之后**，不是购买成功的那一刻：
+                // 两个系统弹窗叠在一起，第二个大概率被系统直接吞掉，白白用掉
+                // 一年三次里的一次。
+                Button("You're welcome!") {
+                    guard review.shouldAsk(.tipCompleted) else { return }
+                    review.markAsked()
+                    requestReview()
+                }
             } message: {
                 Text("Your support means a lot.\nEnjoy your \(coffee.thanksMessage)!")
             }

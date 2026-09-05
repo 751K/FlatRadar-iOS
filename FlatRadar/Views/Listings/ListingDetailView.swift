@@ -1,3 +1,4 @@
+import StoreKit
 import SwiftUI
 import UIKit
 
@@ -13,6 +14,9 @@ struct ListingDetailView: View {
     let route: ListingRoute
 
     @Environment(NavigationCoordinator.self) private var coord
+    @Environment(ReviewPromptStore.self) private var review
+    /// 系统评分框。只能在视图里拿，所以判断在 store、调用在这儿。
+    @Environment(\.requestReview) private var requestReview
 
     @State private var listing: Listing?
     @State private var isLoading = false
@@ -59,6 +63,16 @@ struct ListingDetailView: View {
             }
         }
         .task { await load() }
+        // 时机是**退出详情页**，不是进来的时候。
+        //
+        // 进来时用户正要看房源，弹窗是打断；退出来时他刚看完、手上没事，而且
+        // 「看完一条房源」正是这个 App 兑现承诺的那一刻。门槛（3 个不同的日子、
+        // 5 条详情、开着通知）在 ReviewPromptPolicy 里。
+        .onDisappear {
+            guard review.shouldAsk(.listingClosed) else { return }
+            review.markAsked()
+            requestReview()
+        }
     }
 
     private var titleHint: String? {
@@ -130,6 +144,8 @@ struct ListingDetailView: View {
     }
 
     private func load() async {
+        // 计数放在**加载成功之后**，不在这里开头：加载失败的那次用户什么也没
+        // 看到，不该算进"看过 N 条房源"。
         switch route {
         case .known(let l):
             withoutImplicitAnimation {
@@ -137,6 +153,7 @@ struct ListingDetailView: View {
                 isLoading = false
                 errorMessage = nil
             }
+            review.noteListingOpened()
         case .byId(let id, _):
             guard listing == nil else { return }   // 二次进入不重复 fetch
             withoutImplicitAnimation {
@@ -149,6 +166,7 @@ struct ListingDetailView: View {
                     listing = fetched
                     isLoading = false
                 }
+                review.noteListingOpened()
             } catch {
                 withoutImplicitAnimation {
                     errorMessage = error.localizedDescription
