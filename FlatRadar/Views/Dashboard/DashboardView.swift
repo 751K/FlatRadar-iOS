@@ -61,11 +61,7 @@ struct DashboardView: View {
                         } else {
                             headerRow
                             liveBadge
-                            statsCard(available: proxy.size)
-                            if auth.isUser, let me = store.meSummary {
-                                matchesSection(me, availableWidth: proxy.size.width)
-                            }
-                            exploreSection(availableWidth: proxy.size.width)
+                            dashboardBody(proxy.size)
                         }
                     }
                     .padding(.bottom, 24)
@@ -274,21 +270,14 @@ struct DashboardView: View {
         }
     }
 
-    // MARK: - Stats card
-
-    /// 顶部大数字卡。
-    ///
-    /// 横排把「大数字 / 三个小数 / 迷你曲线」放成**一行**。竖排版本在 iPhone 竖屏
-    /// 上是对的，但横过来之后大数字贴最左、曲线贴最右，中间空出一大片；下面三个
-    /// 小数又被 `maxWidth: .infinity` 拉开到跨越整块屏幕。排成一行之后那些空隙
-    /// 变成了卡片本身的宽度，卡高也少了一半。
+    /// 单栏时大数字卡该不该排成一行。
     ///
     /// 判据是**朝向 + 放不放得下**，不是绝对宽度
     /// ------------------------------------------
-    /// 原来写的是 `availableWidth >= 1000`，而这里量到的是**正文**宽度，不是屏幕
+    /// 原来写的是 `availableWidth >= 1000`，而量到的是**正文**宽度，不是屏幕
     /// 宽度——`sidebarAdaptable` 的侧边栏一展开就从里面扣掉约 320pt。iPad 11 寸
     /// 横屏 1194 收起侧边栏走一行、展开后正文只剩 ~874 掉回两行，于是每收放一次
-    /// 侧边栏这张卡就换一次排布，而旁边几块只是平滑地改宽度。
+    /// 侧边栏那张卡就换一次排布，而旁边几块只是平滑地改宽度。
     ///
     /// 而且绝对宽度根本分不开这两件事：13 寸**竖屏**是 1024，比 11 寸**横屏**
     /// 展开侧边栏后的 874 还宽——想要「横屏一律一行、竖屏一律两行」，用一条宽度
@@ -301,14 +290,81 @@ struct DashboardView: View {
     ///   分别对应该走哪种排布。
     /// - `>= 700`——这是**放不放得下**的下限，不是用来区分设备的：大数字块 ~135
     ///   + 竖分隔 50 + 三个小数 ~246 + 曲线左边距 32 + 卡片左右留白 40 ≈ 500，
-    ///   700 之下曲线就只剩一条缝了。跟下面竖排里曲线那个 700 是同一个数。
+    ///   700 之下曲线就只剩一条缝了。跟竖排分支里曲线宽度那个 700 是同一个数。
     ///
     /// 副作用是 iPhone 横屏（852 / 932）也走一行了。这是对的：横屏 iPhone 正文
     /// 高度只有 ~330，两行版要吃掉一大半。SE 那档 667 落在 700 以下，仍是两行。
-    private func statsCard(available: CGSize) -> some View {
-        let availableWidth = available.width
-        let wide = availableWidth > available.height && availableWidth >= 700
-        return Group {
+    private func statsIsWide(_ size: CGSize) -> Bool {
+        size.width > size.height && size.width >= Self.statsOneRowMinWidth
+    }
+
+    // MARK: - 主体排布
+
+    /// 大数字卡 / Your matches / Explore 三块的排布。
+    ///
+    /// iPad 横屏左右分栏：左边大数字卡 + Explore，右边 Your matches。三块竖着排
+    /// 时 Explore 那六张图要滚很久才露头，而右边大片空着；Your matches 又恰好是
+    /// 「一个数 + 几条预览」，天生适合一条窄列。
+    ///
+    /// 分栏的门槛由左栏倒推：左栏必须 ≥700 才排得下一行版的大数字卡
+    /// （见 ``statsIsWide(_:)``），左栏占 3/5，所以整宽要 ≥ 700 / 0.6 ≈ 1167。
+    /// 落点是 iPad 11 寸横屏 1194 和 13 寸横屏 1366；iPad mini 横屏 1133 差一点，
+    /// 分了左栏只有 680、大数字卡会掉回两行版，不如不分。
+    ///
+    /// guest 没有 Your matches，右栏会是空的——那种时候不分栏。
+    @ViewBuilder
+    private func dashboardBody(_ size: CGSize) -> some View {
+        if isTwoColumn(size), auth.isUser, let me = store.meSummary {
+            let leftWidth = size.width * (1 - Self.matchesColumnRatio)
+            let rightWidth = size.width - leftWidth
+            HStack(alignment: .top, spacing: 0) {
+                VStack(alignment: .leading, spacing: 0) {
+                    // wide 直接给 true：门槛已经保证 leftWidth ≥ 700。
+                    statsCard(availableWidth: leftWidth, wide: true)
+                    exploreSection(availableWidth: leftWidth)
+                }
+                .frame(width: leftWidth)
+
+                matchesSection(me, availableWidth: rightWidth, stacked: true)
+                    .frame(width: rightWidth)
+            }
+        } else {
+            statsCard(availableWidth: size.width, wide: statsIsWide(size))
+            if auth.isUser, let me = store.meSummary {
+                matchesSection(me, availableWidth: size.width)
+            }
+            exploreSection(availableWidth: size.width)
+        }
+    }
+
+    /// Your matches 那一栏占的宽度比例——左 3 : 右 2。
+    private static let matchesColumnRatio: CGFloat = 2.0 / 5.0
+
+    /// 一行版大数字卡的最小宽度。分栏门槛由它倒推，见 ``dashboardBody(_:)``。
+    private static let statsOneRowMinWidth: CGFloat = 700
+
+    private static var twoColumnMinWidth: CGFloat {
+        statsOneRowMinWidth / (1 - matchesColumnRatio)
+    }
+
+    private func isTwoColumn(_ size: CGSize) -> Bool {
+        size.width > size.height && size.width >= Self.twoColumnMinWidth
+    }
+
+    // MARK: - Stats card
+
+    /// 顶部大数字卡。
+    ///
+    /// 横排把「大数字 / 三个小数 / 迷你曲线」放成**一行**。竖排版本在 iPhone 竖屏
+    /// 上是对的，但横过来之后大数字贴最左、曲线贴最右，中间空出一大片；下面三个
+    /// 小数又被 `maxWidth: .infinity` 拉开到跨越整块屏幕。排成一行之后那些空隙
+    /// 变成了卡片本身的宽度，卡高也少了一半。
+    ///
+    /// `wide` 由调用点给，不在这里算——分栏时左栏的高宽比说明不了任何事情
+    /// （一条 716×790 的列并不是"竖屏"），那种时候是门槛保证了它放得下。
+    /// 单栏时的判据见 ``statsIsWide(_:)``。
+    private func statsCard(availableWidth: CGFloat, wide: Bool) -> some View {
+        Group {
             if wide {
                 HStack(alignment: .center, spacing: 0) {
                     statsHeadline
@@ -468,8 +524,16 @@ struct DashboardView: View {
 
     // MARK: - Matches section (user only)
 
-    private func matchesSection(_ me: MeSummary, availableWidth: CGFloat) -> some View {
-        let previewCount = matchPreviewCount(for: availableWidth)
+    /// `stacked`：右栏那种**又窄又高**的位置。
+    ///
+    /// 横排版本（数字在左、预览卡横向排开）是照「宽而矮」的整行位置调的，塞进
+    /// 一条 ~478pt 的列里会变成三张 116pt 的小卡挤在顶上，下面几百 pt 全空着。
+    /// 竖排版本把数字提到上面当标题，预览改成一行一条铺满列宽，正好把列填起来，
+    /// 顺带能多显示两条（横排最多 5 条要 1180pt，这里 5 条只要够高）。
+    private func matchesSection(_ me: MeSummary,
+                                availableWidth: CGFloat,
+                                stacked: Bool = false) -> some View {
+        let previewCount = stacked ? 5 : matchPreviewCount(for: availableWidth)
 
         return VStack(spacing: 0) {
             HStack {
@@ -493,41 +557,7 @@ struct DashboardView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 12)
 
-            HStack(alignment: .center, spacing: 10) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("\(me.matchedTotal)")
-                        .font(.system(size: 38, weight: .heavy))
-                        .monospacedDigit()
-                        .tracking(-1)
-                    Text("matched · all available")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(minWidth: 80)
-
-                if matchedPreviews.isEmpty {
-                    ForEach(0..<previewCount, id: \.self) { _ in
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("—").font(.system(size: 13, weight: .bold))
-                            ForEach(0..<5, id: \.self) { _ in
-                                Text("⋯⋯").font(.system(size: 10)).foregroundStyle(.secondary)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, minHeight: 128, alignment: .topLeading)
-                        .padding(.vertical, 12).padding(.horizontal, 10)
-                        .background(Color(.systemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
-                    }
-                } else {
-                    ForEach(matchedPreviews.prefix(previewCount)) { listing in
-                        Button {
-                            coord.openListing(id: listing.id)
-                        } label: {
-                            matchPreviewCard(listing)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
+            matchesBody(me, previewCount: previewCount, stacked: stacked)
             .padding(15)
             .background(Color(.secondarySystemGroupedBackground))
             .clipShape(RoundedRectangle(cornerRadius: 20))
@@ -535,6 +565,140 @@ struct DashboardView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 26)
         }
+    }
+
+    /// 数字块 + 预览。横排一行排开，竖排数字在上、预览一条一行。
+    @ViewBuilder
+    private func matchesBody(_ me: MeSummary, previewCount: Int, stacked: Bool) -> some View {
+        let layout = stacked
+            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10))
+            : AnyLayout(HStackLayout(alignment: .center, spacing: 10))
+        layout {
+            matchedTotalBlock(me, stacked: stacked)
+
+            if matchedPreviews.isEmpty {
+                ForEach(0..<previewCount, id: \.self) { _ in
+                    matchPreviewPlaceholder(stacked: stacked)
+                }
+            } else {
+                ForEach(matchedPreviews.prefix(previewCount)) { listing in
+                    Button {
+                        coord.openListing(id: listing.id)
+                    } label: {
+                        if stacked {
+                            matchPreviewRow(listing)
+                        } else {
+                            matchPreviewCard(listing)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func matchedTotalBlock(_ me: MeSummary, stacked: Bool) -> some View {
+        let total = Text("\(me.matchedTotal)")
+            .font(.system(size: 38, weight: .heavy))
+            .monospacedDigit()
+            .tracking(-1)
+        let caption = Text("matched · all available")
+            .font(.caption)
+            .foregroundStyle(.secondary)
+
+        if stacked {
+            // 竖排时数字和说明并排当一条标题，不然 38pt 的数字上面顶一行小字，
+            // 下面接着一串等宽预览条，中间那一格看着像漏排了。
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                total
+                caption
+                Spacer(minLength: 0)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 4) {
+                total
+                caption
+            }
+            .frame(minWidth: 80)
+        }
+    }
+
+    @ViewBuilder
+    private func matchPreviewPlaceholder(stacked: Bool) -> some View {
+        if stacked {
+            HStack {
+                Text("—").font(.system(size: 15, weight: .bold))
+                Spacer()
+                Text("⋯⋯").font(.system(size: 10)).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 52)
+            .padding(.vertical, 10).padding(.horizontal, 12)
+            .background(Color(.systemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+        } else {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("—").font(.system(size: 13, weight: .bold))
+                ForEach(0..<5, id: \.self) { _ in
+                    Text("⋯⋯").font(.system(size: 10)).foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, minHeight: 128, alignment: .topLeading)
+            .padding(.vertical, 12).padding(.horizontal, 10)
+            .background(Color(.systemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+        }
+    }
+
+    /// 竖排用的一条预览。字段和 ``matchPreviewCard(_:)`` 一样，只是摊平成一行：
+    /// 价格 + 状态在左，面积 / 楼栋 / 城市在右。列宽有 ~450pt，横着放读起来比
+    /// 竖着堆五行短句顺。
+    private func matchPreviewRow(_ listing: Listing) -> some View {
+        HStack(alignment: .center, spacing: 10) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text(listing.priceRaw ?? "—")
+                    .font(.system(size: 15, weight: .bold))
+                    .lineLimit(1)
+                HStack(spacing: 4) {
+                    Circle()
+                        .fill(matchStatusColor(listing))
+                        .frame(width: 5, height: 5)
+                    Text(matchStatusLabel(listing))
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(matchStatusColor(listing))
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            VStack(alignment: .trailing, spacing: 3) {
+                if let area = matchAreaText(listing) {
+                    Text(area)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+                // buildingText 是 String?，city 是 String——compactMap 抹平，
+                // 顺手把空串也去掉（PlaceSummary 只负责去重，不负责去空）。
+                if let place = PlaceSummary.text(
+                    name: listing.name,
+                    parts: [listing.buildingText, listing.city]
+                        .compactMap { $0 }.filter { !$0.isEmpty }) {
+                    Text(place)
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                }
+            }
+
+            Image(systemName: "chevron.right")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color(.systemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
     }
 
     private func matchPreviewCount(for width: CGFloat) -> Int {
