@@ -33,6 +33,7 @@
       }
     },
     " " : {
+      "extractionState" : "stale",
       "localizations" : {
         "zh-Hans" : {
           "stringUnit" : {
@@ -6696,6 +6697,7 @@
       }
     },
     "Next month" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {
@@ -8535,6 +8537,7 @@
       }
     },
     "Previous month" : {
+      "extractionState" : "stale",
       "localizations" : {
         "es" : {
           "stringUnit" : {

@@ -61,7 +61,7 @@ struct DashboardView: View {
                         } else {
                             headerRow
                             liveBadge
-                            statsCard(availableWidth: proxy.size.width)
+                            statsCard(available: proxy.size)
                             if auth.isUser, let me = store.meSummary {
                                 matchesSection(me, availableWidth: proxy.size.width)
                             }
@@ -278,16 +278,36 @@ struct DashboardView: View {
 
     /// 顶部大数字卡。
     ///
-    /// 宽屏（≥1000pt，iPad 横屏）把「大数字 / 三个小数 / 迷你曲线」排成**一行**。
-    /// 竖排版本在 iPhone 上是对的，但横屏 iPad 上大数字贴最左、曲线贴最右，中间
-    /// 空出 ~800pt；下面三个小数又被 `maxWidth: .infinity` 拉开到跨越整块屏幕。
-    /// 横过来之后这些空隙变成了卡片本身的宽度，卡高也少了一半。
+    /// 横排把「大数字 / 三个小数 / 迷你曲线」放成**一行**。竖排版本在 iPhone 竖屏
+    /// 上是对的，但横过来之后大数字贴最左、曲线贴最右，中间空出一大片；下面三个
+    /// 小数又被 `maxWidth: .infinity` 拉开到跨越整块屏幕。排成一行之后那些空隙
+    /// 变成了卡片本身的宽度，卡高也少了一半。
     ///
-    /// 1000 这个阈值：iPad 横屏 1194、竖屏 834。竖屏放不下一行（大数字块
-    /// ~200 + 三个小数 ~330 + 曲线 ~130 + 间距，接近 800 已经很挤），所以竖屏
-    /// 继续走竖排，只是曲线会撑开一些。
-    private func statsCard(availableWidth: CGFloat) -> some View {
-        let wide = availableWidth >= 1_000
+    /// 判据是**朝向 + 放不放得下**，不是绝对宽度
+    /// ------------------------------------------
+    /// 原来写的是 `availableWidth >= 1000`，而这里量到的是**正文**宽度，不是屏幕
+    /// 宽度——`sidebarAdaptable` 的侧边栏一展开就从里面扣掉约 320pt。iPad 11 寸
+    /// 横屏 1194 收起侧边栏走一行、展开后正文只剩 ~874 掉回两行，于是每收放一次
+    /// 侧边栏这张卡就换一次排布，而旁边几块只是平滑地改宽度。
+    ///
+    /// 而且绝对宽度根本分不开这两件事：13 寸**竖屏**是 1024，比 11 寸**横屏**
+    /// 展开侧边栏后的 874 还宽——想要「横屏一律一行、竖屏一律两行」，用一条宽度
+    /// 线是写不出来的。
+    ///
+    /// 所以跟 `CalendarView.isSideBySide` 用同一套判据：
+    ///
+    /// - `width > height`——横排缺的是**纵向**空间，这跟屏幕多大无关。侧边栏展开
+    ///   后 874×~746 仍然是横的，Split View 拉成半屏（~570×790）则是竖的，正好
+    ///   分别对应该走哪种排布。
+    /// - `>= 700`——这是**放不放得下**的下限，不是用来区分设备的：大数字块 ~135
+    ///   + 竖分隔 50 + 三个小数 ~246 + 曲线左边距 32 + 卡片左右留白 40 ≈ 500，
+    ///   700 之下曲线就只剩一条缝了。跟下面竖排里曲线那个 700 是同一个数。
+    ///
+    /// 副作用是 iPhone 横屏（852 / 932）也走一行了。这是对的：横屏 iPhone 正文
+    /// 高度只有 ~330，两行版要吃掉一大半。SE 那档 667 落在 700 以下，仍是两行。
+    private func statsCard(available: CGSize) -> some View {
+        let availableWidth = available.width
+        let wide = availableWidth > available.height && availableWidth >= 700
         return Group {
             if wide {
                 HStack(alignment: .center, spacing: 0) {
@@ -338,6 +358,20 @@ struct DashboardView: View {
         .shadow(color: .black.opacity(0.04), radius: 10, y: 4)
         .padding(.horizontal, 20)
         .padding(.bottom, 24)
+        // `if wide` 的两个分支是**结构不同的两棵子树**（一行 vs 两行、竖分隔 vs
+        // 横分隔、小数收紧 vs 等分），SwiftUI 只能把一棵拆掉换上另一棵，没有可
+        // 插值的中间态——不给动画就是硬切。
+        //
+        // 改判据之后收放侧边栏已经不再触发这次切换了（横屏两种状态都是一行），
+        // 但转屏还会，Split View 拖动分割线也会。这两种场合下尺寸是从
+        // `GeometryReader` 读出来的，不在触发那次变化的 transaction 里，不会
+        // 自动继承动画——得靠 `.animation(_:value:)` 盯着 `wide` 自己起一次。
+        //
+        // 效果是淡入淡出加卡片高度平滑收放。真要让大数字和三个小数**飞到**新
+        // 位置，得让两种排布共用同一批子视图再套 `AnyLayout`；现在两边的子视图
+        // 和顺序都不一样（一行版里三个小数在曲线前面，两行版在下面），那是一次
+        // 结构改动。
+        .animation(.smooth(duration: 0.28), value: wide)
     }
 
     /// TOTAL LISTINGS + 大数字 + 本周涨幅。
