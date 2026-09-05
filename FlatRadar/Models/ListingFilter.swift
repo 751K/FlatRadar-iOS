@@ -5,7 +5,7 @@ import Foundation
 ///
 /// ``Encodable`` 用于 ``PUT /me/filter`` 提交 —— 后端 ``_coerce_filter_payload``
 /// 会做白名单过滤 + 边界校验，多/少字段都安全。
-struct ListingFilter: Codable, Equatable, Sendable {
+nonisolated struct ListingFilter: Codable, Equatable, Sendable {
     var maxRent: Double?
     var minArea: Double?
     var minFloor: Int?

@@ -94,7 +94,7 @@ extension NotificationItem {
     /// - `alert`   服务端异常（403 / blocked / 抓取失败）
     /// - `test`    手动触发的测试推送（SSE TEST / Test push）
     /// - `system`  兜底——其它系统消息
-    enum Kind {
+    nonisolated enum Kind {
         case book, lottery, status, alert, test, system
     }
 
@@ -184,7 +184,7 @@ extension NotificationItem {
     }()
 
     /// "超过一周"时显示的具体日期（"MMM d"，跟随系统 locale）。
-    private static let shortDateFormatter: DateFormatter = {
+    nonisolated(unsafe) private static let shortDateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)
         f.locale = .autoupdatingCurrent
@@ -208,10 +208,10 @@ extension NotificationItem {
     }
 
     /// 兼容旧调用点：直接返回预计算好的 ``parsedDate``（零解析）。
-    var createdDate: Date? { parsedDate }
+    nonisolated var createdDate: Date? { parsedDate }
 
     /// 相对年龄串：`now` / `38m` / `5h` / `2d`。
-    var ageText: String {
+    nonisolated var ageText: String {
         guard let d = createdDate else { return "" }
         let interval = Date().timeIntervalSince(d)
         if interval < 60 { return "now" }
@@ -223,17 +223,17 @@ extension NotificationItem {
     }
 
     /// "Today" / "Yesterday" / "Earlier" 三段——给 NotificationsView 做 Section 分组。
-    enum DayBucket: String, CaseIterable {
+    nonisolated enum DayBucket: String, CaseIterable {
         case today, yesterday, earlier
     }
 
-    private static let amsterdamCalendar: Calendar = {
+    nonisolated(unsafe) private static let amsterdamCalendar: Calendar = {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = amsterdamTZ
         return cal
     }()
 
-    var dayBucket: DayBucket {
+    nonisolated var dayBucket: DayBucket {
         guard let d = createdDate else { return .earlier }
         let cal = Self.amsterdamCalendar
         if cal.isDateInToday(d) { return .today }

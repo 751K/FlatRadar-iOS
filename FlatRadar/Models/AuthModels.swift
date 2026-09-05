@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Request
 
-struct LoginRequest: Encodable {
+nonisolated struct LoginRequest: Encodable {
     let username: String
     let password: String
     let deviceName: String

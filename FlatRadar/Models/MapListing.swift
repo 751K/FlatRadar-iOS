@@ -92,7 +92,7 @@ nonisolated struct MapLocateResult: Decodable, Sendable {
     let reason: String?
     let listing: MapListing?
 
-    enum Reason: String {
+    nonisolated enum Reason: String {
         case notFound = "not_found"
         case noCoords = "no_coords"
     }

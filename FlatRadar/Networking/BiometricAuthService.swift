@@ -6,7 +6,7 @@ import LocalAuthentication
 /// Face ID / Touch ID 封装：检测可用性 + 触发认证 + 读取 Keychain 中受生物特征保护的凭据。
 enum BiometricAuthService {
     /// 本地存储的生物凭据：登录凭据（不含其他加密数据）。
-    struct StoredCredential: Codable {
+    nonisolated struct StoredCredential: Codable {
         let username: String
         let password: String
         let role: String       // "user" | "admin"

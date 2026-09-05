@@ -66,9 +66,9 @@ nonisolated struct Listing: Decodable, Identifiable, Hashable, Sendable {
 extension Listing {
     /// Server-side timezone — Holland2Stay 后端发的日期字符串都按 Europe/Amsterdam
     /// 解读，避免在做 "now() - first_seen" 计算时因为本地时区抖动出现 25h / -1h。
-    fileprivate static let amsterdamTZ: TimeZone = TimeZone(identifier: "Europe/Amsterdam") ?? .current
+    nonisolated fileprivate static let amsterdamTZ: TimeZone = TimeZone(identifier: "Europe/Amsterdam") ?? .current
 
-    private static let dateParser: DateFormatter = {
+    nonisolated(unsafe) private static let dateParser: DateFormatter = {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)
         f.locale = Locale(identifier: "en_US_POSIX")
@@ -77,7 +77,7 @@ extension Listing {
         return f
     }()
 
-    private static let shortDateFormatter: DateFormatter = {
+    nonisolated(unsafe) private static let shortDateFormatter: DateFormatter = {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)
         f.locale = .autoupdatingCurrent
@@ -86,13 +86,13 @@ extension Listing {
         return f
     }()
 
-    private static let isoFormatter: ISO8601DateFormatter = {
+    nonisolated(unsafe) private static let isoFormatter: ISO8601DateFormatter = {
         let f = ISO8601DateFormatter()
         f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         return f
     }()
 
-    private static let fallbackParsers: [DateFormatter] = {
+    nonisolated(unsafe) private static let fallbackParsers: [DateFormatter] = {
         let formats = [
             "yyyy-MM-dd HH:mm:ss",
             "yyyy-MM-dd HH:mm",
@@ -110,24 +110,24 @@ extension Listing {
     }()
 
     /// Holland2Stay 三态业务语义 — 设计稿用这个区分 ●Book / ●Lottery / ●Reserved。
-    enum StatusKind {
+    nonisolated enum StatusKind {
         case book      // 先到先得
         case lottery   // 抽签
         case reserved  // 已订 / Rented / Not available
         case other     // 未识别的状态原样兜底
     }
 
-    var isBookable: Bool {
+    nonisolated var isBookable: Bool {
         status.localizedCaseInsensitiveContains("available to book")
     }
 
-    var isLottery: Bool {
+    nonisolated var isLottery: Bool {
         status.localizedCaseInsensitiveContains("lottery")
     }
 
     /// 归一化后的状态枚举。原始后端可能返回 "Available to book"/"available_to_book"/
     /// "Available in lottery"/"Reserved"/"Rented"/"Not available" 等多种写法。
-    var statusKind: StatusKind {
+    nonisolated var statusKind: StatusKind {
         let s = status.lowercased().replacingOccurrences(of: "_", with: " ")
         if s.contains("lottery") { return .lottery }
         if s.contains("available to book") || s == "book" { return .book }
@@ -137,41 +137,41 @@ extension Listing {
         return .other
     }
 
-    var areaText: String? {
+    nonisolated var areaText: String? {
         featureValue(matching: ["area", "surface", "living area", "m2", "m²"])
     }
 
     /// 已规范化的面积串（"65 m²"）：trim + 补 m² 后缀。
     /// 列表行每滚动一帧都用，缓存在 dataclass-style computed property 上
     /// 避免在视图层每次 render 重 trim/lowercased。
-    var normalizedAreaText: String? {
+    nonisolated var normalizedAreaText: String? {
         guard let raw = areaText else { return nil }
         let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed.isEmpty { return nil }
         return trimmed.lowercased().contains("m") ? trimmed : "\(trimmed)m²"
     }
 
-    var floorText: String? {
+    nonisolated var floorText: String? {
         featureValue(matching: ["floor", "level"])
     }
 
-    var energyText: String? {
+    nonisolated var energyText: String? {
         featureValue(matching: ["energy", "energy label"])
     }
 
-    var contractText: String? {
+    nonisolated var contractText: String? {
         featureValue(matching: ["contract", "rental agreement", "agreement"])
     }
 
-    var typeText: String? {
+    nonisolated var typeText: String? {
         featureValue(matching: ["type", "property type", "apartment type"])
     }
 
-    var buildingText: String? {
+    nonisolated var buildingText: String? {
         featureValue(matching: ["building", "building name", "building_name", "complex"])
     }
 
-    var availableDayKey: String? {
+    nonisolated var availableDayKey: String? {
         guard let availableFrom, !availableFrom.isEmpty else { return nil }
         return String(availableFrom.prefix(10))
     }
@@ -186,7 +186,7 @@ extension Listing {
     ///
     /// 1900 / 2049 是客户端另外观察到的两种占位，后端目前没有对应判据；
     /// 保留在这里作为**更严**的一层，不上收，免得改动后端判据的人被牵连。
-    var hasRealAvailableDate: Bool {
+    nonisolated var hasRealAvailableDate: Bool {
         guard let day = availableDayKey else { return false }
         if ServerTime.isSentinelDate(day) { return false }
         if day.hasPrefix("2049") || day.hasPrefix("1900") { return false }
@@ -194,14 +194,14 @@ extension Listing {
     }
 
     /// "Jun 22" 形态的短日期，仅当不是占位时返回。
-    var availableShortText: String? {
+    nonisolated var availableShortText: String? {
         guard hasRealAvailableDate, let day = availableDayKey else { return nil }
         guard let date = Self.dateParser.date(from: day) else { return nil }
         return Self.shortDateFormatter.string(from: date)
     }
 
     /// Parse `first_seen` —— 复用 ServerTime 的多格式兼容。
-    var firstSeenDate: Date? {
+    nonisolated var firstSeenDate: Date? {
         guard let firstSeen, !firstSeen.isEmpty else { return nil }
         if let d = Self.isoFormatter.date(from: firstSeen) { return d }
         for f in Self.fallbackParsers {
@@ -211,19 +211,19 @@ extension Listing {
     }
 
     /// 24h 内首次出现的房源 — 用于 "NEW TODAY" 分组和 NEW 徽章。
-    var isNew: Bool { isNew(asOf: Date()) }
+    nonisolated var isNew: Bool { isNew(asOf: Date()) }
 
     /// 相对年龄串："now" / "38m" / "5h" / "2d"。
-    var ageText: String? { ageText(asOf: Date()) }
+    nonisolated var ageText: String? { ageText(asOf: Date()) }
 
     /// 同 ``isNew`` 但使用外部快照的 `now`（避免循环中每条都调 `Date()` 做 syscall）。
-    func isNew(asOf now: Date) -> Bool {
+    nonisolated func isNew(asOf now: Date) -> Bool {
         guard let d = firstSeenDate else { return false }
         return now.timeIntervalSince(d) < 24 * 3600
     }
 
     /// 同 ``ageText`` 但使用外部快照的 `now`。
-    func ageText(asOf now: Date) -> String? {
+    nonisolated func ageText(asOf now: Date) -> String? {
         guard let d = firstSeenDate else { return nil }
         let interval = now.timeIntervalSince(d)
         if interval < 60 { return "now" }
@@ -243,7 +243,7 @@ extension Listing {
     ///
     /// 后端明明发了准确的 `source`，却被一条猜测覆盖掉。URL 嗅探只该在 source
     /// 缺失时兜底，不该凌驾于它之上。
-    var normalizedSourceKey: String? {
+    nonisolated var normalizedSourceKey: String? {
         let raw = (source ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
 
         // 1) 后端登记过的平台，直接采信。
@@ -272,11 +272,11 @@ extension Listing {
         return raw.isEmpty ? nil : raw
     }
 
-    var sourceShortText: String { Platform.shortName(normalizedSourceKey) }
+    nonisolated var sourceShortText: String { Platform.shortName(normalizedSourceKey) }
 
-    var sourceDisplayText: String { Platform.displayName(normalizedSourceKey) }
+    nonisolated var sourceDisplayText: String { Platform.displayName(normalizedSourceKey) }
 
-    func featureValue(matching aliases: [String]) -> String? {
+    nonisolated func featureValue(matching aliases: [String]) -> String? {
         // 只归一化少量别名（每属性 1–5 个字面量）；featureMap 的键已在
         // decode 时预归一化进 normalizedFeatureMap，这里不再逐键现算。
         let normalizedAliases = aliases.map(Self.normalizeFeatureKey)

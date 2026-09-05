@@ -28,7 +28,7 @@ import Foundation
 /// 而不是断言"对所有平台生效"。
 nonisolated enum PlatformScope {
 
-    struct Note {
+    nonisolated struct Note {
         let text: String
         /// 用户勾选的平台里没有一个支持该维度 —— 这条过滤等于没设。
         let isWarning: Bool

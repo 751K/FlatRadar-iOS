@@ -299,7 +299,7 @@ final class APIClient {
     /// - 后端校验当前密码，更新 bcrypt hash，撤销其他设备会话（当前 token 保留）
     /// - 仅 role=user 可用；admin 调会被后端 403
     func changePassword(current: String, new: String) async throws -> ChangePasswordResponse {
-        struct Body: Encodable {
+        nonisolated struct Body: Encodable {
             let currentPassword: String
             let newPassword: String
             enum CodingKeys: String, CodingKey {
@@ -321,7 +321,7 @@ final class APIClient {
     ///
     /// 密码错误时后端返回 401，这里抛错；调用方据此区分"密码不对"和"网络问题"。
     func verifyPassword(_ password: String) async throws -> VerifyPasswordResponse {
-        struct Body: Encodable { let password: String }
+        nonisolated struct Body: Encodable { let password: String }
         return try await request("POST", "api/v1/auth/verify", body: Body(password: password))
     }
 
@@ -385,7 +385,7 @@ final class APIClient {
     }
 
     func markNotificationsRead(ids: [Int]? = nil) async throws -> MarkReadResponse {
-        struct MarkReadBody: Encodable {
+        nonisolated struct MarkReadBody: Encodable {
             let ids: [Int]?
         }
         return try await request("POST", "api/v1/notifications/read", body: MarkReadBody(ids: ids))
@@ -492,7 +492,7 @@ final class APIClient {
     /// 用于验证 APNs 链路通畅，绕过 push.dispatch 的 user_id/throttle 限制。
     func testPush(title: String? = nil,
                   body: String? = nil) async throws -> DeviceTestPushResponse {
-        struct TestPushBody: Encodable {
+        nonisolated struct TestPushBody: Encodable {
             let title: String?
             let body: String?
         }
@@ -510,7 +510,7 @@ final class APIClient {
 
     // MARK: - Feedback
 
-    struct FeedbackBody: Encodable {
+    nonisolated struct FeedbackBody: Encodable {
         let kind: String      // "bug" | "suggestion" | "other"
         let message: String
         let user_name: String
@@ -607,7 +607,7 @@ final class APIClient {
 // MARK: - Helper types
 
 /// Wrapper so we can encode arbitrary Encodable values via JSONEncoder
-private struct AnyEncodable: Encodable {
+private nonisolated struct AnyEncodable: Encodable {
     let value: any Encodable
     init(_ value: any Encodable) { self.value = value }
     func encode(to encoder: any Encoder) throws {

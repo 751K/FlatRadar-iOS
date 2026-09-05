@@ -70,7 +70,7 @@ extension Array where Element == ChartEntry {
     ///                 括号注释剥掉。
     /// - `energy_dist` "A+"/"A++"/"A+++" 合并成 "A+"；"A" 独立一组；
     ///                 B/C/D/E/F/G 原样。
-    func bucketed(forKey key: String) -> [ChartEntry] {
+    nonisolated func bucketed(forKey key: String) -> [ChartEntry] {
         switch key {
         case "source_dist":
             let merged = mergedByBucket { Self.sourceBucketLabel($0) }
@@ -94,7 +94,7 @@ extension Array where Element == ChartEntry {
 
     /// 按 `bucket` 闭包归桶，保留**首次出现顺序**。
     /// 给 type_dist 用——结果再由调用方按 count desc 排。
-    private func mergedByBucket(_ bucket: (String) -> String) -> [ChartEntry] {
+    private nonisolated func mergedByBucket(_ bucket: (String) -> String) -> [ChartEntry] {
         var counts: [String: Int] = [:]
         var order: [String] = []
         for entry in self {
@@ -111,7 +111,7 @@ extension Array where Element == ChartEntry {
 
     /// 按 `bucket` 归桶，并按 `orderedKeys` 给定顺序输出（缺失等级跳过）。
     /// 给 energy_dist 用——A→G 是天然顺序，不按 count 排。
-    private func mergedByBucket(orderedKeys: [String], _ bucket: (String) -> String) -> [ChartEntry] {
+    private nonisolated func mergedByBucket(orderedKeys: [String], _ bucket: (String) -> String) -> [ChartEntry] {
         var counts: [String: Int] = [:]
         for entry in self {
             let key = bucket(entry.label)
@@ -124,7 +124,7 @@ extension Array where Element == ChartEntry {
         }
     }
 
-    static func typeBucketLabel(_ label: String) -> String {
+    nonisolated static func typeBucketLabel(_ label: String) -> String {
         let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
         // 后端 type_dist 直接发数字 "1"/"2"/"3"/"4"，代表 N-room apt
         if !trimmed.isEmpty, trimmed.allSatisfy(\.isNumber) {
@@ -144,11 +144,11 @@ extension Array where Element == ChartEntry {
             .trimmingCharacters(in: .whitespaces) ?? trimmed
     }
 
-    static func sourceBucketLabel(_ label: String) -> String {
+    nonisolated static func sourceBucketLabel(_ label: String) -> String {
         Platform.shortName(label)
     }
 
-    static func energyBucketLabel(_ label: String) -> String {
+    nonisolated static func energyBucketLabel(_ label: String) -> String {
         let cleaned = label.uppercased().trimmingCharacters(in: .whitespacesAndNewlines)
         // A+/A++/A+++ → "A+"；纯 "A" → "A"；B/C/D/E/F/G 原样。
         // 注意：A++ 也以 "A" 开头，所以先 check "A+" 前缀再 fallback 到 "A"。

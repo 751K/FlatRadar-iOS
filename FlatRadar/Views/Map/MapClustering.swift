@@ -8,7 +8,7 @@ import MapKit
 /// pin 会糊成一团。这里在 Swift 侧用最简单的 **grid bucket** 算法做手动聚合：
 /// 把当前可见区域按 lat/lng 等距切成网格，落在同一格的房源归并成一个簇，
 /// 视图渲染时单条画 pin、多条画带数字的气泡。
-struct ListingCluster: Identifiable, Hashable, Sendable {
+nonisolated struct ListingCluster: Identifiable, Hashable, Sendable {
     /// 形如 ``"single:<listingId>"`` 或 ``"cluster:<lat>,<lng>"``，
     /// `Map(selection:)` 用同一个 string 选中（单 pin 才有效）。
     let id: String

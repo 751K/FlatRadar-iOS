@@ -253,7 +253,7 @@ nonisolated struct MarkReadResponse: Decodable {
 // MARK: - Devices / APNs (Phase 3)
 
 /// `POST /api/v1/devices/register` 请求体。
-struct DeviceRegisterRequest: Encodable {
+nonisolated struct DeviceRegisterRequest: Encodable {
     let deviceToken: String
     let env: String       // "sandbox" | "production"
     let platform: String  // "ios"
