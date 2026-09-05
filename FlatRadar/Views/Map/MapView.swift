@@ -121,6 +121,152 @@ struct MapView: View {
                 Map(position: $camera, selection: $store.selectedID) {
                     ForEach(clusters) { cluster in
                         if cluster.isSingle, let l = cluster.single {
+    // MARK: - 可达圈
+
+    /// 选中一套房源时，在它周围画「10 分钟可达」的圈——步行一个、骑车一个。
+    ///
+    /// 半径不是直接用速度乘时间。圆是**直线**距离，而人得沿街走／沿路骑——
+    /// 阿姆斯特丹还隔着运河，直线 800m 常常是一公里多的路。不校正的话圈会系统性
+    /// 地过于乐观，用户照着圈选了房、实际走起来不是那么回事。
+    ///
+    /// 所以都除以绕路系数 1.3（城市路网的常见经验值，运河城市偏高端）：
+    ///
+    ///     步行  5 km/h  = 83 m/min   → 有效 64 m/min   → 10 分钟 ≈ 640m
+    ///     骑车  15 km/h = 250 m/min  → 有效 192 m/min  → 10 分钟 ≈ 1920m
+    ///
+    /// 宁可画保守——圈内一定到得了，比圈内可能到不了要好。
+    ///
+    /// 为什么骑车这一圈值得单独画：荷兰的日常出行默认就是自行车，"骑十分钟能到
+    /// 哪儿"跟"走十分钟能到哪儿"是两个量级（1.9km vs 0.64km），而后者根本圈不到
+    /// 大多数人真正在意的东西。
+    ///
+    /// 这仍然是估算，不是等时线。真等时线要对每个方向发路径请求，代价完全不同；
+    /// 这里要的只是"大概多远"的量感。
+    private struct ReachRing: Identifiable {
+        let id: String
+        let minutes: Int
+        let radius: CLLocationDistance
+        let symbol: String
+        let tint: Color
+        /// 外圈画虚线：两个同心圆在这个尺度上相隔很远，实线看着像两个无关的圈；
+        /// 虚线一眼就是"边界／大约到这儿"，也把内外层次分开。
+        let dashed: Bool
+    }
+
+    /// 绕路系数：直线距离 × 系数 ≈ 实际路程。
+    private static let detourFactor: Double = 1.3
+
+    private static func reachRadius(kmh: Double, minutes: Int) -> CLLocationDistance {
+        kmh * 1000 / 60 / detourFactor * Double(minutes)
+    }
+
+    /// 配色刻意避开图钉的状态色。
+    ///
+    /// `ListingStatus` 已经占了绿（Direct book）、橙（Lottery）、蓝（Reserved）、
+    /// 灰（Occupied）。骑车圈一开始用的绿是双重撞车：既跟"可直接预订"这个语义撞，
+    /// 又画在一张大面积是绿地的底图上——0.32 的透明度下基本看不见。
+    ///
+    /// 换成紫色：状态色里没有，苹果标准底图的调色板（绿地／灰建筑／白路／蓝水）
+    /// 里也没有，所以它在哪一层上都跳得出来。
+    private static let reachRings: [ReachRing] = [
+        ReachRing(id: "walk", minutes: 10,
+                  radius: reachRadius(kmh: 5, minutes: 10),
+                  symbol: "figure.walk", tint: .blue, dashed: false),
+        ReachRing(id: "cycle", minutes: 10,
+                  radius: reachRadius(kmh: 15, minutes: 10),
+                  symbol: "bicycle", tint: .purple, dashed: true),
+    ]
+
+    /// 可达圈锚在**哪一套**房源上。
+    ///
+    /// 刻意不用 `store.selected`：那样卡片一关（`selectedID = nil`）圈就跟着没了，
+    /// 而关掉卡片的目的恰恰是"我要看图"——圈正是这时候才最该在。所以选中时把房源
+    /// 记在这里，取消选中不动它；换选另一套时替换，点右下角那个按钮显式清掉。
+    @State private var ringsListing: MapListing?
+
+    @MapContentBuilder
+    private var walkingRings: some MapContent {
+        if let l = ringsListing {
+            ForEach(Self.reachRings) { ring in
+                // 用**真实坐标**而不是 displayCoordinate：同址那几套在图上被摆成
+                // 一圈只是为了能分别点到，圈上的点谁都不是真的门牌位置。这一点
+                // 和 AppleMaps.openDirections 是同一个理由。
+                MapCircle(center: l.coordinate, radius: ring.radius)
+                    // 填充压得很淡：两个圆是同心的，内圈那块会被叠两层。
+                    .foregroundStyle(ring.tint.opacity(0.045))
+                    // 描边从 0.32/1pt 提到 0.55/2pt。原来那组值在 iPhone 那种
+                    // 小尺寸上够用，摊到 iPad 的整屏地图上就淡到看不见了。
+                    .stroke(ring.tint.opacity(0.55),
+                            style: StrokeStyle(lineWidth: 2,
+                                               dash: ring.dashed ? [10, 7] : []))
+            }
+
+            // 圈上的标签。不标的话两个同心圆不表达任何东西——用户看到的只是两个
+            // 圈，不知道哪个是走的、哪个是骑的、各代表多久。
+            ForEach(Self.reachRings) { ring in
+                Annotation("", coordinate: Self.offsetNorth(l.coordinate, meters: ring.radius)) {
+                    Label("\(ring.minutes) min", systemImage: ring.symbol)
+                        .font(.caption2.weight(.semibold))
+                        .foregroundStyle(ring.tint)
+                        .labelStyle(.titleAndIcon)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(.regularMaterial, in: Capsule())
+                }
+                .annotationTitles(.hidden)
+            }
+        }
+    }
+
+    /// 把坐标沿正北移动若干米。用于把分钟标签摆在圈的顶端。
+    ///
+    /// 只动纬度，所以不需要按纬度修正经度——1 度纬度在任何地方都约 111.32km。
+    private static func offsetNorth(
+        _ c: CLLocationCoordinate2D, meters: CLLocationDistance
+    ) -> CLLocationCoordinate2D {
+        CLLocationCoordinate2D(latitude: c.latitude + meters / 111_320,
+                               longitude: c.longitude)
+    }
+
+    // MARK: - POI
+
+    /// 地图上保留的 POI 类目。
+    ///
+    /// 曾经是 `.excludingAll` 全关，理由写在当时的注释里：截图里「Clown Juju」
+    /// 「Dental Clinics」「Global Dance Centre」跟找房子毫无关系，却在跟房源图钉
+    /// 抢注意力，密度还比图钉高得多。
+    ///
+    /// 那个判断没错，错的是"全关"这个粒度。选房时真正会看的就三件事——**楼下有没有
+    /// 超市、离车站多远、附近有没有学校**——这三类恰恰是地图能直接回答、而房源
+    /// 数据里没有的。把它们放回来，其余继续关着。
+    ///
+    /// 刻意不含的：`.restaurant` / `.cafe` / `.nightlife` / `.store`。它们正是当初
+    /// 那条注释抱怨的那批，密度高且跟"住不住得下去"没关系；`.store` 尤其宽，
+    /// 一放开就把整条商业街铺满。
+    private static let poiCategories: [MKPointOfInterestCategory] = [
+        .foodMarket,       // 超市 / 生鲜
+        .publicTransport,  // 车站 / 站点
+        .school,
+    ]
+
+    /// 放大到什么程度才显示 POI（latitudeDelta，单位度）。
+    ///
+    /// 概览视角下（默认 0.55° ≈ 60km）满屏都是聚类气泡，这时候叠 POI 就是把当初
+    /// 那个问题原样请回来。0.05° ≈ 5.5km，大约一个城区——到这个尺度用户已经在看
+    /// "具体这一带怎么样"，POI 才开始有意义，而房源也散成了单个图钉。
+    private static let poiMaxSpan: Double = 0.05
+
+    /// 按当前缩放决定显示哪些 POI。
+    ///
+    /// 比较的是**量化后**的 span，跟 clustering 用同一组 log2 桶——`currentRegion`
+    /// 本来就只在跨桶时才更新（见 `bucketsDiffer`），所以这个开关只会在桶边界翻转，
+    /// 不会随手指拖动每帧抖动。
+    private var visiblePointsOfInterest: PointOfInterestCategories {
+        MapClustering.quantizeSpan(currentRegion.span.latitudeDelta) <= Self.poiMaxSpan
+            ? .including(Self.poiCategories)
+            : .excludingAll
+    }
+
                             Annotation(l.name, coordinate: l.displayCoordinate) {
                                 pinView(for: l)
                                     .transition(.asymmetric(
@@ -135,6 +281,8 @@ struct MapView: View {
                                     .transition(.asymmetric(
                                         insertion: .scale(scale: 0.5).combined(with: .opacity),
                                         removal: .scale(scale: 0.5).combined(with: .opacity)))
+                    // 放在最前面：MapContent 按声明顺序叠，圈要压在图钉下面。
+                    walkingRings
                             }
                             .annotationTitles(.hidden)
                         }
@@ -156,6 +304,11 @@ struct MapView: View {
                         }
                         recomputeClusters()
                     }
+                .onChange(of: store.selectedID) { _, id in
+                    // 只在"选中了某一套"时更新锚点；取消选中（id == nil）不清，
+                    // 圈留在图上。
+                    if id != nil, let l = store.selected { ringsListing = l }
+                }
                 }
                 .onAppear { recomputeClusters() }
                 .onChange(of: store.listings.count) { _, _ in
@@ -174,10 +327,8 @@ struct MapView: View {
                 }
                 // .realistic 会把地形高程画出来——深色模式下整张图变成一片
                 // 诡异的蓝绿，房源图钉全被淹没。找房子跟地形没有关系。
-                // pointsOfInterest 全关：截图里「Clown Juju」「Dental Clinics」
-                // 「Global Dance Centre」这些跟找房子毫无关系，却在跟房源图钉
-                // 抢注意力，密度还比图钉高得多。
-                .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
+                .mapStyle(.standard(elevation: .flat,
+                                    pointsOfInterest: visiblePointsOfInterest))
                 .mapControls {
                     MapCompass()
                     MapScaleView()
@@ -484,6 +635,13 @@ struct MapView: View {
         }
     }
 
+                // 只在圈还画着时出现——没有圈的时候放一个"清除圈"的按钮是噪音。
+                if ringsListing != nil {
+                    mapControlButton(systemName: "circle.dashed",
+                                     label: "Clear walking radius") {
+                        withAnimation(.easeInOut(duration: 0.2)) { ringsListing = nil }
+                    }
+                }
     /// 筛完一套不剩时的说明卡。
     ///
     /// 原因**从实际数据算出来**，不写死。此前这里硬写了一句「多数已出租或预留」，
