@@ -536,34 +536,52 @@ struct DashboardView: View {
         let previewCount = stacked ? 5 : matchPreviewCount(for: availableWidth)
 
         return VStack(spacing: 0) {
-            HStack {
-                HStack(spacing: 4) {
-                    Text("Your matches")
-                        .font(.system(size: 22, weight: .heavy))
-                        .tracking(-0.5)
-                    if me.filterActive {
-                        Text("(filtered)")
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-                Spacer()
-                Button("See all \(me.matchedTotal)") {
-                    coord.selectedTab = .browse; coord.selectedBrowseMode = .list
-                }
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.blue)
+            // 分栏时标题收进卡里。
+            //
+            // 左栏第一块是大数字卡，卡里自带 "TOTAL LISTINGS" 没有外置标题；右栏
+            // 要是把 "Your matches" 摆在卡外面，右边那张卡就被压低一个标题的高度,
+            // 两栏的卡顶边对不齐——截图上一眼就能看出来。收进卡里之后两边都是
+            // 「卡自带标题」，顶边平齐。
+            //
+            // 单栏时保持原样：那儿它和 "Explore" 是并列的两个区标题，一致。
+            if !stacked {
+                matchesHeader(me, stacked: false)
+                    .padding(.horizontal, 20).padding(.bottom, 12)
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 12)
 
-            matchesBody(me, previewCount: previewCount, stacked: stacked)
+            VStack(alignment: .leading, spacing: 12) {
+                if stacked { matchesHeader(me, stacked: true) }
+                matchesBody(me, previewCount: previewCount, stacked: stacked)
+            }
             .padding(15)
             .background(Color(.secondarySystemGroupedBackground))
             .clipShape(RoundedRectangle(cornerRadius: 20))
             .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.secondary.opacity(0.12), lineWidth: 1))
             .padding(.horizontal, 20)
             .padding(.bottom, 26)
+        }
+    }
+
+    /// `stacked` 时按钮不带数字：标题收进卡里之后，"See all 25" 和它正下方那个
+    /// 38pt 的 "25" 挨在一起，同一个数念两遍。
+    private func matchesHeader(_ me: MeSummary, stacked: Bool) -> some View {
+        HStack {
+            HStack(spacing: 4) {
+                Text("Your matches")
+                    .font(.system(size: 22, weight: .heavy))
+                    .tracking(-0.5)
+                if me.filterActive {
+                    Text("(filtered)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            Spacer()
+            Button(stacked ? "See all ›" : "See all \(me.matchedTotal)") {
+                coord.selectedTab = .browse; coord.selectedBrowseMode = .list
+            }
+            .font(.subheadline.weight(.semibold))
+            .foregroundStyle(.blue)
         }
     }
 
@@ -627,12 +645,17 @@ struct DashboardView: View {
     @ViewBuilder
     private func matchPreviewPlaceholder(stacked: Bool) -> some View {
         if stacked {
-            HStack {
-                Text("—").font(.system(size: 15, weight: .bold))
-                Spacer()
-                Text("⋯⋯").font(.system(size: 10)).foregroundStyle(.secondary)
+            // 结构照着 matchPreviewRow 走，数据到位时高度才不会跳。
+            VStack(alignment: .leading, spacing: 3) {
+                HStack {
+                    Text("⋯⋯⋯⋯").font(.system(size: 14, weight: .semibold))
+                    Spacer(minLength: 8)
+                    Text("—").font(.system(size: 15, weight: .bold))
+                }
+                Text("⋯⋯").font(.system(size: 11)).foregroundStyle(.secondary)
             }
-            .frame(maxWidth: .infinity, minHeight: 52)
+            .foregroundStyle(.secondary)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 10).padding(.horizontal, 12)
             .background(Color(.systemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
         } else {
@@ -648,16 +671,28 @@ struct DashboardView: View {
         }
     }
 
-    /// 竖排用的一条预览。字段和 ``matchPreviewCard(_:)`` 一样，只是摊平成一行：
-    /// 价格 + 状态在左，面积 / 楼栋 / 城市在右。列宽有 ~450pt，横着放读起来比
-    /// 竖着堆五行短句顺。
+    /// 竖排用的一条预览。
+    ///
+    /// **房源名是第一行**。横排那张 ~116pt 宽的小卡放不下名字，只能拿价格当标识；
+    /// 这里列宽有 ~450pt，不放名字的话五条长得一模一样（价格 + Book + 面积），
+    /// 根本认不出哪套是哪套——第一版就是这样，截图上五条只剩数字。
+    ///
+    /// 两行：名字 + 价格一行，状态 + 面积 / 地点一行。
     private func matchPreviewRow(_ listing: Listing) -> some View {
         HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(listing.priceRaw ?? "—")
-                    .font(.system(size: 15, weight: .bold))
-                    .lineLimit(1)
-                HStack(spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(listing.name)
+                        .font(.system(size: 14, weight: .semibold))
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                    Spacer(minLength: 8)
+                    Text(listing.priceRaw ?? "—")
+                        .font(.system(size: 15, weight: .bold))
+                        .lineLimit(1)
+                }
+
+                HStack(spacing: 5) {
                     Circle()
                         .fill(matchStatusColor(listing))
                         .frame(width: 5, height: 5)
@@ -665,29 +700,14 @@ struct DashboardView: View {
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(matchStatusColor(listing))
                         .lineLimit(1)
-                }
-            }
-
-            Spacer(minLength: 8)
-
-            VStack(alignment: .trailing, spacing: 3) {
-                if let area = matchAreaText(listing) {
-                    Text(area)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                }
-                // buildingText 是 String?，city 是 String——compactMap 抹平，
-                // 顺手把空串也去掉（PlaceSummary 只负责去重，不负责去空）。
-                if let place = PlaceSummary.text(
-                    name: listing.name,
-                    parts: [listing.buildingText, listing.city]
-                        .compactMap { $0 }.filter { !$0.isEmpty }) {
-                    Text(place)
-                        .font(.system(size: 11))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                    if let detail = matchRowDetail(listing) {
+                        Text("· \(detail)")
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
+                    Spacer(minLength: 0)
                 }
             }
 
@@ -699,6 +719,25 @@ struct DashboardView: View {
         .padding(.horizontal, 12)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Color(.systemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    /// 状态后面那串副信息：面积 · 地点。
+    ///
+    /// 地点走 `PlaceSummary`——名字已经在上一行了，楼栋和城市里跟名字重复的词
+    /// 要去掉，否则 "OurCampus Diemen #3250" 后面再跟一句 "OurCampus Diemen"。
+    /// 去重之后可能什么都不剩，那就只剩面积；面积也没有就整段不显示。
+    private func matchRowDetail(_ listing: Listing) -> String? {
+        var parts: [String] = []
+        if let area = matchAreaText(listing) { parts.append(area) }
+        // buildingText 是 String?、city 是 String——compactMap 抹平，顺手去空串
+        // （PlaceSummary 只负责去重，不负责去空）。
+        if let place = PlaceSummary.text(
+            name: listing.name,
+            parts: [listing.buildingText, listing.city]
+                .compactMap { $0 }.filter { !$0.isEmpty }) {
+            parts.append(place)
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
 
     private func matchPreviewCount(for width: CGFloat) -> Int {
