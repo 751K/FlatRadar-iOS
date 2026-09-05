@@ -471,11 +471,12 @@ final class APIClient {
     ///   - bundleId: 防 Bundle ID 配错；上报实际运行的 bundle id
     func registerDevice(token: String, env: String,
                         model: String, bundleId: String,
-                        language: String) async throws -> DeviceRegisterResponse {
+                        language: String,
+                        osVersion: String) async throws -> DeviceRegisterResponse {
         let body = DeviceRegisterRequest(
             deviceToken: token, env: env,
             platform: "ios", model: model, bundleId: bundleId,
-            language: language)
+            language: language, osVersion: osVersion)
         return try await request("POST", "api/v1/devices/register", body: body)
     }
 

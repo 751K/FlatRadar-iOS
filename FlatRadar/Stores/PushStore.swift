@@ -56,12 +56,34 @@ final class PushStore {
             .reduce(into: "") { $0.append(Character(UnicodeScalar($1))) }
     }
 
+    /// 系统版本，如 "18.5"。随 `/devices/register` 一起上报。
+    ///
+    /// 为什么要报
+    /// ----------
+    /// App Store Connect 的 Analytics 已经给了系统版本的**聚合**分布，所以这里
+    /// 报它不是为了看「有多少人在 iOS 18」——那个问题已经有免费答案了。
+    ///
+    /// 要的是**逐设备**的组合：`model` 报的是硬件标识符（iPhone16,2 这种），
+    /// 加上系统版本，后端才能算出「机型够格 **且** 系统够新」的那批设备占多少。
+    /// 这是端上模型（Foundation Models）三道门里的前两道，ASC 的聚合报表拼不出来
+    /// ——它给的是两张互相独立的分布，不是交叉表。
+    ///
+    /// 第三道门「用户有没有开 Apple Intelligence」这里还报不了，那要读
+    /// `SystemLanguageModel.default.availability`，需要 iOS 26 SDK。见 docs/NEXT.md。
+    static var currentOSVersion: String {
+        UIDevice.current.systemVersion
+    }
+
     static var currentBundleId: String {
         Bundle.main.bundleIdentifier ?? ""
     }
 
     /// 设备当前语言，取 primary language code（"en" / "zh" / ...）。
     /// 上报给后端的 ``/api/v1/devices/register``，用于 APNs 双语推送。
+    ///
+    /// 曾经带一个 `if #available(iOS 16, *)` 的分支，回退到已废弃的
+    /// `Locale.current.languageCode`。最低支持版本升到 18.0 之后那条分支
+    /// 永远不会执行，连同它里面那个废弃 API 一起删掉。
     static var currentLanguage: String {
         Locale.current.language.languageCode?.identifier ?? "en"
     }
@@ -76,10 +98,6 @@ final class PushStore {
             Task { @MainActor in
                 await self?.handleDeviceToken(data)
             }
-    ///
-    /// 曾经带一个 `if #available(iOS 16, *)` 的分支，回退到已废弃的
-    /// `Locale.current.languageCode`。最低支持版本升到 18.0 之后那条分支
-    /// 永远不会执行，连同它里面那个废弃 API 一起删掉。
         }
         PushDelegate.shared?.onRegistrationError = { [weak self] err in
             Task { @MainActor in
@@ -173,7 +191,8 @@ final class PushStore {
                 env: Self.currentEnv,
                 model: Self.currentModel,
                 bundleId: Self.currentBundleId,
-                language: Self.currentLanguage)
+                language: Self.currentLanguage,
+                osVersion: Self.currentOSVersion)
             registeredDeviceId = resp.deviceId
             lastError = nil
             print("[PushStore] backend registered device_id=\(resp.deviceId) env=\(resp.env)")

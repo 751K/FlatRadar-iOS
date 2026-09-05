@@ -257,15 +257,21 @@ struct DeviceRegisterRequest: Encodable {
     let deviceToken: String
     let env: String       // "sandbox" | "production"
     let platform: String  // "ios"
-    let model: String
+    let model: String     // 硬件标识符，如 "iPhone16,2"（不是 "iPhone"）
     let bundleId: String
     let language: String  // "en" | "zh" | ...
+    let osVersion: String // "18.5"
 
     enum CodingKeys: String, CodingKey {
         case deviceToken = "device_token"
         case env, platform, model
         case bundleId = "bundle_id"
         case language
+        // 叫 os_version 而不是 ios_version：这个端点是跨平台的（platform 字段
+        // 区分 ios / android），Android 那边报的是 Android 版本号。崩溃上报那条
+        // 路径（APIClient.uploadCrashDiagnostic）用的是 ios_version，因为那个
+        // 端点本来就只有 iOS 在打。两个名字不一致是有意的，别顺手统一。
+        case osVersion = "os_version"
     }
 }
 
