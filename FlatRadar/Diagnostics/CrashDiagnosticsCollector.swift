@@ -38,11 +38,9 @@ final class CrashDiagnosticsCollector: NSObject, MXMetricManagerSubscriber {
 
     private let directory: URL
     private let fileManager = FileManager.default
-    private let isoFormatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
+    /// 只用来格式化时间戳。`.iso8601` 的默认参数等价于
+    /// `.withInternetDateTime`（见 ``ServerTime`` 里的说明）。
+    private let isoStyle = Date.ISO8601FormatStyle()
 
     override init() {
         // ~/Library/Application Support/FlatRadar/Diagnostics/
@@ -101,7 +99,7 @@ final class CrashDiagnosticsCollector: NSObject, MXMetricManagerSubscriber {
                 kind = "other"
             }
 
-            let stamp = isoFormatter.string(from: Date())
+            let stamp = isoStyle.format(Date())
                 .replacingOccurrences(of: ":", with: "")  // 文件名安全
             let filename = "\(stamp)-\(kind)-\(UUID().uuidString.prefix(8)).json"
             let url = directory.appendingPathComponent(filename)

@@ -137,36 +137,40 @@ extension NotificationItem {
 
     // MARK: - 共享日期格式化器（static，避免每次访问重新分配）
     //
-    // DateFormatter / ISO8601DateFormatter 的创建是已知最贵的 Foundation
-    // 操作之一（~100–200μs）。createdDate 是计算属性，ageText / dayBucket
-    // 都会调它——之前每次访问都现 new 1 个 ISO + 最多 4 个 DateFormatter。
-    // 列表滚动时每行每帧重复分配，开销显著。
+    // DateFormatter 的创建是已知最贵的 Foundation 操作之一（~100–200μs）。
+    // createdDate 是计算属性，ageText / dayBucket 都会调它——之前每次访问都
+    // 现 new 一批出来，列表滚动时每行每帧重复分配，开销显著。
     //
-    // 改成 static let 一次性建好复用。DateFormatter / ISO8601DateFormatter
-    // 自 iOS 7 起对并发"解析/格式化"是线程安全的（只读不改 options），所以
-    // 全局共享安全。注意：ISO 拆成两个（含/不含小数秒），避免运行时改
-    // formatOptions（那会破坏共享）。
+    // 改成 static let 一次性建好复用。DateFormatter 自 iOS 7 起对并发
+    // "解析/格式化"是线程安全的（只读不改 options），所以全局共享安全。
+    //
+    // ISO 那两个拆成含 / 不含小数秒两份。以前这么拆是为了避免运行时改
+    // `formatOptions`（那会破坏共享）；换成 `Date.ISO8601FormatStyle` 之后
+    // 它本来就是不可变值类型，拆开纯粹是因为后端两种形态都发过。
     //
     // `nonisolated`：SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor 会把这些
     // static let 也推断成主 actor，而 parseCreatedDate 是 nonisolated
     // （它服务于 Decodable 的 init(from:)），跨不过去。
-    // ISO8601DateFormatter 当前 SDK 尚未标 Sendable，单 nonisolated 不够，
-    // 用 (unsafe) —— 只读使用实际线程安全，理由同 ``ServerTime``。
 
     nonisolated fileprivate static let amsterdamTZ: TimeZone =
         TimeZone(identifier: "Europe/Amsterdam") ?? .current
 
-    nonisolated(unsafe) private static let isoFractional: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
+    /// ISO8601 两种形态：带小数秒和不带。后端两种都发过，所以两个都留着。
+    ///
+    /// 用 `Date.ISO8601FormatStyle` 而不是 `ISO8601DateFormatter`：
+    ///
+    /// - 它是 **`Sendable` 的值类型**，`nonisolated` 就够了，不必再挂
+    ///   `(unsafe)` 去关掉并发检查。工程里最后几个 `nonisolated(unsafe)` 全是
+    ///   为这个旧类留的。
+    /// - `includingFractionalSeconds` 之外的默认值正好等于
+    ///   `.withInternetDateTime`：dateSeparator `-`、dateTimeSeparator `T`、
+    ///   timeSeparator `:`、timeZoneSeparator 省略、时区 UTC。所以这是**行为
+    ///   等价**的替换，不是"差不多"。
+    nonisolated private static let isoFractional =
+        Date.ISO8601FormatStyle(includingFractionalSeconds: true)
 
-    nonisolated(unsafe) private static let isoPlain: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
+    nonisolated private static let isoPlain =
+        Date.ISO8601FormatStyle(includingFractionalSeconds: false)
 
     /// 多格式兜底解析器（Europe/Amsterdam，en_US_POSIX 固定 locale）。
     nonisolated private static let fallbackParsers: [DateFormatter] = {
@@ -199,8 +203,8 @@ extension NotificationItem {
     nonisolated static func parseCreatedDate(_ createdAt: String) -> Date? {
         let raw = createdAt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !raw.isEmpty else { return nil }
-        if let d = isoFractional.date(from: raw) { return d }
-        if let d = isoPlain.date(from: raw) { return d }
+        if let d = try? isoFractional.parse(raw) { return d }
+        if let d = try? isoPlain.parse(raw) { return d }
         for f in fallbackParsers {
             if let d = f.date(from: raw) { return d }
         }

@@ -86,11 +86,22 @@ extension Listing {
         return f
     }()
 
-    nonisolated(unsafe) private static let isoFormatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
+    /// ISO8601 两种形态：带小数秒和不带。后端两种都发过，所以两个都留着。
+    ///
+    /// 用 `Date.ISO8601FormatStyle` 而不是 `ISO8601DateFormatter`：
+    ///
+    /// - 它是 **`Sendable` 的值类型**，`nonisolated` 就够了，不必再挂
+    ///   `(unsafe)` 去关掉并发检查。工程里最后几个 `nonisolated(unsafe)` 全是
+    ///   为这个旧类留的。
+    /// - `includingFractionalSeconds` 之外的默认值正好等于
+    ///   `.withInternetDateTime`：dateSeparator `-`、dateTimeSeparator `T`、
+    ///   timeSeparator `:`、timeZoneSeparator 省略、时区 UTC。所以这是**行为
+    ///   等价**的替换，不是"差不多"。
+    nonisolated private static let isoFrac =
+        Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+
+    nonisolated private static let isoNoFrac =
+        Date.ISO8601FormatStyle(includingFractionalSeconds: false)
 
     nonisolated private static let fallbackParsers: [DateFormatter] = {
         let formats = [
@@ -207,7 +218,12 @@ extension Listing {
     /// Parse `first_seen` —— 复用 ServerTime 的多格式兼容。
     nonisolated var firstSeenDate: Date? {
         guard let firstSeen, !firstSeen.isEmpty else { return nil }
-        if let d = Self.isoFormatter.date(from: firstSeen) { return d }
+        if let d = try? Self.isoFrac.parse(firstSeen) { return d }
+        // 不带小数秒这一路是这次补上的：原来只试带小数秒的那个，
+        // `2026-09-05T10:00:00Z` 会掉进下面的 DateFormatter 兜底，而那批
+        // 格式串没有一个能吃掉末尾的 `Z` 或 `+02:00`，结果是**整条返回 nil**。
+        // `ServerTime` 和 `NotificationItem` 早就是两种都试，只有这里漏了。
+        if let d = try? Self.isoNoFrac.parse(firstSeen) { return d }
         for f in Self.fallbackParsers {
             if let d = f.date(from: firstSeen) { return d }
         }

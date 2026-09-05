@@ -40,11 +40,12 @@ struct LoginView: View {
     @State private var contentWidth: CGFloat = 0
     private var useLargeCards: Bool { contentWidth > 410 }
 
-    private static let isoFormatter: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
+    /// 见 ``ServerTime`` 里的说明：`Date.ISO8601FormatStyle` 是 Sendable 值类型，
+    /// 默认参数正好等价于 `.withInternetDateTime`。
+    private static let isoFrac =
+        Date.ISO8601FormatStyle(includingFractionalSeconds: true)
+    private static let isoNoFrac =
+        Date.ISO8601FormatStyle(includingFractionalSeconds: false)
 
     private var appVersion: String {
         AppVersion.short
@@ -245,7 +246,8 @@ struct LoginView: View {
             changes24h = summary.changes24h
             let iso = summary.lastScrape
             if !iso.isEmpty, iso != "--" {
-                lastScrapeAt = Self.isoFormatter.date(from: iso)
+                lastScrapeAt = (try? Self.isoFrac.parse(iso))
+                    ?? (try? Self.isoNoFrac.parse(iso))
             }
         } catch { }
     }

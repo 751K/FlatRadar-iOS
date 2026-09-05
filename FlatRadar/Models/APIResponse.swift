@@ -7,22 +7,24 @@ enum ServerTime {
     //
     // Swift 6 strict concurrency 下，static let 默认走 MainActor 隔离，但
     // display(_:) / parse(_:) 等是 nonisolated，跨不过去 → 编译错。
-    // 加 `nonisolated` 关键字解除隔离；iOS 18 SDK 的 DateFormatter /
-    // ISO8601DateFormatter 已声明为 Sendable，编译器不需要额外 (unsafe) 兜底。
+    // 加 `nonisolated` 关键字解除隔离。
 
-    // ISO8601DateFormatter 当前 SDK 尚未标 Sendable，单 nonisolated 通不过严格
-    // 并发检查；只读使用（仅 .date(from:)）实际线程安全，用 (unsafe) 关掉警告。
-    nonisolated(unsafe) private static let isoFrac: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return f
-    }()
+    /// ISO8601 两种形态：带小数秒和不带。后端两种都发过，所以两个都留着。
+    ///
+    /// 用 `Date.ISO8601FormatStyle` 而不是 `ISO8601DateFormatter`：
+    ///
+    /// - 它是 **`Sendable` 的值类型**，`nonisolated` 就够了，不必再挂
+    ///   `(unsafe)` 去关掉并发检查。工程里最后几个 `nonisolated(unsafe)` 全是
+    ///   为这个旧类留的。
+    /// - `includingFractionalSeconds` 之外的默认值正好等于
+    ///   `.withInternetDateTime`：dateSeparator `-`、dateTimeSeparator `T`、
+    ///   timeSeparator `:`、timeZoneSeparator 省略、时区 UTC。所以这是**行为
+    ///   等价**的替换，不是"差不多"。
+    nonisolated private static let isoFrac =
+        Date.ISO8601FormatStyle(includingFractionalSeconds: true)
 
-    nonisolated(unsafe) private static let isoNoFrac: ISO8601DateFormatter = {
-        let f = ISO8601DateFormatter()
-        f.formatOptions = [.withInternetDateTime]
-        return f
-    }()
+    nonisolated private static let isoNoFrac =
+        Date.ISO8601FormatStyle(includingFractionalSeconds: false)
 
     nonisolated private static let dateParser: DateFormatter = {
         let f = DateFormatter()
@@ -136,8 +138,8 @@ enum ServerTime {
     }
 
     nonisolated private static func parse(_ raw: String) -> Date? {
-        if let date = isoFrac.date(from: raw) { return date }
-        if let date = isoNoFrac.date(from: raw) { return date }
+        if let date = try? isoFrac.parse(raw) { return date }
+        if let date = try? isoNoFrac.parse(raw) { return date }
 
         for f in fallbackParsers {
             if let date = f.date(from: raw) { return date }

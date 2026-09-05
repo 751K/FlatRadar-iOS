@@ -192,4 +192,51 @@ final class ListingTests: XCTestCase {
         let b = try makeListing(id: "b", name: "A", status: "S")
         XCTAssertNotEqual(a, b)
     }
+
+    // MARK: - firstSeenDate 的 ISO8601 解析
+
+    /// 带小数秒（后端最常发的形态）。
+    func test_firstSeen_parses_iso_with_fractional_seconds() throws {
+        let l = Self.listing(firstSeen: "2026-09-05T08:30:00.123Z")
+        let t = try XCTUnwrap(l.firstSeenDate).timeIntervalSince1970
+        XCTAssertEqual(t, 1_788_597_000.123, accuracy: 0.01)
+    }
+
+    /// **不带**小数秒。这条是补上的：原来只试带小数秒的那个解析器，不带的会
+    /// 掉进 DateFormatter 兜底，而那批格式串没有一个能吃掉末尾的 `Z`，于是
+    /// 整条返回 nil——`isNew` 恒为 false、`ageText` 恒为 nil，静默地不对。
+    func test_firstSeen_parses_iso_without_fractional_seconds() throws {
+        let l = Self.listing(firstSeen: "2026-09-05T08:30:00Z")
+        let t = try XCTUnwrap(l.firstSeenDate).timeIntervalSince1970
+        XCTAssertEqual(t, 1_788_597_000, accuracy: 0.01)
+    }
+
+    /// 带时区偏移的也要认（+02:00 = 阿姆斯特丹夏令时）。
+    func test_firstSeen_parses_iso_with_offset() throws {
+        let l = Self.listing(firstSeen: "2026-09-05T10:30:00+02:00")
+        let t = try XCTUnwrap(l.firstSeenDate).timeIntervalSince1970
+        XCTAssertEqual(t, 1_788_597_000, accuracy: 0.01)
+    }
+
+    /// 没有时区的裸时间戳仍然走 DateFormatter 兜底，按阿姆斯特丹时区读。
+    /// 这条守的是「换成 ISO8601FormatStyle 之后把兜底那条路弄丢了」。
+    func test_firstSeen_falls_back_for_zoneless_timestamp() throws {
+        let l = Self.listing(firstSeen: "2026-09-05 10:30:00")
+        XCTAssertNotNil(l.firstSeenDate)
+    }
+
+    func test_firstSeen_garbage_is_nil() throws {
+        XCTAssertNil(Self.listing(firstSeen: "not a date").firstSeenDate)
+        XCTAssertNil(Self.listing(firstSeen: "").firstSeenDate)
+    }
+
+    private static func listing(firstSeen: String) -> Listing {
+        let json = """
+        {"id":"x","name":"n","status":"Book","price_raw":"€1",
+         "city":"Amsterdam","first_seen":"\(firstSeen)"}
+        """.data(using: .utf8)!
+        // swiftlint:disable:next force_try
+        return try! JSONDecoder().decode(Listing.self, from: json)
+    }
+
 }
