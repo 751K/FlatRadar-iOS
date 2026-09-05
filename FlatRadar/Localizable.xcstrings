@@ -1,34 +1,6 @@
 {
   "sourceLanguage" : "en",
   "strings" : {
-    "%lld platforms" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld plataformas"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld platforms"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 个平台"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "%lld 個平台"
-          }
-        }
-      }
-    },
     "" : {
 
     },
@@ -655,6 +627,34 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "%1$lld of %2$lld listings shown"
+          }
+        }
+      }
+    },
+    "%lld platforms" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld plataformas"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld platforms"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 个平台"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld 個平台"
           }
         }
       }
@@ -2370,6 +2370,7 @@
       }
     },
     "By creating an account, you agree to our" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -3008,6 +3009,7 @@
       }
     },
     "Create Account & Login" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -4430,7 +4432,11 @@
         }
       }
     },
+    "FlatRadar is an **independent** third-party client.\nNot affiliated with, endorsed by, or sponsored by any of the platforms it monitors.\nAll listing data belongs to its respective owners." : {
+
+    },
     "FlatRadar is an **unofficial** third-party client.\nNot affiliated with, endorsed by, or sponsored by any of the platforms it monitors.\nAll listing data belongs to its respective owners." : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6181,6 +6187,7 @@
       }
     },
     "Name" : {
+      "extractionState" : "stale",
       "localizations" : {
         "en" : {
           "stringUnit" : {
@@ -6338,34 +6345,6 @@
         }
       }
     },
-    "NEW TODAY · %lld" : {
-      "localizations" : {
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "HOY · %lld"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "VANDAAG NIEUW · %lld"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "今日新增 · %lld"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "今日新增 · %lld"
-          }
-        }
-      }
-    },
     "NEW · %@" : {
       "localizations" : {
         "es" : {
@@ -6474,6 +6453,34 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "New · Lottery"
+          }
+        }
+      }
+    },
+    "NEW · LOTTERY" : {
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "NUEVO · SORTEO"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "NIEUW · LOTING"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新 · 抽签"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "新 · 抽籤"
           }
         }
       }
@@ -6624,30 +6631,30 @@
         }
       }
     },
-    "NEW · LOTTERY" : {
+    "NEW TODAY · %lld" : {
       "localizations" : {
         "es" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "NUEVO · SORTEO"
+            "value" : "HOY · %lld"
           }
         },
         "nl" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "NIEUW · LOTING"
+            "value" : "VANDAAG NIEUW · %lld"
           }
         },
         "zh-Hans" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "新 · 抽签"
+            "value" : "今日新增 · %lld"
           }
         },
         "zh-Hant" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "新 · 抽籤"
+            "value" : "今日新增 · %lld"
           }
         }
       }
@@ -10735,6 +10742,9 @@
         }
       }
     },
+    "TEST" : {
+
+    },
     "Test Push" : {
       "localizations" : {
         "en" : {
@@ -11676,6 +11686,9 @@
           }
         }
       }
+    },
+    "Username" : {
+
     },
     "Username must be at least 2 characters." : {
       "localizations" : {

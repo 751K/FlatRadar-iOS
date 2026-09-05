@@ -2,33 +2,32 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <!--
-        本文件只放 Xcode auto-generated Info.plist 无法表达的复杂键。
-        其他键（NSAllowsLocalNetworking、UISupportedInterfaceOrientations 等）
-        继续在 project.pbxproj 的 INFOPLIST_KEY_* build settings 里维护，
-        构建时 Xcode 把两边合并。
+	<!--
+	    本文件只放 Xcode auto-generated Info.plist **无法表达**的复杂键。
 
-        CFBundleURLTypes:
-        注册 ``h2smonitor://`` URL Scheme，使得 ``h2smonitor://listing/<id>``
-        这类链接（邮件 / iMessage / 网页里点）能唤起 FlatRadar，由 SwiftUI
-        ``.onOpenURL`` 接到。
-    -->
-    <key>NSFaceIDUsageDescription</key>
-    <string>Face ID lets you sign in to FlatRadar instantly without typing your password.</string>
-    <key>NSLocationWhenInUseUsageDescription</key>
-    <string>FlatRadar uses your location only to center the map near you.</string>
-    <key>ITSAppUsesNonExemptEncryption</key>
-    <false/>
-    <key>CFBundleURLTypes</key>
-    <array>
-        <dict>
-            <key>CFBundleURLName</key>
-            <string>com.j.kong.FlatRadar.deepLink</string>
-            <key>CFBundleURLSchemes</key>
-            <array>
-                <string>h2smonitor</string>
-            </array>
-        </dict>
-    </array>
+	    简单的字符串 / 布尔键（NSFaceIDUsageDescription、
+	    NSLocationWhenInUseUsageDescription、ITSAppUsesNonExemptEncryption）
+	    在 project.pbxproj 的 INFOPLIST_KEY_* build settings 里维护，构建时
+	    Xcode 把两边合并。
+
+	    2026-09-05：那三个键原本也写在这里，与上面这条约定自相矛盾。用 Xcode 27
+	    打开工程时它把它们搬到了 build settings，搬得对——现在这个文件才名副其实。
+	    别再往这里加简单键。
+
+	    CFBundleURLTypes 留在这里，是因为它是数组套字典，INFOPLIST_KEY_* 表达不了。
+	    它注册 h2smonitor:// URL Scheme，使 h2smonitor://listing/<id> 这类链接
+	    （邮件 / iMessage / 网页里点）能唤起 FlatRadar，由 SwiftUI 的 .onOpenURL 接到。
+	-->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.j.kong.FlatRadar.deepLink</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>h2smonitor</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>
