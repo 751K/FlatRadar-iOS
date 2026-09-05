@@ -71,7 +71,14 @@ struct ListingCluster: Identifiable, Hashable, Sendable {
 ///   归并：cell 内点数 ≥ 2 → cluster；==1 → single
 ///
 /// 复杂度对 listings < 千级数据完全够用，每次 region change 重算 < 1ms。
-enum MapClustering {
+///
+/// `nonisolated`：整个命名空间是纯函数，不碰任何状态。不标的话
+/// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` 会把它整个推断成 @MainActor，
+/// 于是 MapView 里那句 `Task.detached { MapClustering.cluster(...) }` 变成
+/// "从 actor 外部调用主 actor 方法"——Swift 5 只是警告，Swift 6 语言模式是错误。
+/// 标在类型上而不是逐个函数上，是因为 `cluster` 内部还要调 `quantizeSpan`，
+/// 只标一个的话另一个会接着报。
+nonisolated enum MapClustering {
 
     /// 把连续 ``span`` 量化到 log2 桶（默认 step=0.5 → 每 √2 倍缩放 = 1 桶）。
     ///

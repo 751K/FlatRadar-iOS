@@ -8,7 +8,11 @@ import Foundation
 /// MapListing 是地图专用 DTO：含 ``lat`` / ``lng`` 坐标，不含完整 feature 列表。
 /// 点击 pin → 弹卡 → 点详情按钮时，再走 ``ListingRoute.byId`` 让 ListingDetailView
 /// 自己 ``getListing(id:)`` 拉全字段。
-struct MapListing: Decodable, Identifiable, Hashable, Sendable {
+///
+/// `nonisolated`：纯 DTO，没有任何可变状态，而且要跟着 ``MapClustering`` 一起
+/// 进 `Task.detached` 做后台聚类。默认主 actor 隔离会把 ``displayCoordinate``
+/// 这类派生属性也推断成 @MainActor，后台任务里读它就成了跨 actor 访问。
+nonisolated struct MapListing: Decodable, Identifiable, Hashable, Sendable {
     let id: String
     let name: String
     let status: String

@@ -3,7 +3,7 @@
 [![App Store](https://img.shields.io/badge/App_Store-Download-0D96F6?style=flat-square&logo=appstore&logoColor=white)](https://apps.apple.com/us/app/flarradar/id6769857080)
 [![iOS Tests](https://img.shields.io/github/actions/workflow/status/751K/FlatRadar-iOS/ios.yml?style=flat-square&label=tests)](https://github.com/751K/FlatRadar-iOS/actions/workflows/ios.yml)
 [![Platform](https://img.shields.io/badge/iOS-18.0%2B-000000?style=flat-square&logo=apple&logoColor=white)](https://developer.apple.com/ios/)
-[![SwiftUI](https://img.shields.io/badge/SwiftUI-Swift_5-FA7343?style=flat-square&logo=swift&logoColor=white)](https://developer.apple.com/xcode/swiftui/)
+[![SwiftUI](https://img.shields.io/badge/SwiftUI-Swift_6-FA7343?style=flat-square&logo=swift&logoColor=white)](https://developer.apple.com/xcode/swiftui/)
 [![Backend](https://img.shields.io/badge/backend-holland2stay--monitor-0057CC?style=flat-square&logo=github)](https://github.com/751K/holland2stay-monitor)
 [![License](https://img.shields.io/badge/license-PolyForm%20Noncommercial%201.0.0-blue?style=flat-square)](https://github.com/751K/holland2stay-monitor/blob/master/LICENSE)
 

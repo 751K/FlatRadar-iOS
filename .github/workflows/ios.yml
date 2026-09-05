@@ -50,6 +50,13 @@ jobs:
           xcodebuild -version
           xcrun simctl list runtimes
 
+      # tests/ 下那几个 pytest 是对**仓库文件**的检查（pbxproj 的版本号与语言
+      # 模式、AppIcon 的深色图标、截图上传前的体检、CI 配置本身），不需要模拟器。
+      # 它们此前一次都没在 CI 里跑过——44 条测试只在本地手跑时才有意义，而
+      # 「没人跑的测试」和「没有测试」是一回事。放在模拟器那一步之前，秒级失败。
+      - name: Run repo checks (pytest)
+        run: python3 -m pytest tests -q
+
       # 不写死 "iPhone 16" 之类的名字：GitHub 换镜像时那个型号可能就没了，
       # 而报错是 "no destinations"，看上去像项目坏了。挑选逻辑在
       # scripts/pick_simulator.py，那边有单元测试。
