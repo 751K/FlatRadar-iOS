@@ -172,11 +172,11 @@ struct CalendarView: View {
             availableRange: store.dateRange,
             countForDay: { store.listings(on: $0).count }
         )
-        // 宽度上限由 NativeMonthCalendar.sizeThatFits 自己卡（它会问视图愿意多宽），
-        // 这里不再写死一个数——写死过 420（太窄）和 640（会露出相邻月份）。
+        // 宽度上限由 NativeMonthCalendar 自己卡（容器在布局时实测月网格的页宽），
+        // 这里不再写死一个数——写死过 420（太窄）、460 / 640（会露出相邻月份）。
         .padding(.vertical, 8)
         // 卡片底**贴着日历本身**，不是撑满整列。顺序反过来的话（先撑满再画底）
-        // 卡片会横跨整个左栏，而里面的日历只占中间 420pt，两边各空一截。
+        // 卡片会横跨整个左栏，而里面的日历只占中间那一段，两边各空一截。
         .background(Color(.secondarySystemGroupedBackground),
                     in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .frame(maxWidth: .infinity)   // 画完底再在列里居中

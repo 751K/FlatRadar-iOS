@@ -32,18 +32,15 @@ struct NativeMonthCalendar: UIViewRepresentable {
 
     private static let cal = Calendar.current
 
-    /// 返回的是一个**容器**，`UICalendarView` 用 Auto Layout 钉在里面。
+    /// 返回的是一个**容器**（``ClippingContainer``），`UICalendarView` 用 Auto Layout
+    /// 钉在里面。
     ///
     /// 文档明写着「Set up Auto Layout to position the calendar view in your
     /// interface」——它要求用约束布局。而 UIViewRepresentable 默认是 SwiftUI
-    /// 直接设 frame（autoresizing mask），内部的分页布局在那种方式下算不对：
-    /// 表现就是左右两侧透出相邻月份的日期。
+    /// 直接设 frame（autoresizing mask），内部的分页布局在那种方式下算不对。
     ///
-    /// 之前以为是"给太宽了"，靠调宽度上限压下去（420 干净、640 露馅），那只是
-    /// 让它恰好落回能算对的尺寸，没解决根因——所以换个设备或字号又会露出来。
+    /// 宽度上限不写死，由容器在布局时**实测**（见 ``ClippingContainer``）。
     func makeUIView(context: Context) -> UIView {
-        let container = UIView()
-
         let view = UICalendarView()
         view.calendar = Self.cal
         view.locale = .autoupdatingCurrent
@@ -57,15 +54,7 @@ struct NativeMonthCalendar: UIViewRepresentable {
         context.coordinator.selection = selection
         context.coordinator.calendarView = view
 
-        view.translatesAutoresizingMaskIntoConstraints = false
-        container.addSubview(view)
-        NSLayoutConstraint.activate([
-            view.leadingAnchor.constraint(equalTo: container.leadingAnchor),
-            view.trailingAnchor.constraint(equalTo: container.trailingAnchor),
-            view.topAnchor.constraint(equalTo: container.topAnchor),
-            view.bottomAnchor.constraint(equalTo: container.bottomAnchor),
-        ])
-        return container
+        return ClippingContainer(calendarView: view)
     }
 
     func updateUIView(_ container: UIView, context: Context) {
@@ -110,7 +99,7 @@ struct NativeMonthCalendar: UIViewRepresentable {
         }
     }
 
-    /// 宽度卡在日历**自己愿意的**那个值上，高度交给 Auto Layout 算。
+    /// 宽度卡在月网格**实测**的页宽上，高度交给 Auto Layout 算。
     ///
     /// UICalendarView 内部是一个分页滚动视图，每一页是一个月的网格，而**网格有
     /// 自己的最大宽度**。视图比那个宽度宽出来的部分，会被相邻月份的页填满——
@@ -120,13 +109,18 @@ struct NativeMonthCalendar: UIViewRepresentable {
     /// 两侧各露三列。加 Auto Layout 约束（文档要求的那一条）也压不住，因为分页
     /// 视图本来就该铺满自己的容器，问题在网格不跟着铺。
     ///
-    /// 所以不能把外面给的宽度照单全收，要先问它压缩后想要多宽。问不出来才退回
-    /// 常量——那个常量取自实测：420 干净、640 露馅。
+    /// 那个最大宽度没有 API 能问到（`systemLayoutSizeFitting` 压缩尺寸给的是
+    /// 最小值，不是它）。以前靠常量兜：420 干净、460 / 640 露馅——换个字号或
+    /// 系统版本就不准。现在的做法是**先按外面给的宽度铺开一次，量出分页的步长**
+    /// （就是网格的最大宽度），再把宽度收到那个值上。量的过程在
+    /// ``ClippingContainer/layoutSubviews()`` 里，同一次布局里就把日历收窄，
+    /// 不会闪一帧相邻月份。
     func sizeThatFits(_ proposal: ProposedViewSize,
                       uiView container: UIView,
                       context: Context) -> CGSize? {
         guard let offered = proposal.width, offered > 0 else { return nil }
-        let width = min(offered, Self.preferredWidth(of: container))
+        let cap = (container as? ClippingContainer)?.widthCap ?? Self.fallbackMaxWidth
+        let width = min(offered, cap)
         let fitted = container.systemLayoutSizeFitting(
             CGSize(width: width, height: UIView.layoutFittingCompressedSize.height),
             withHorizontalFittingPriority: .required,
@@ -134,14 +128,121 @@ struct NativeMonthCalendar: UIViewRepresentable {
         return CGSize(width: width, height: fitted.height)
     }
 
-    /// 实测：420 干净，640 会露出相邻月份。问不出固有宽度时用这个。
-    private static let fallbackMaxWidth: CGFloat = 460
+    /// 实测量不出来（系统改了内部结构）时的兜底。取实测过的安全值：420 干净。
+    static let fallbackMaxWidth: CGFloat = 420
 
-    private static func preferredWidth(of container: UIView) -> CGFloat {
-        let compressed = container.systemLayoutSizeFitting(
-            UIView.layoutFittingCompressedSize).width
-        // 压缩尺寸有时会退化成 0 或一个很小的值（约束还没生效），那种时候别用。
-        return compressed > 320 ? compressed : fallbackMaxWidth
+    /// 装 `UICalendarView` 的容器，负责量出月网格的最大宽度并把日历卡在那上面。
+    ///
+    /// 约束：上下贴边（必需）、水平居中（必需）、左右贴边（高优先级）、
+    /// 宽度 ≤ 量到的页宽（必需，量到之前不激活）。容器比页宽窄时左右贴边生效，
+    /// 日历跟着容器；容器比页宽宽时宽度约束压住，日历居中、两侧留白。
+    ///
+    /// 怎么量：日历内部那个横向分页的滚动视图里，每页是一个月视图（collection
+    /// view 的 cell），相邻两页的 `minX` 之差就是页宽。只看到一页时取那一页的
+    /// 宽度。量到的值比日历当前宽度小，说明确实露了相邻月份，记下来。
+    /// 这依赖系统内部的视图层级，所以量不出来时退回 ``fallbackMaxWidth``。
+    final class ClippingContainer: UIView {
+        let calendarView: UICalendarView
+        private let widthLimit: NSLayoutConstraint
+
+        private enum Measurement { case pending, measured(CGFloat), failed }
+        private var measurement: Measurement = .pending
+        /// 量到的页宽（没量到时给 `nil`，让 sizeThatFits 先给全宽好量一次；
+        /// 量不出来时给兜底常量）。
+        var widthCap: CGFloat? {
+            switch measurement {
+            case .pending: return nil
+            case .measured(let w): return w
+            case .failed: return NativeMonthCalendar.fallbackMaxWidth
+            }
+        }
+
+        init(calendarView: UICalendarView) {
+            self.calendarView = calendarView
+            widthLimit = calendarView.widthAnchor.constraint(lessThanOrEqualToConstant: 0)
+            super.init(frame: .zero)
+            clipsToBounds = true
+            calendarView.translatesAutoresizingMaskIntoConstraints = false
+            addSubview(calendarView)
+            let leading = calendarView.leadingAnchor.constraint(equalTo: leadingAnchor)
+            let trailing = calendarView.trailingAnchor.constraint(equalTo: trailingAnchor)
+            leading.priority = .defaultHigh
+            trailing.priority = .defaultHigh
+            NSLayoutConstraint.activate([
+                leading, trailing,
+                calendarView.centerXAnchor.constraint(equalTo: centerXAnchor),
+                calendarView.topAnchor.constraint(equalTo: topAnchor),
+                calendarView.bottomAnchor.constraint(equalTo: bottomAnchor),
+            ])
+        }
+
+        @available(*, unavailable)
+        required init?(coder: NSCoder) { fatalError() }
+
+        override func layoutSubviews() {
+            super.layoutSubviews()
+            guard case .pending = measurement, bounds.width > 0 else { return }
+            // 子视图的布局排在父视图 layoutSubviews 之后，这时候内部的 cell 可能
+            // 还没摆好，先催一次。
+            calendarView.layoutIfNeeded()
+            if let stride = Self.pageStride(in: calendarView) {
+                // 比日历自身还宽的"页"不是我们要找的（那是没露馅的情况，
+                // 学不到上限，也不需要）。
+                if stride + 1 < calendarView.bounds.width {
+                    measurement = .measured(stride)
+                    widthLimit.constant = stride
+                    widthLimit.isActive = true
+                    // 同一次布局里就收窄，别等下一帧。
+                    super.layoutSubviews()
+                    invalidateIntrinsicContentSize()   // 让 SwiftUI 重问 sizeThatFits
+                }
+            } else if !attemptedRetry {
+                // 第一次布局时 cell 可能还没生成，下一轮 runloop 再量一次。
+                attemptedRetry = true
+                DispatchQueue.main.async { [weak self] in self?.setNeedsLayout() }
+            } else {
+                measurement = .failed
+                invalidateIntrinsicContentSize()
+            }
+        }
+        private var attemptedRetry = false
+
+        override func traitCollectionDidChange(_ previous: UITraitCollection?) {
+            super.traitCollectionDidChange(previous)
+            // 字号变了网格上限也会变，重新量。
+            if previous?.preferredContentSizeCategory != traitCollection.preferredContentSizeCategory {
+                measurement = .pending
+                attemptedRetry = false
+                widthLimit.isActive = false
+                invalidateIntrinsicContentSize()
+                setNeedsLayout()
+            }
+        }
+
+        /// 找日历里横向分页的滚动视图，返回它相邻两页的步长。
+        static func pageStride(in root: UIView) -> CGFloat? {
+            var queue: [UIView] = [root]
+            while !queue.isEmpty {
+                let v = queue.removeFirst()
+                if let sv = v as? UIScrollView,
+                   sv.bounds.width > 0,
+                   sv.contentSize.width > sv.bounds.width + 1 {
+                    let pages = sv.subviews
+                        .filter { $0.frame.width > 100 && $0.frame.height > 100 }
+                        .map { $0.frame.minX }
+                        .sorted()
+                    if pages.count >= 2 {
+                        let gaps = zip(pages, pages.dropFirst()).map { $1 - $0 }.filter { $0 > 1 }
+                        if let g = gaps.min() { return g }
+                    }
+                    if let only = sv.subviews.first(where: { $0.frame.width > 100 && $0.frame.height > 100 }) {
+                        return only.frame.width
+                    }
+                }
+                queue.append(contentsOf: v.subviews)
+            }
+            return nil
+        }
     }
 
     /// 只比 年 / 月 / 日 三个字段。
