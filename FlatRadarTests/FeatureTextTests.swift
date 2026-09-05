@@ -115,9 +115,25 @@ final class FeatureTextTests: XCTestCase {
         XCTAssertEqual(FeatureText.display("student only"), "Student only")
     }
 
+    /// 规则是「首字母是小写就大写它」，判据只看**第一个字符**。
+    ///
+    /// 这几个都不是小写开头：数字、大写字母。所以原样返回。
     func test_display_leaves_values_that_do_not_start_lowercase_alone() {
-        for value in ["m²", "21.5 m²", "1-Bedroom", "A+", "XC 1112"] {
+        for value in ["21.5 m²", "1-Bedroom", "A+", "XC 1112"] {
             XCTAssertEqual(FeatureText.display(value), value)
         }
+    }
+
+    /// 反过来钉一条边界：**光秃秃的 `"m²"` 会被大写成 `"M²"`**。
+    ///
+    /// 这条原本混在上面那批里——`"m²"` 是小写开头，跟测试名字自相矛盾，CI 上
+    /// 一直红着。放错桶的原因是照抄了 `display` 的注释，而那份注释举 `"m²"`
+    /// 当例子是在说「整串 title case 会改坏什么」，那是另一个更宽的集合。
+    ///
+    /// 之所以无害：面积值实际长成 `"21.5 m²"`，数字开头，走上面那条；单独一个
+    /// `"m²"` 不是任何维度的取值。真出现了也只是显示成 `"M²"`，不影响勾选和
+    /// 回传（那些用的是原字符串）。
+    func test_display_uppercases_even_a_bare_unit() {
+        XCTAssertEqual(FeatureText.display("m²"), "M²")
     }
 }

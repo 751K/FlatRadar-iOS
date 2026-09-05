@@ -15,8 +15,14 @@ nonisolated enum FeatureText {
     ///
     /// - 已登记的平台走 ``Platform.displayName``：机械地首字母大写会得到
     ///   "Ourcampus"，那既不是原样也不是正确写法，比不改还糟。
-    /// - 首字母**不是小写**的一律原样返回：值里常有 "m²"、"excl."、"XC"、
-    ///   "1-Bedroom" 这类写法，整串 title case 会把它们改坏。
+    /// - 首字母**不是小写**的一律原样返回："21.5 m²"、"1-Bedroom"、"A+"、
+    ///   "XC 1112" 这类写法整串 title case 会被改坏，而它们都是数字或大写开头，
+    ///   这条判据正好放过。
+    ///
+    ///   注意判据只看**第一个字符**，不是"含有单位/缩写就放过"。单独一个 "m²"
+    ///   仍会被大写成 "M²"——它是小写开头。实际取值里不存在这种形态（面积长成
+    ///   "21.5 m²"），所以无害；但别把这条注释当成"单位不会被动"来读，
+    ///   FeatureTextTests 里为此专门钉了一条。
     static func display(_ value: String) -> String {
         let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let first = trimmed.first else { return trimmed }
