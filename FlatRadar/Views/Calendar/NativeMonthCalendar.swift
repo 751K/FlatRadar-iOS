@@ -318,9 +318,23 @@ struct NativeMonthCalendar: UIViewRepresentable {
     ///   都指向**今天所在的月**——数据要是从下个月才开始，那个月份就是非法值。
     static func monthSpan(_ range: (start: Date, end: Date)) -> DateInterval {
         let today = Date()
-        let lo = min(range.start, range.end, today)
         let hi = max(range.start, range.end, today)
-        let start = startOfMonth(lo)
+        // **下界固定在本月**，不跟着数据往前走。
+        //
+        // 这条是被三次失败逼出来的。`UICalendarView` 在设 `availableDateRange`
+        // 时会把可见月**吸附到范围起点**，而那次吸附发生在赋值之后的布局里，还会
+        // 触发 `didChangeVisibleDateComponentsFrom` 把绑定的 `visibleMonth` 一起
+        // 改写。我先后试过「选中某天让它自己滚过去」「下一轮 runloop 再拨回来」
+        // 「用一次性开关拨回来」，build 295 / 302 / 304 的截图里日历始终停在
+        // **8 月**——因为数据里最早的房源在 8 月，范围起点就是 8 月 1 日。
+        //
+        // 与其跟那个时机较劲，不如让吸附本身就落在正确的月：范围从本月开始，
+        // 吸附过去正好是我们要显示的月份。
+        //
+        // 代价是**翻不到本月之前**。这个日历显示的是「可入住日期」，过去的月份
+        // 没有可操作内容——上面那批 8 月的房源在实测数据里只有 1 条，而且是
+        // 已经过期的。真要看历史，那是另一个功能，不该由默认视野承担。
+        let start = startOfMonth(today)
         // 末月的最后一秒：下个月月初往回退 1 秒。
         let end = cal.date(byAdding: DateComponents(month: 1, second: -1),
                            to: startOfMonth(hi)) ?? hi

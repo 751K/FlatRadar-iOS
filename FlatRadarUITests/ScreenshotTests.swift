@@ -407,20 +407,43 @@ final class ScreenshotTests: XCTestCase {
 
     /// 保存当前屏幕为 XCTAttachment，跟测试结果一起进 .xcresult 包。
     private func snap(named step: String) {
-        // `app.screenshot()` 而不是 `XCUIScreen.main.screenshot()`。
+        // 拍物理屏幕，然后**自己转正**。
         //
-        // 后者拍的是**屏幕的物理朝向**：iPad 转成横屏之后，内容是横的，图却仍然
-        // 存成 2064×2752 的竖图、整幅转了 90°——build 302 的 iPad 那 35 张就是
-        // 这样，状态栏「9:41」竖在右边。App Store 收到的会是一批躺倒的图。
+        // 两种拍法都试过，都不能直接用（iPad 横屏下）：
         //
-        // `app.screenshot()` 拍的是**应用当前的界面朝向**，横屏就是 2752×2064。
-        let screenshot = app.screenshot()
-        let attachment = XCTAttachment(screenshot: screenshot)
+        //   XCUIScreen.main.screenshot()  2064×2752 竖图，横屏内容整幅转了 90°
+        //                                 ——拍的是物理面板，不看界面朝向
+        //   app.screenshot()              2752×2064 横图，但内容**仍然是转的**，
+        //                                 右边还多出一条黑边（build 304 实测）
+        //
+        // 所以用前者（无黑边、无损），再自己逆时针转 90°。方向不是猜的：拿
+        // build 302 的产物用 PIL 两个方向各转一次比对过——`rotate(+90)`
+        // （逆时针）之后状态栏「9:41 AM Sat Sep 5」和顶部 tab bar 都正立，
+        // 顺时针那版是倒的。
+        //
+        // `UIImage.Orientation.right` 表示「原图相对正立被顺时针转过 90°」，
+        // 绘制时 UIKit 会反向补偿，净效果就是逆时针 90°。用 renderer 重画一遍是
+        // 为了把朝向**烘进像素**——PNG 不携带 UIImage 的 orientation。
+        var image = XCUIScreen.main.screenshot().image
+        if isPad { image = Self.uprighted(image) }
+        let attachment = XCTAttachment(image: image)
         // 名字里不再带语言：语言由 test plan 决定，附件的 configurationName
         // 已经带着它，提取脚本按那个分桶。名字里再写一份只会有机会写错。
         let device = UIDevice.current.name.replacingOccurrences(of: " ", with: "-")
         attachment.name = "\(step)_\(device)"
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    /// 把物理朝向的截图逆时针转 90°，并把朝向烘进像素。
+    private static func uprighted(_ image: UIImage) -> UIImage {
+        guard let cg = image.cgImage else { return image }
+        let rotated = UIImage(cgImage: cg, scale: image.scale, orientation: .right)
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = image.scale
+        format.opaque = true
+        return UIGraphicsImageRenderer(size: rotated.size, format: format).image { _ in
+            rotated.draw(in: CGRect(origin: .zero, size: rotated.size))
+        }
     }
 }

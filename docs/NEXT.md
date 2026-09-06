@@ -11,6 +11,10 @@ Analytics——现有用户已经全部在 iOS 18 及以上。工程里六处 `I
 
 顺序不是随便排的：**第 1 条是第 2 条的前提**，第 3 条独立，随时可做。
 
+**2026-09-06 追加**：2.1.0 在 iOS 这边已经收口，文末多了一节
+[下一版预期（2.2.0）](#下一版预期220)。这份文档从这里起是两段——上半截讲 2.1.0
+（含事后追记，留作记录），下半截才是还没做的。
+
 ---
 
 ## 事后追记：2.1.0 实际变成了什么
@@ -247,6 +251,124 @@ MKPointOfInterestCategory: .foodMarket, .school, .university,
 真要做，代价是 `NavigationCoordinator` 的 `listingsPath: [ListingRoute]` 要从
 **路径模型**改成**选中模型**，而 deep link（`h2smonitor://listing/<id>`、推送点开）
 走的正是它——那是有真实用户在走的路径。这一步比这一轮做的任何一件都大。
+
+---
+
+# 下一版预期（2.2.0）
+
+写于 2026-09-06。上面那份说的是 2.1.0，**它在 iOS 这边已经收口**；这一节是 2.2.0
+的清单。新加的只有一条（小组件），其余是从上面顺延下来的。
+
+| | 出处 | 卡在哪 |
+|---|---|---|
+| **小组件（状态型）** | 本节，2026-09-06 定 | **不卡任何东西**，随时可做 |
+| 1b. 端上模型可用性上报 | 上面第 1 条的后半 | 只缺"做不做"的决定 |
+| AI 筛选 | 上面第 2 条 | 等 1b 的数据，不知道多少人能用就没法判断值不值 |
+| App 图标三张变体 | 「两件悬着的事」之一 | 诊断完了，缺从设计源重新导出 |
+| iPad `NavigationSplitView` | 「两件悬着的事」之二 | 代价最大的一件，动的是 deep link 在走的那条路 |
+
+排在最前是因为它是这张表里**唯一一条不依赖别人**的：不等后端、不等数据、不等
+用户升级。1b / AI 那条链最快也要再隔一个版本周期。
+
+---
+
+## 小组件：主屏 / 锁屏的状态卡
+
+**状态：已定为 2.2.0 目标（2026-09-06），未动工。**
+
+### 先说不做什么：房源列表小组件
+
+WidgetKit 的刷新是**系统给预算**的，一天几十次，落到实际粒度是 15–60 分钟。而这个
+app 的整个卖点是"匹配的瞬间推给你"，房源在这个市场上是分钟级消失的。
+
+所以一个滞后半小时的房源卡片，展示的大概率是**已经没了的房子**。它不是"多一个
+入口"，是主动制造一次错误的希望。推送已经把"快"这条路占满了，小组件在这条路上
+只可能更慢，做多少都是负分。
+
+同理排除的两个形状：
+
+- **Live Activity** —— 没有任何一个随时间推进的状态。[ListingStatus](../FlatRadar/Models/ListingStatus.swift)
+  那五档是离散的，不带倒计时，凑不出一条"进度"。
+- **控制中心控件** —— 省下来的那一下点击本来就不贵。
+
+### 要做的那个：把"沉默"翻译出来
+
+这个 app 有一个**推送治不了的失败模式**。用户看不到推送时，无法区分三件事：
+
+1. 真的没有新房源
+2. 后端管道挂了 / 爬虫停了
+3. 自己掉了登录，或推送权限被系统悄悄收了
+
+对一个**监控**产品来说，沉默是有歧义的——而这正是这个项目反复出现的那个形状：
+把"不知道"当成一个确定的答案（`ListingStatus.other` 单独占一档，是同一条道理）。
+
+`last_scrape` 一个字段就能消歧，代价是零次交互。这是小组件在这个 app 里**唯一
+不与推送重复**的价值，也是范围应该钉死在它上面的原因。
+
+### 数据是现成的，后端一行不用改
+
+| 端点 | 要不要登录 | 字段 |
+|---|---|---|
+| `/stats/public/summary` | **不要** | `total` / `new_24h` / `new_7d` / `changes_24h` / **`last_scrape`** —— [MonitorStatus.swift](../FlatRadar/Models/MonitorStatus.swift) |
+| `/me/summary` | 要 | `matched_total` / `matched_available` / `new_24h_total` / **`last_scrape`** / `filter_active` —— [APIResponse.swift:218](../FlatRadar/Models/APIResponse.swift:218) |
+
+`/me/summary` 几乎就是照着一个 `systemSmall` 的尺寸长的：一个大数字 + 一行
+"x 分钟前扫过"。**一次请求，零后端改动，不新增任何 API 契约**——它绕开了根
+README 里那个"spec 是唯一真相、但字段级漂移没人查"的老问题，这一条不会再往那个
+坑里加东西。
+
+另外两笔不用付的成本：最低版本已经是 18.0，WidgetKit 的现代 API 全部可用，
+**不需要任何 `if #available` 分支**（对比第 2 条那三道门）；深链
+`h2smonitor://listing/<id>` 是现成的，`widgetURL` 直接接得上。
+
+### 成本全在管道上，不在小组件里
+
+视图本身半天就写完。贵的是下面四件，都是查过的：
+
+- **App Group 是硬需求，哪怕先做不登录的版本。** `server_url` 存在
+  `UserDefaults.standard`（[APIClient.swift:75](../FlatRadar/Networking/APIClient.swift:75)），
+  而扩展有自己的 defaults 域。不搬到 App Group，**自建部署的用户 app 指着自己的
+  服务器、小组件却在问 flatradar.app**——还不报错，只是两边数字对不上。
+- **Keychain 要开 access group，而且要迁移。**
+  [KeychainManager](../FlatRadar/Networking/KeychainManager.swift) 现在不带
+  `kSecAttrAccessGroup`，token 落在 app 默认组里，扩展读不到。加了共享组之后
+  **存量用户的 token 还在老组**：不写"读两处、写共享组"的迁移，小组件对老用户
+  永远显示未登录。这条路上有真实用户，性质和 iPad 那条 `NavigationCoordinator`
+  一样。
+- **代码共享要先定形状。** 工程用的是 `PBXFileSystemSynchronizedRootGroup`
+  （文件夹自动同步），跨 target 共享要么抽本地 SPM 包、要么手工挂 membership。
+  而 `APIClient` 是 625 行、`@MainActor`、`import UIKit`、带 URLCache 和崩溃
+  上传——为了一个 GET 把它抽出去不划算。**倾向在 widget target 里另写一个
+  ~80 行的专用 fetcher**，只解 summary 那一个结构。
+- **pytest 会变红，得在同一个提交里改。** `tests/test_deployment_target.py` 的
+  `EXPECTED_CONFIG_COUNT = 6` 是硬编码计数，新 target 会让它变 8。另外新
+  bundle id、App Group、Keychain sharing 三个 capability 要在 App ID 上开——
+  出包走 Xcode Cloud，**配漂了只会在 archive 阶段才炸**。再加 5 种语言的新文案，
+  以及小组件库里的那句描述。
+
+### 分两步，第一步就拿得到核心价值
+
+- **Step 1（约 1 天）** —— `systemSmall` + `accessoryRectangular`（锁屏），
+  只吃 `/stats/public/summary`。只需要 App Group 搬一个 `server_url`，
+  **零 keychain 风险**。它已经回答了"管道还活着吗"。
+- **Step 2（约 1 天）** —— 换成 `/me/summary`，加 keychain 共享组和迁移，数字
+  从"全市有多少"变成"**我的**匹配还剩几套"。这才是用户真正想要的数，风险也全在
+  这一步。
+
+范围钉死：不做房源列表、不做地图、不做 interactive `AppIntent`。
+
+### 又一次撞上"维护模式"
+
+根 [README](../README.md#L138) 和 [iOS_README](iOS_README.md) 写的是
+"feature-complete / maintenance mode"。上面那份文档已经指出这条方针跟它那三条
+新功能冲突，并且说了"要么这份文档是显式例外，要么方针该改"——**然后没定**。
+小组件是第二次撞上同一句话。
+
+实际状态已经很清楚了：2.x 一直在做有选择的功能扩展（iPad 适配、地图 POI、
+可达圈，没一件是"维护"）。与其每加一个功能就在文档里自辩一段，不如把那两处
+改成它实际的样子。**这件事本身也算 2.2.0 的一项，而且是最便宜的一项。**
+
+---
 
 ## 在这台机器上构建
 
