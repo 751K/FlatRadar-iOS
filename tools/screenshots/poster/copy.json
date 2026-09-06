@@ -1,0 +1,278 @@
+{
+  "_comment": "_hero 用于前两张跨页：title 两行主标题，body 简介，proof 平台数字旁说明，tagline 品牌副句。其他页面用 lead/head。",
+  "en-US": {
+    "_badges": [
+      [
+        "7",
+        "platforms watched at once"
+      ],
+      [
+        "Push",
+        "the second a match appears"
+      ],
+      [
+        "Both",
+        "iPhone and iPad"
+      ]
+    ],
+    "00-Alerts": {
+      "lead": "The moment it's listed",
+      "head": "it's on your phone"
+    },
+    "01-Inbox": {
+      "lead": "Only the ones",
+      "head": "that match your filters"
+    },
+    "02-Map": {
+      "lead": "See what's",
+      "head": "within reach"
+    },
+    "03-Dashboard": {
+      "lead": "The whole market",
+      "head": "at a glance"
+    },
+    "04-Views": {
+      "lead": "Same listings",
+      "head": "four ways"
+    },
+    "05-Calendar": {
+      "lead": "Every move-in date",
+      "head": "in one calendar"
+    },
+    "_hero": {
+      "title": [
+        "Good homes.",
+        "Found faster."
+      ],
+      "body": [
+        "Listings, maps and move-in dates.",
+        "Your search, all in one place."
+      ],
+      "tagline": "A little less searching.",
+      "proof": [
+        "platforms.",
+        "One place."
+      ]
+    }
+  },
+  "zh-Hans": {
+    "_badges": [
+      [
+        "7",
+        "个平台同时盯着"
+      ],
+      [
+        "推送",
+        "匹配的那一秒就发出"
+      ],
+      [
+        "双端",
+        "iPhone 和 iPad 适用"
+      ]
+    ],
+    "00-Alerts": {
+      "lead": "房源一上线",
+      "head": "手机就响"
+    },
+    "01-Inbox": {
+      "lead": "只提醒",
+      "head": "你真正在意的"
+    },
+    "02-Map": {
+      "lead": "十分钟能到的",
+      "head": "都在圈里"
+    },
+    "03-Dashboard": {
+      "lead": "整个市场",
+      "head": "一眼看完"
+    },
+    "04-Views": {
+      "lead": "同一批房源",
+      "head": "四种看法"
+    },
+    "05-Calendar": {
+      "lead": "所有起租日",
+      "head": "一张日历"
+    },
+    "_hero": {
+      "title": [
+        "好房出现",
+        "你先知道"
+      ],
+      "body": [
+        "房源动态、地图与日历，",
+        "一个 App 全部掌握。"
+      ],
+      "tagline": "荷兰租房，从容一点。",
+      "proof": [
+        "个平台",
+        "一处掌握"
+      ]
+    }
+  },
+  "zh-Hant": {
+    "_badges": [
+      [
+        "7",
+        "個平台同時盯著"
+      ],
+      [
+        "推播",
+        "匹配的那一秒就發出"
+      ],
+      [
+        "雙端",
+        "iPhone 和 iPad 適用"
+      ]
+    ],
+    "00-Alerts": {
+      "lead": "房源一上線",
+      "head": "手機就響"
+    },
+    "01-Inbox": {
+      "lead": "只提醒",
+      "head": "你真正在意的"
+    },
+    "02-Map": {
+      "lead": "十分鐘能到的",
+      "head": "都在圈裡"
+    },
+    "03-Dashboard": {
+      "lead": "整個市場",
+      "head": "一眼看完"
+    },
+    "04-Views": {
+      "lead": "同一批房源",
+      "head": "四種看法"
+    },
+    "05-Calendar": {
+      "lead": "所有起租日",
+      "head": "一張日曆"
+    },
+    "_hero": {
+      "title": [
+        "好房出現",
+        "你先知道"
+      ],
+      "body": [
+        "房源動態、地圖與日曆，",
+        "一個 App 全部掌握。"
+      ],
+      "tagline": "荷蘭租房，從容一點。",
+      "proof": [
+        "個平台",
+        "一處掌握"
+      ]
+    }
+  },
+  "nl-NL": {
+    "_badges": [
+      [
+        "7",
+        "platforms tegelijk in de gaten"
+      ],
+      [
+        "Push",
+        "op het moment van de match"
+      ],
+      [
+        "Beide",
+        "iPhone en iPad"
+      ]
+    ],
+    "00-Alerts": {
+      "lead": "Zodra het online staat",
+      "head": "weet jij het"
+    },
+    "01-Inbox": {
+      "lead": "Alleen wat",
+      "head": "bij je filters past"
+    },
+    "02-Map": {
+      "lead": "Zie wat er",
+      "head": "binnen bereik is"
+    },
+    "03-Dashboard": {
+      "lead": "De hele markt",
+      "head": "in één oogopslag"
+    },
+    "04-Views": {
+      "lead": "Dezelfde woningen",
+      "head": "vier weergaven"
+    },
+    "05-Calendar": {
+      "lead": "Elke ingangsdatum",
+      "head": "in één kalender"
+    },
+    "_hero": {
+      "title": [
+        "Jouw nieuwe",
+        "thuis begint hier."
+      ],
+      "body": [
+        "Woningen, kaarten en verhuisdata.",
+        "Je zoektocht op één plek."
+      ],
+      "tagline": "Meer overzicht. Minder zoeken.",
+      "proof": [
+        "platforms.",
+        "Eén plek."
+      ]
+    }
+  },
+  "es-ES": {
+    "_badges": [
+      [
+        "7",
+        "plataformas a la vez"
+      ],
+      [
+        "Aviso",
+        "en el segundo de la coincidencia"
+      ],
+      [
+        "Ambos",
+        "iPhone y iPad"
+      ]
+    ],
+    "00-Alerts": {
+      "lead": "En cuanto se publica",
+      "head": "lo sabes tú"
+    },
+    "01-Inbox": {
+      "lead": "Solo lo que",
+      "head": "encaja con tus filtros"
+    },
+    "02-Map": {
+      "lead": "Mira qué tienes",
+      "head": "a diez minutos"
+    },
+    "03-Dashboard": {
+      "lead": "Todo el mercado",
+      "head": "de un vistazo"
+    },
+    "04-Views": {
+      "lead": "Los mismos anuncios",
+      "head": "cuatro vistas"
+    },
+    "05-Calendar": {
+      "lead": "Cada fecha de entrada",
+      "head": "en un calendario"
+    },
+    "_hero": {
+      "title": [
+        "Tu próximo hogar.",
+        "Más cerca."
+      ],
+      "body": [
+        "Anuncios, mapas y fechas de entrada.",
+        "Tu búsqueda en un solo lugar."
+      ],
+      "tagline": "Menos búsqueda. Más claridad.",
+      "proof": [
+        "plataformas.",
+        "Un solo lugar."
+      ]
+    }
+  }
+}

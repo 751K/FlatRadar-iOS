@@ -25,6 +25,6 @@ __pycache__/
 .pytest_cache/
 
 # 截图产物
-screenshots/
+/screenshots/
 *.xcresult
 *.xcresult.zip

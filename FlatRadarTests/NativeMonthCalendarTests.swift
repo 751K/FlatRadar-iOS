@@ -22,7 +22,19 @@ import XCTest
 @MainActor
 final class NativeMonthCalendarTests: XCTestCase {
 
-    private let cal = Calendar.current
+    /// **和被测代码同一个日历**（`ServerTime.calendar`，Europe/Amsterdam），
+    /// 不是 `Calendar.current`。
+    ///
+    /// 这条本身就是这个文件在守的那个 bug 的翻版：`monthSpan` 用服务端日历算
+    /// 月初，而测试用运行机器的时区算"同一个"月初，两者差整整一个时区偏移
+    /// （夏令时下 2 小时）——
+    ///
+    ///     Amsterdam 月初  2026-08-31 22:00:00 +0000
+    ///     UTC       月初  2026-09-01 00:00:00 +0000
+    ///
+    /// 于是"上一个月不该被带进来"这类边界断言在 UTC 的 CI 机器上必挂，而在
+    /// 阿姆时区的开发机上全绿。测试要和被测代码用同一把尺。
+    private let cal = ServerTime.calendar
 
     // MARK: - 日历必须和服务端同一个时区
 
