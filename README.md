@@ -135,10 +135,8 @@ which cannot pass in guest mode.
 
 ## Contributing
 
-The app is feature-complete for the current product scope and is maintained
-rather than actively expanded: compatibility with new iOS and Xcode releases,
-crash and contract fixes, App Store metadata, and small UI work that keeps
-parity with the other clients. New cross-platform behaviour is specified in the
+What each release is aiming at, and whether it landed, is tracked in
+[docs/NEXT.md](docs/NEXT.md). New cross-platform behaviour is specified in the
 backend's `docs/API.md` first, then implemented on each client.
 
 Two conventions worth knowing before you send a patch:

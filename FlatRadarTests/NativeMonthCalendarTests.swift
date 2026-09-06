@@ -103,19 +103,28 @@ final class NativeMonthCalendarTests: XCTestCase {
         XCTAssertTrue(past.contains(today))
     }
 
-    /// **本月之前不在范围里**，哪怕数据里有更早的房源。
+    /// `visibleComponents` 必须给出**能解析成日期的**组件（含 day）。
     ///
-    /// 这条钉的是 build 295 / 302 / 304 那个反复出现的症状：日历打开停在 8 月，
-    /// 因为数据里最早的房源在 8 月、范围起点就是 8 月，而 `UICalendarView` 会把
-    /// 可见月吸附到范围起点。下界固定在本月之后，吸附落点就是对的。
-    ///
-    /// 反过来说：谁要是哪天把下界改回「跟着数据走」，这条会红——那正是需要
-    /// 重新想清楚吸附问题的时候。
-    func testMonthSpanExcludesMonthsBeforeThisOne() {
-        let lastMonth = cal.date(byAdding: .month, value: -1, to: Date())!
-        let span = NativeMonthCalendar.monthSpan((start: lastMonth, end: Date()))
-        XCTAssertFalse(span.contains(lastMonth), "上个月不该在范围里")
-        XCTAssertTrue(span.contains(Date()), "今天必须在范围里")
+    /// 头文件对 `visibleDateComponents` 说的是 "must also be a valid date within
+    /// availableDateRange"。只给 year + month 不是日期，赋值会被忽略——
+    /// build 295 / 302 / 304 的日历始终停在 8 月就是这么来的。
+    func testVisibleComponentsCarryADay() {
+        let comps = NativeMonthCalendar.visibleComponents(for: date(2026, 9, 20), in: nil)
+        XCTAssertEqual(comps.year, 2026)
+        XCTAssertEqual(comps.month, 9)
+        XCTAssertNotNil(comps.day, "没有 day 就不是一个日期，UICalendarView 会忽略")
+        XCTAssertNotNil(cal.date(from: comps), "组件必须能解析回 Date")
+    }
+
+    /// 边界月：月初早于可用范围起点时，要取范围起点——否则违反同一句话的后半段
+    /// 「within availableDateRange」，一样会被忽略。
+    func testVisibleComponentsStayInsideTheRange() {
+        let rangeStart = date(2026, 9, 20)
+        let span = DateInterval(start: rangeStart, end: date(2026, 11, 30))
+        let comps = NativeMonthCalendar.visibleComponents(for: date(2026, 9, 1), in: span)
+        let resolved = try? XCTUnwrap(cal.date(from: comps))
+        XCTAssertEqual(comps.day, 20, "该被抬到范围起点那天")
+        if let resolved { XCTAssertTrue(span.contains(resolved)) }
     }
 
     /// 首尾传反了也不能算出一个空区间。

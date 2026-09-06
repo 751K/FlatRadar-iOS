@@ -1,6 +1,6 @@
-# FlatRadar iOS Maintenance Notes
+# FlatRadar iOS Notes
 
-The iOS app is feature-complete for the current FlatRadar product scope and is now in maintenance mode. Large feature development has moved to backend reliability and multi-platform data quality.
+What each release is aiming at, and whether it landed, is tracked in [NEXT.md](NEXT.md).
 
 For the Android client — its status, distribution, and roadmap — see [ANDROID_PLAN.md](https://github.com/751K/FlatRadar-Android/blob/master/docs/ANDROID_PLAN.md) in [FlatRadar-Android](https://github.com/751K/FlatRadar-Android). This document is iOS only.
 
@@ -17,17 +17,9 @@ For the Android client — its status, distribution, and roadmap — see [ANDROI
 - Performance work worth preserving: static `DateFormatter` instances, pre-normalized `featureMap` keys, a non-blocking notification first screen, and map clustering off the main actor.
 - Localized into English (source), 简体中文, 繁體中文, Nederlands and Español, through `FlatRadar/Localizable.xcstrings`.
 
-## Maintenance Policy
+## Change Policy
 
-iOS should now receive:
-
-- compatibility fixes for new iOS / Xcode releases;
-- crash, navigation, notification, and API contract fixes;
-- App Store metadata, privacy, and legal text updates;
-- small UI polish that keeps parity with the shared product;
-- security and dependency hygiene.
-
-iOS should not be the default place for large new product experiments. New cross-platform behavior should first be specified in the backend's [API.md](https://github.com/751K/holland2stay-monitor/blob/master/docs/API.md) and then implemented consistently across Web, Android, and iOS as needed.
+New cross-platform behavior is specified in the backend's [API.md](https://github.com/751K/holland2stay-monitor/blob/master/docs/API.md) first, then implemented consistently across Web, Android, and iOS. Anything iOS-only — platform frameworks, App Store metadata, device-specific UI — is planned in [NEXT.md](NEXT.md).
 
 ## Quick Start
 
@@ -38,6 +30,24 @@ open FlatRadar.xcodeproj
 ```
 
 Run the `FlatRadar` scheme on a simulator or physical device. The app connects to `flatradar.app` by default; point it at another deployment from Settings.
+
+### 在维护者这台机器上构建
+
+`xcode-select -p` 指向 `/Library/Developer/CommandLineTools`，`/Applications` 下没有
+Xcode.app——别据此断定这台机器编不了。Xcode 装在外置盘的一个 UUID 目录里，用
+`mdfind "kMDItemCFBundleIdentifier == 'com.apple.dt.Xcode'"` 找，然后：
+
+```bash
+export DEVELOPER_DIR=/Volumes/MacoutDsik/Applications/FE00CCDA-B55C-49E0-A6A9-D7E8A2E0A829/Xcode-beta.app/Contents/Developer
+xcodebuild build -project FlatRadar.xcodeproj -scheme FlatRadar \
+  -destination 'generic/platform=iOS' CODE_SIGNING_ALLOWED=NO
+```
+
+- **别传 `-derivedDataPath`。** 内置盘只剩约 5.6Gi，工程已经把 `IDECustomDerivedDataLocation`
+  和 `SYMROOT` 配在外置盘（`/Volumes/MacoutDsik/Xcode/`）。
+- **没装模拟器 runtime**，能编译但跑不了模拟器测试。⌘U 选 My Mac (Designed for iPad) 或真机。
+- 这个 Xcode 是 **beta（27.0）**，只用于本地验证和真机调试。Apple 拒收 beta Xcode 打的包，
+  出包走 Xcode Cloud 自己的工具链。
 
 ## Architecture Pointers
 

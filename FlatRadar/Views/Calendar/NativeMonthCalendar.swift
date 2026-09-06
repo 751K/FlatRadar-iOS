@@ -93,7 +93,7 @@ struct NativeMonthCalendar: UIViewRepresentable {
         // `setVisibleDateComponents(animated:)`，就打断了正在进行的那次滑动。
         // 表现就是"滑起来乱飘"：手指还在动，视图被程序拽去另一个位置。
         if context.coordinator.lastReportedMonth != visibleMonth {
-            let wanted = Self.cal.dateComponents([.year, .month], from: visibleMonth)
+            let wanted = Self.visibleComponents(for: visibleMonth, in: view.availableDateRange)
             let current = view.visibleDateComponents
             if current.year != wanted.year || current.month != wanted.month {
                 view.setVisibleDateComponents(wanted, animated: true)
@@ -318,27 +318,38 @@ struct NativeMonthCalendar: UIViewRepresentable {
     ///   都指向**今天所在的月**——数据要是从下个月才开始，那个月份就是非法值。
     static func monthSpan(_ range: (start: Date, end: Date)) -> DateInterval {
         let today = Date()
+        let lo = min(range.start, range.end, today)
         let hi = max(range.start, range.end, today)
-        // **下界固定在本月**，不跟着数据往前走。
-        //
-        // 这条是被三次失败逼出来的。`UICalendarView` 在设 `availableDateRange`
-        // 时会把可见月**吸附到范围起点**，而那次吸附发生在赋值之后的布局里，还会
-        // 触发 `didChangeVisibleDateComponentsFrom` 把绑定的 `visibleMonth` 一起
-        // 改写。我先后试过「选中某天让它自己滚过去」「下一轮 runloop 再拨回来」
-        // 「用一次性开关拨回来」，build 295 / 302 / 304 的截图里日历始终停在
-        // **8 月**——因为数据里最早的房源在 8 月，范围起点就是 8 月 1 日。
-        //
-        // 与其跟那个时机较劲，不如让吸附本身就落在正确的月：范围从本月开始，
-        // 吸附过去正好是我们要显示的月份。
-        //
-        // 代价是**翻不到本月之前**。这个日历显示的是「可入住日期」，过去的月份
-        // 没有可操作内容——上面那批 8 月的房源在实测数据里只有 1 条，而且是
-        // 已经过期的。真要看历史，那是另一个功能，不该由默认视野承担。
-        let start = startOfMonth(today)
+        let start = startOfMonth(lo)
         // 末月的最后一秒：下个月月初往回退 1 秒。
         let end = cal.date(byAdding: DateComponents(month: 1, second: -1),
                            to: startOfMonth(hi)) ?? hi
         return DateInterval(start: start, end: max(end, start))
+    }
+
+    /// 拼出「这个月里的某一天」——**必须是能解析成日期的完整组件**。
+    ///
+    /// 头文件对 `visibleDateComponents` 属性和 `setVisibleDateComponents(_:animated:)`
+    /// 方法各写了一遍同一句：
+    ///
+    /// > The `visibleDateComponents` **must also be a valid date** within
+    /// > `availableDateRange`
+    ///
+    /// 而 `dateComponents([.year, .month], from:)` 只有年和月，**不构成一个日期**。
+    /// build 295 / 302 / 304 三次都栽在这上面：日历始终停在 8 月，我一直以为是
+    /// 「拨的时机不对」，先后加了 runloop 延迟、一次性开关、甚至把可用范围的下界
+    /// 改掉去绕开——其实是参数从一开始就不合法，赋值根本没生效。
+    ///
+    /// 取月初；月初早于可用范围起点时（边界月），取范围起点——否则又违反同一句话
+    /// 的后半段「within availableDateRange」。
+    static func visibleComponents(for month: Date,
+                                  in range: DateInterval?) -> DateComponents {
+        var day = startOfMonth(month)
+        if let range, day < range.start,
+           cal.isDate(range.start, equalTo: day, toGranularity: .month) {
+            day = range.start
+        }
+        return cal.dateComponents([.year, .month, .day], from: day)
     }
 
     static func startOfMonth(_ date: Date) -> Date {
@@ -399,7 +410,8 @@ struct NativeMonthCalendar: UIViewRepresentable {
         func scheduleInitialMonthFix(view: UICalendarView, month: Date) {
             guard !didApplyInitialMonth else { return }
             didApplyInitialMonth = true
-            let wanted = NativeMonthCalendar.cal.dateComponents([.year, .month], from: month)
+            let wanted = NativeMonthCalendar.visibleComponents(
+                for: month, in: view.availableDateRange)
             let target = NativeMonthCalendar.startOfMonth(month)
             DispatchQueue.main.async { [weak self, weak view] in
                 guard let self, let view else { return }
