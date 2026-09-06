@@ -544,10 +544,10 @@ struct LoginView: View {
 
                     if mode == .user {
                         HStack(spacing: 0) {
-                            Image(systemName: "envelope.fill")
+                            Image(systemName: "person.fill")
                                 .font(.caption).foregroundStyle(.secondary).frame(width: 24)
-                            TextField("Email or username", text: $username)
-                                .textContentType(.emailAddress).textFieldStyle(.plain)
+                            TextField("Username", text: $username)
+                                .textContentType(.username).textFieldStyle(.plain)
                                 .autocorrectionDisabled().textInputAutocapitalization(.never)
                         }
                         .padding(10)
