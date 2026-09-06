@@ -140,25 +140,31 @@ final class NativeMonthCalendarTests: XCTestCase {
     /// `visibleComponents` 必须给出**能解析成日期的**组件（含 day）。
     ///
     /// 头文件对 `visibleDateComponents` 说的是 "must also be a valid date within
-    /// availableDateRange"。只给 year + month 不是日期，赋值会被忽略——
-    /// build 295 / 302 / 304 的日历始终停在 8 月就是这么来的。
+    /// availableDateRange"。只给 year + month 不是日期。
     func testVisibleComponentsCarryADay() {
-        let comps = NativeMonthCalendar.visibleComponents(for: date(2026, 9, 20), in: nil)
+        let comps = NativeMonthCalendar.visibleComponents(for: date(2026, 9, 20))
         XCTAssertEqual(comps.year, 2026)
         XCTAssertEqual(comps.month, 9)
-        XCTAssertNotNil(comps.day, "没有 day 就不是一个日期，UICalendarView 会忽略")
-        XCTAssertNotNil(cal.date(from: comps), "组件必须能解析回 Date")
+        XCTAssertEqual(comps.day, 1, "取的是月初")
+        XCTAssertNotNil(ServerTime.calendar.date(from: comps), "组件必须能解析回 Date")
     }
 
-    /// 边界月：月初早于可用范围起点时，要取范围起点——否则违反同一句话的后半段
-    /// 「within availableDateRange」，一样会被忽略。
-    func testVisibleComponentsStayInsideTheRange() {
-        let rangeStart = date(2026, 9, 20)
-        let span = DateInterval(start: rangeStart, end: date(2026, 11, 30))
-        let comps = NativeMonthCalendar.visibleComponents(for: date(2026, 9, 1), in: span)
-        let resolved = try? XCTUnwrap(cal.date(from: comps))
-        XCTAssertEqual(comps.day, 20, "该被抬到范围起点那天")
-        if let resolved { XCTAssertTrue(span.contains(resolved)) }
+    /// 月初一定落在 `monthSpan` 给出的范围里——这是不用再做 clamp 的依据。
+    ///
+    /// 之前那版为了「保证 within availableDateRange」加了一段把月初抬到范围起点
+    /// 的兜底，结果自相矛盾：抬完再截断到 day 粒度又变回 0 点。这条测试直接钉住
+    /// 真正成立的那个不变式。
+    func testMonthStartIsInsideTheSpan() {
+        let span = NativeMonthCalendar.monthSpan(
+            (start: date(2026, 8, 20), end: date(2026, 11, 3)))
+        for offset in 0...3 {
+            let month = ServerTime.calendar.date(byAdding: .month, value: offset,
+                                                 to: span.start)!
+            let comps = NativeMonthCalendar.visibleComponents(for: month)
+            let resolved = ServerTime.calendar.date(from: comps)!
+            XCTAssertTrue(span.contains(resolved),
+                          "第 \(offset) 个月的月初 \(resolved) 不在 \(span) 里")
+        }
     }
 
     /// 首尾传反了也不能算出一个空区间。
