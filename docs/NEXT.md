@@ -8,8 +8,7 @@
 | 目标 | 状态 |
 |---|---|
 | 主屏 / 锁屏小组件：上次扫描时间 + 我的匹配数。不做房源列表 | 未开始 |
-| 端上模型可用性上报：`SystemLanguageModel.default.availability`，连 `.unavailable` 的原因一起报 | 未开始 |
-| AI 筛选：自然语言 → `ListingFilter`。等上一条的数据再定值不值得做 | 未开始 |
+| AI 筛选：自然语言 → `ListingFilter`。入口只在 `SystemLanguageModel` 可用时出现 | 未开始 |
 | App 图标：浅色和 tinted 两张重导，去掉烤进 PNG 的白圆角，tinted 改灰度 | 未开始 |
 | iPad `NavigationSplitView`：横屏点房源不再把列表整个顶掉 | 未开始 |
 
@@ -21,7 +20,5 @@
 | Xcode 27 迁移：`Shape` conformance 隔离、50 处 `nonisolated` | 完成 |
 | iPad 适配：`Tab {}` builder、Dashboard / Explore / 详情页分栏、地图控件按 HIG 分档 | 完成 |
 | 地图 POI（超市 / 学校 / 公共交通）+ 10 分钟步行 / 骑行可达圈 | 完成 |
-| 系统版本上报：`os_version` 随 `/devices/register` 发 | 客户端完成，等后端落库 |
+| 系统版本上报：`os_version` 随 `/devices/register` 发，后端落库 | 完成 |
 | 登录失败显示后端给的具体原因 | 完成 |
-
-后端还欠 2.1.0 两件：把 `os_version` 落库；给 spec 补上 `os_version` 和一直在发但从没写进去的 `language`。

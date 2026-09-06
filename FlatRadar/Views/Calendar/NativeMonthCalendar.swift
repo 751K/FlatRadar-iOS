@@ -75,13 +75,17 @@ struct NativeMonthCalendar: UIViewRepresentable {
                 // 而网格显示的是 8 月——因为数据里最早的房源在 8 月，范围起点
                 // 就是 8 月 1 日。
                 //
-                // 上一轮我以为「选中某天会顺带滚到那个月」就够了（头文件那句
-                // "to be displayed in the calendar"），实测不够：吸附在它之后。
-                // 只能等布局跑完再拨回来。
+                // 立刻无条件设一次，**并把想要的月份记下来交给 delegate 去守**。
                 //
-                // 只在**用户还没自己翻过月份**时拨（lastReportedMonth == nil），
-                // 否则一次刷新就会把他从正在看的月份拽走。
-                context.coordinator.scheduleInitialMonthFix(view: view, month: visibleMonth)
+                // 吸附到底在哪一次布局里发生，我猜了四轮都没猜中（295 靠
+                // setSelected、302 靠下一轮 runloop、304 靠一次性开关、307 靠补上
+                // day 让参数合法）。每一轮的推理都能自圆其说，每一轮截图里日历还是
+                // 停在 8 月。所以不再猜时机——见 `pendingInitialMonth`：吸附**真的
+                // 发生**时 delegate 会被调到，那时纠正回来，无论它发生在第几次布局。
+                let wanted = Self.visibleComponents(for: visibleMonth,
+                                                    in: view.availableDateRange)
+                context.coordinator.pendingInitialMonth = wanted
+                view.setVisibleDateComponents(wanted, animated: false)
             }
         }
 
@@ -384,45 +388,11 @@ struct NativeMonthCalendar: UIViewRepresentable {
         var decorationsToken = Int.min
         /// delegate 最后一次报上来的可见月份。用来区分"用户滑出来的"和"外部设的"。
         var lastReportedMonth: Date?
-        /// 初始月份有没有强制拨过。见 ``updateUIView`` 里的说明。
-        var didApplyInitialMonth = false
+        /// 首屏想停在哪个月。非 nil 表示「还没落定」——见
+        /// ``calendarView(_:didChangeVisibleDateComponentsFrom:)``。
+        var pendingInitialMonth: DateComponents?
 
         init(parent: NativeMonthCalendar) { self.parent = parent }
-
-        /// 设完 `availableDateRange` 之后，把可见月**强制**拨回要显示的那个月。
-        ///
-        /// 为什么非要这么绕
-        /// ----------------
-        /// 设范围会把可见月吸附到范围起点（数据里最早的房源在 8 月），而吸附发生
-        /// 在这次调用**之后的布局**里。更糟的是吸附会触发
-        /// `didChangeVisibleDateComponentsFrom`，于是 `lastReportedMonth` 和绑定的
-        /// `visibleMonth` 双双变成 8 月——上一版我把这段逻辑门在
-        /// `lastReportedMonth == nil` 上，等它执行时那个条件早就不成立了，
-        /// 而且连"要拨到哪个月"都已经被改写成 8 月。build 302 的截图里，右栏是
-        /// 9 月 7 日、网格却是 8 月，就是这么来的。
-        ///
-        /// 所以这里：
-        /// - 用**自己的一次性开关**，不看 `lastReportedMonth`；
-        /// - 目标月在**调度时就捕获**，不在执行时再读（那时已经被改写）；
-        /// - 拨完把 `lastReportedMonth` 同步成目标月，让后面的比较有个正确基线。
-        ///
-        /// 只做一次：之后用户翻月份是他自己的事，不该再被拨回来。
-        func scheduleInitialMonthFix(view: UICalendarView, month: Date) {
-            guard !didApplyInitialMonth else { return }
-            didApplyInitialMonth = true
-            let wanted = NativeMonthCalendar.visibleComponents(
-                for: month, in: view.availableDateRange)
-            let target = NativeMonthCalendar.startOfMonth(month)
-            DispatchQueue.main.async { [weak self, weak view] in
-                guard let self, let view else { return }
-                let now = view.visibleDateComponents
-                if now.year != wanted.year || now.month != wanted.month {
-                    view.setVisibleDateComponents(wanted, animated: false)
-                }
-                self.lastReportedMonth = target
-                if self.parent.visibleMonth != target { self.parent.visibleMonth = target }
-            }
-        }
 
         func calendarView(_ calendarView: UICalendarView,
                           decorationFor dateComponents: DateComponents)
@@ -445,6 +415,22 @@ struct NativeMonthCalendar: UIViewRepresentable {
         func calendarView(_ calendarView: UICalendarView,
                           didChangeVisibleDateComponentsFrom previous: DateComponents) {
             let comps = calendarView.visibleDateComponents
+
+            // 首屏还没落定：设 `availableDateRange` 会把可见月吸附到范围起点，
+            // 而那次吸附发生在哪一轮布局里没有文档、也猜不准。这里不猜——**它
+            // 真的发生时会走到这个回调**，那时把月份拨回来即可。
+            //
+            // 这次改动不回写 `visibleMonth`：吸附不是用户操作，写回去会让 anchor
+            // 变成 8 月，后面所有基于它的计算跟着错（前四轮就是这么烂掉的）。
+            if let want = pendingInitialMonth {
+                if comps.year != want.year || comps.month != want.month {
+                    calendarView.setVisibleDateComponents(want, animated: false)
+                    return
+                }
+                // 已经停在想要的月份，首屏收工，后面按正常逻辑走。
+                pendingInitialMonth = nil
+            }
+
             guard let date = NativeMonthCalendar.cal.date(from: comps) else { return }
             let start = NativeMonthCalendar.cal.date(
                 from: NativeMonthCalendar.cal.dateComponents([.year, .month], from: date)) ?? date

@@ -438,7 +438,10 @@ final class ScreenshotTests: XCTestCase {
     /// 把物理朝向的截图逆时针转 90°，并把朝向烘进像素。
     private static func uprighted(_ image: UIImage) -> UIImage {
         guard let cg = image.cgImage else { return image }
-        let rotated = UIImage(cgImage: cg, scale: image.scale, orientation: .right)
+        // `.left` 不是 `.right`。build 307 用 `.right` 拍出来的是**倒 180°**的图
+        // ——说明它给的是顺时针，而我们要的是逆时针（302 的产物用 PIL
+        // `rotate(+90)` 转出来才正立）。90° 只有两个方向，反过来就是对的。
+        let rotated = UIImage(cgImage: cg, scale: image.scale, orientation: .left)
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = image.scale
         format.opaque = true
