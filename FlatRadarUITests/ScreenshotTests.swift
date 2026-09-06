@@ -407,7 +407,14 @@ final class ScreenshotTests: XCTestCase {
 
     /// 保存当前屏幕为 XCTAttachment，跟测试结果一起进 .xcresult 包。
     private func snap(named step: String) {
-        let screenshot = XCUIScreen.main.screenshot()
+        // `app.screenshot()` 而不是 `XCUIScreen.main.screenshot()`。
+        //
+        // 后者拍的是**屏幕的物理朝向**：iPad 转成横屏之后，内容是横的，图却仍然
+        // 存成 2064×2752 的竖图、整幅转了 90°——build 302 的 iPad 那 35 张就是
+        // 这样，状态栏「9:41」竖在右边。App Store 收到的会是一批躺倒的图。
+        //
+        // `app.screenshot()` 拍的是**应用当前的界面朝向**，横屏就是 2752×2064。
+        let screenshot = app.screenshot()
         let attachment = XCTAttachment(screenshot: screenshot)
         // 名字里不再带语言：语言由 test plan 决定，附件的 configurationName
         // 已经带着它，提取脚本按那个分桶。名字里再写一份只会有机会写错。

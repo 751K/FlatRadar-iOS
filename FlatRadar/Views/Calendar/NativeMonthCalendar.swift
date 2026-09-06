@@ -81,15 +81,7 @@ struct NativeMonthCalendar: UIViewRepresentable {
                 //
                 // 只在**用户还没自己翻过月份**时拨（lastReportedMonth == nil），
                 // 否则一次刷新就会把他从正在看的月份拽走。
-                if context.coordinator.lastReportedMonth == nil {
-                    let wanted = Self.cal.dateComponents([.year, .month], from: visibleMonth)
-                    DispatchQueue.main.async { [weak view] in
-                        guard let view else { return }
-                        let now = view.visibleDateComponents
-                        guard now.year != wanted.year || now.month != wanted.month else { return }
-                        view.setVisibleDateComponents(wanted, animated: false)
-                    }
-                }
+                context.coordinator.scheduleInitialMonthFix(view: view, month: visibleMonth)
             }
         }
 
@@ -367,8 +359,44 @@ struct NativeMonthCalendar: UIViewRepresentable {
         var decorationsToken = Int.min
         /// delegate 最后一次报上来的可见月份。用来区分"用户滑出来的"和"外部设的"。
         var lastReportedMonth: Date?
+        /// 初始月份有没有强制拨过。见 ``updateUIView`` 里的说明。
+        var didApplyInitialMonth = false
 
         init(parent: NativeMonthCalendar) { self.parent = parent }
+
+        /// 设完 `availableDateRange` 之后，把可见月**强制**拨回要显示的那个月。
+        ///
+        /// 为什么非要这么绕
+        /// ----------------
+        /// 设范围会把可见月吸附到范围起点（数据里最早的房源在 8 月），而吸附发生
+        /// 在这次调用**之后的布局**里。更糟的是吸附会触发
+        /// `didChangeVisibleDateComponentsFrom`，于是 `lastReportedMonth` 和绑定的
+        /// `visibleMonth` 双双变成 8 月——上一版我把这段逻辑门在
+        /// `lastReportedMonth == nil` 上，等它执行时那个条件早就不成立了，
+        /// 而且连"要拨到哪个月"都已经被改写成 8 月。build 302 的截图里，右栏是
+        /// 9 月 7 日、网格却是 8 月，就是这么来的。
+        ///
+        /// 所以这里：
+        /// - 用**自己的一次性开关**，不看 `lastReportedMonth`；
+        /// - 目标月在**调度时就捕获**，不在执行时再读（那时已经被改写）；
+        /// - 拨完把 `lastReportedMonth` 同步成目标月，让后面的比较有个正确基线。
+        ///
+        /// 只做一次：之后用户翻月份是他自己的事，不该再被拨回来。
+        func scheduleInitialMonthFix(view: UICalendarView, month: Date) {
+            guard !didApplyInitialMonth else { return }
+            didApplyInitialMonth = true
+            let wanted = NativeMonthCalendar.cal.dateComponents([.year, .month], from: month)
+            let target = NativeMonthCalendar.startOfMonth(month)
+            DispatchQueue.main.async { [weak self, weak view] in
+                guard let self, let view else { return }
+                let now = view.visibleDateComponents
+                if now.year != wanted.year || now.month != wanted.month {
+                    view.setVisibleDateComponents(wanted, animated: false)
+                }
+                self.lastReportedMonth = target
+                if self.parent.visibleMonth != target { self.parent.visibleMonth = target }
+            }
+        }
 
         func calendarView(_ calendarView: UICalendarView,
                           decorationFor dateComponents: DateComponents)

@@ -340,7 +340,11 @@ struct CalendarView: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
-                Text(l.status)
+                // 后端原样透出来的 status（"Occupied" / "Direct book" …）不是
+                // 可本地化的 key，直接显示就是所有语言都看到英文——build 302 的
+                // 中文截图里，一列中文房源卡上戳着 "Occupied"。
+                // 走 ListingStatus 的本地化标签，和它旁边的 statusColor 同源。
+                Text(ListingStatus.from(l.status).label)
                     .font(.caption2)
                     .foregroundStyle(statusColor(for: l.status))
             }
