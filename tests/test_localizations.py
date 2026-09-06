@@ -51,6 +51,9 @@ NOT_TRANSLATABLE = {
     "+%lld",         # 增量数字
     "⋯⋯⋯⋯",          # 加载占位的省略号
     "TEST",          # 测试推送的角标，各语言都保持 TEST
+    # App 名字本身。Xcode 会把它抽进 InfoPlist.xcstrings，但 FlatRadar 是品牌名，
+    # 各语言都保持原样——翻译它意味着桌面图标下的名字会变，不是我们要的。
+    "CFBundleName",
 }
 
 

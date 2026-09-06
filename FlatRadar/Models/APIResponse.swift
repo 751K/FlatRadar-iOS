@@ -3,6 +3,26 @@ import Foundation
 enum ServerTime {
     nonisolated static let timeZone = TimeZone(identifier: "Europe/Amsterdam") ?? .current
 
+    /// **全 App 唯一的「服务端日历」。**
+    ///
+    /// 后端发的日期字符串按 Europe/Amsterdam 解读，房源的「可入住日」也是那个
+    /// 时区里的日子。凡是要回答「这是几月」「这是哪一天」的地方都得用它，
+    /// 不能用 `Calendar.current`。
+    ///
+    /// 为什么要收成一份：`CalendarView` 用的是这个时区，`NativeMonthCalendar`
+    /// 用的是 `Calendar.current`，两者在**月初那一刻**会差整整一个月——
+    /// 9 月 1 日 00:00 阿姆斯特丹 = 8 月 31 日 22:00 UTC，用 UTC 去读就是 8 月。
+    ///
+    /// 那正是 build 295→307 里日历始终停在 8 月的原因。真机在阿姆时区上看不到
+    /// （读回来正好是 9 月 1 日），只有 CI 的模拟器复现——我据此猜了五轮
+    /// 「UICalendarView 的吸附时机」，全是错的。两个日历只要还是两份，
+    /// 这类"只在某些时区出现"的错就会继续冒出来。
+    nonisolated static let calendar: Calendar = {
+        var c = Calendar(identifier: .gregorian)
+        c.timeZone = timeZone
+        return c
+    }()
+
     // MARK: - Static formatters (DateFormatter creation is expensive)
     //
     // Swift 6 strict concurrency 下，static let 默认走 MainActor 隔离，但

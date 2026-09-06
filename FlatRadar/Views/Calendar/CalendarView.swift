@@ -41,11 +41,9 @@ struct CalendarView: View {
     /// 碰上一次刷新，就会被拽回自动选的那天。
     @State private var didAutoSelect = false
 
-    private static let cal: Calendar = {
-        var c = Calendar(identifier: .gregorian)
-        c.timeZone = ServerTime.timeZone
-        return c
-    }()
+    /// 见 ``ServerTime/calendar``——和 ``NativeMonthCalendar`` 共用同一份，
+    /// 两边各建一个是 build 295→307 那个"日历停在 8 月"的根源。
+    private static let cal = ServerTime.calendar
 
     /// 完整日期，跟随系统语言（en："Wednesday, May 14, 2026"，
     /// zh-Hans："2026年5月14日星期三"）。

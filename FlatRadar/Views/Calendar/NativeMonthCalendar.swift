@@ -30,7 +30,9 @@ struct NativeMonthCalendar: UIViewRepresentable {
     /// 某天有多少套房源。只用来画装饰。
     let countForDay: (Date) -> Int
 
-    private static let cal = Calendar.current
+    /// 见 ``ServerTime/calendar``。**不要换回 `Calendar.current`**——
+    /// 它和 `CalendarView` 的 anchor 用的不是同一个时区时，月初那一刻会差一个月。
+    private static let cal = ServerTime.calendar
 
     /// 返回的是一个**容器**（``ClippingContainer``），`UICalendarView` 用 Auto Layout
     /// 钉在里面。
@@ -43,6 +45,9 @@ struct NativeMonthCalendar: UIViewRepresentable {
     func makeUIView(context: Context) -> UIView {
         let view = UICalendarView()
         view.calendar = Self.cal
+        // 时区也要给：不给的话 UICalendarView 按设备时区切分"一天"，
+        // 而装饰上的房源数是按服务端时区的 dayKey 查的，边界日会对不上。
+        view.timeZone = ServerTime.timeZone
         view.locale = .autoupdatingCurrent
         view.fontDesign = .rounded
         view.wantsDateDecorations = true
@@ -75,16 +80,14 @@ struct NativeMonthCalendar: UIViewRepresentable {
                 // 而网格显示的是 8 月——因为数据里最早的房源在 8 月，范围起点
                 // 就是 8 月 1 日。
                 //
-                // 立刻无条件设一次，**并把想要的月份记下来交给 delegate 去守**。
+                // 设完范围顺手把可见月按 anchor 摆一次。
                 //
-                // 吸附到底在哪一次布局里发生，我猜了四轮都没猜中（295 靠
-                // setSelected、302 靠下一轮 runloop、304 靠一次性开关、307 靠补上
-                // day 让参数合法）。每一轮的推理都能自圆其说，每一轮截图里日历还是
-                // 停在 8 月。所以不再猜时机——见 `pendingInitialMonth`：吸附**真的
-                // 发生**时 delegate 会被调到，那时纠正回来，无论它发生在第几次布局。
+                // 这里曾经有一整套「记下想要的月份、等吸附发生时在 delegate 里
+                // 纠正」的机器，用来对付日历老是停在 8 月。真机探针证明那个前提
+                // 不成立——设 range 前后 `visibleDateComponents` 一直是 9 月，
+                // 吸附从未发生。真因是两个日历时区不一致，见 ``ServerTime/calendar``。
                 let wanted = Self.visibleComponents(for: visibleMonth,
                                                     in: view.availableDateRange)
-                context.coordinator.pendingInitialMonth = wanted
                 view.setVisibleDateComponents(wanted, animated: false)
             }
         }
@@ -388,9 +391,7 @@ struct NativeMonthCalendar: UIViewRepresentable {
         var decorationsToken = Int.min
         /// delegate 最后一次报上来的可见月份。用来区分"用户滑出来的"和"外部设的"。
         var lastReportedMonth: Date?
-        /// 首屏想停在哪个月。非 nil 表示「还没落定」——见
-        /// ``calendarView(_:didChangeVisibleDateComponentsFrom:)``。
-        var pendingInitialMonth: DateComponents?
+
 
         init(parent: NativeMonthCalendar) { self.parent = parent }
 
@@ -415,21 +416,6 @@ struct NativeMonthCalendar: UIViewRepresentable {
         func calendarView(_ calendarView: UICalendarView,
                           didChangeVisibleDateComponentsFrom previous: DateComponents) {
             let comps = calendarView.visibleDateComponents
-
-            // 首屏还没落定：设 `availableDateRange` 会把可见月吸附到范围起点，
-            // 而那次吸附发生在哪一轮布局里没有文档、也猜不准。这里不猜——**它
-            // 真的发生时会走到这个回调**，那时把月份拨回来即可。
-            //
-            // 这次改动不回写 `visibleMonth`：吸附不是用户操作，写回去会让 anchor
-            // 变成 8 月，后面所有基于它的计算跟着错（前四轮就是这么烂掉的）。
-            if let want = pendingInitialMonth {
-                if comps.year != want.year || comps.month != want.month {
-                    calendarView.setVisibleDateComponents(want, animated: false)
-                    return
-                }
-                // 已经停在想要的月份，首屏收工，后面按正常逻辑走。
-                pendingInitialMonth = nil
-            }
 
             guard let date = NativeMonthCalendar.cal.date(from: comps) else { return }
             let start = NativeMonthCalendar.cal.date(

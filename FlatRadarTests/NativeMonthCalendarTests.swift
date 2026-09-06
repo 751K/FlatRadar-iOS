@@ -24,6 +24,40 @@ final class NativeMonthCalendarTests: XCTestCase {
 
     private let cal = Calendar.current
 
+    // MARK: - 日历必须和服务端同一个时区
+
+    /// **这是 build 295→307 那个"日历停在 8 月"的根源，钉死它。**
+    ///
+    /// `CalendarView` 用「格里高利 + Europe/Amsterdam」算 anchor，而
+    /// `NativeMonthCalendar` 曾经用 `Calendar.current`。同一个时刻在两个时区里
+    /// 会落在**不同的月**：
+    ///
+    ///     9 月 1 日 00:00 阿姆斯特丹 == 8 月 31 日 22:00 UTC
+    ///     用 Amsterdam 读 → 9 月；用 UTC / 洛杉矶读 → 8 月
+    ///
+    /// 真机在阿姆时区看不到，只有 CI 的模拟器复现——所以我按"UICalendarView 的
+    /// 吸附时机"猜了五轮，全是错的。两份日历只要还分开，这类"只在某些时区出现"
+    /// 的错就会继续冒。
+    func testCalendarUsesServerTimeZone() {
+        XCTAssertEqual(ServerTime.calendar.timeZone, ServerTime.timeZone)
+        XCTAssertNotEqual(ServerTime.calendar.timeZone, TimeZone(identifier: "UTC"),
+                          "服务端时区不是 UTC——真是 UTC 的话这条测试就失去意义了")
+    }
+
+    /// 上面那个时区差在**月初**会翻月，这里把它复现出来当回归。
+    func testMonthOfAServerMonthStartIsStableAcrossDeviceTimeZones() {
+        let server = ServerTime.calendar
+        let sept = server.date(from: DateComponents(year: 2026, month: 9, day: 1))!
+
+        XCTAssertEqual(server.dateComponents([.month], from: sept).month, 9)
+
+        var utc = Calendar(identifier: .gregorian)
+        utc.timeZone = TimeZone(identifier: "UTC")!
+        XCTAssertEqual(utc.dateComponents([.month], from: sept).month, 8,
+                       "这条**故意**断言 8——它就是 bug 的样子。"
+                       + "两边日历不一致时，UTC 设备会把服务端的 9 月月初读成 8 月。")
+    }
+
     // MARK: - isSameDay
 
     /// 核心那条：UIKit 那份带 calendar / timeZone，我们那份不带。

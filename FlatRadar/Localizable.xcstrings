@@ -4254,40 +4254,6 @@
         }
       }
     },
-    "Email or username" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Email or username"
-          }
-        },
-        "es" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Correo electrónico o nombre de usuario"
-          }
-        },
-        "nl" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "E-mailadres of gebruikersnaam"
-          }
-        },
-        "zh-Hans" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "邮箱或用户名"
-          }
-        },
-        "zh-Hant" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "郵箱或用戶名"
-          }
-        }
-      }
-    },
     "Empty = no limit. Floor 0 = ground floor." : {
       "localizations" : {
         "en" : {
@@ -9628,6 +9594,40 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "推送通知"
+          }
+        }
+      }
+    },
+    "Rate FlatRadar" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Rate FlatRadar"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Valorar FlatRadar"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "FlatRadar beoordelen"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "为 FlatRadar 评分"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "為 FlatRadar 評分"
           }
         }
       }
