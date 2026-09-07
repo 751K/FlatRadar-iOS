@@ -24,10 +24,26 @@ import MetricKit
 ///
 /// 并发
 /// ----
-/// 不标 @MainActor —— MetricKit 的 didReceive 在系统选择的后台队列调度，
-/// 而我们做的全是文件 IO + NotificationCenter post，都线程安全。UI 层读
-/// pendingDiagnostics() 也安全（不可变 fileManager 调用）。
-final class CrashDiagnosticsCollector: NSObject, MXMetricManagerSubscriber {
+/// **必须显式写 `nonisolated`。** 本 target 开了
+/// `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`，不写的话整个类被推断成
+/// `@MainActor`；而 `MXMetricManagerSubscriber` 是从 ObjC 头文件导入的
+/// `@preconcurrency` 协议，编译器会给 didReceive 生成一个 @objc witness
+/// thunk，在真正调用前插 `_checkExpectedExecutor(MainActor)`。
+/// MetricKit 是在自己选的后台 dispatch 队列上回调的，这个检查必然不过：
+///
+///     _dispatch_assert_queue_fail  →  __builtin_trap
+///     EXC_BREAKPOINT / SIGTRAP（signal 5）
+///
+/// 于是「收集崩溃的模块自己崩溃」，而且崩在 didReceive 里 ——
+/// 报告写不进盘，这次崩溃连同它想上报的那次一起丢掉。
+/// 2026-09-06 线上实测崩过（build 199，iPhone17,1 / iOS 27.0）。
+///
+/// 标了 `nonisolated` 之后，didReceive 里做的全是文件 IO（`FileManager`
+/// 这几个调用线程安全）+ 一次 notification post，post 见
+/// ``postPendingChanged()`` —— 它负责回主线程，因为 UI 层是用
+/// `.onReceive` 接的，而 NotificationCenter 的 publisher 在**谁 post 就在谁
+/// 那个线程**同步派发，直接在后台 post 会变成后台写 SwiftUI `@State`。
+nonisolated final class CrashDiagnosticsCollector: NSObject, MXMetricManagerSubscriber, @unchecked Sendable {
 
     static let shared = CrashDiagnosticsCollector()
 
@@ -119,9 +135,27 @@ final class CrashDiagnosticsCollector: NSObject, MXMetricManagerSubscriber {
             }
         }
         if !payloads.isEmpty {
+            postPendingChanged()
+        }
+    }
+
+    /// 发「待审批数量变了」通知，保证在主线程发。
+    ///
+    /// NotificationCenter 的 Combine publisher 是同步派发的：post 在哪个线程，
+    /// `.onReceive` 的闭包就在哪个线程跑。UI 层那个闭包会改 `@State`，
+    /// 所以 didReceive（后台队列）这条路必须先跳回主线程。
+    /// 已经在主线程时同步发，保持原来的时序（UI 操作后立刻生效）。
+    private func postPendingChanged() {
+        if Thread.isMainThread {
             NotificationCenter.default.post(
                 name: Self.pendingChangedNotification, object: nil
             )
+        } else {
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(
+                    name: Self.pendingChangedNotification, object: nil
+                )
+            }
         }
     }
 
@@ -170,7 +204,7 @@ final class CrashDiagnosticsCollector: NSObject, MXMetricManagerSubscriber {
     /// 上传成功 → 物理删除文件（不留垃圾）。
     func markUploaded(_ diagnostic: PendingDiagnostic) {
         try? fileManager.removeItem(at: diagnostic.url)
-        NotificationCenter.default.post(name: Self.pendingChangedNotification, object: nil)
+        postPendingChanged()
     }
 
     /// 用户拒绝 → 重命名为 .declined.json，保留作本地引用；
@@ -180,7 +214,7 @@ final class CrashDiagnosticsCollector: NSObject, MXMetricManagerSubscriber {
             .deletingPathExtension()
             .appendingPathExtension("declined.json")
         try? fileManager.moveItem(at: diagnostic.url, to: declined)
-        NotificationCenter.default.post(name: Self.pendingChangedNotification, object: nil)
+        postPendingChanged()
     }
 
     /// 批量"全部拒绝"。
