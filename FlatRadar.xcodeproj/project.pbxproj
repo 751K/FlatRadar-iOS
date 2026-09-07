@@ -36,6 +36,11 @@
 			path = FlatRadar;
 			sourceTree = "<group>";
 		};
+		FCC02E4E2FD00C0DE0000001 /* FlatRadarCore */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = FlatRadarCore;
+			sourceTree = "<group>";
+		};
 		FC5588742FBDB6A300855C9D /* FlatRadarUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = FlatRadarUITests;
@@ -78,6 +83,7 @@
 			children = (
 				FCA5BF452FBA1D5F0081A5E4 /* FlatRadar.storekit */,
 				FC1F38652FB72DA000FC7A33 /* FlatRadar */,
+				FCC02E4E2FD00C0DE0000001 /* FlatRadarCore */,
 				FC5588742FBDB6A300855C9D /* FlatRadarUITests */,
 				FCB189392FCCC22E006E5796 /* FlatRadarTests */,
 				FC1F38642FB72DA000FC7A33 /* Products */,
@@ -134,6 +140,7 @@
 			);
 			fileSystemSynchronizedGroups = (
 				FC1F38652FB72DA000FC7A33 /* FlatRadar */,
+				FCC02E4E2FD00C0DE0000001 /* FlatRadarCore */,
 			);
 			name = FlatRadar;
 			packageProductDependencies = (

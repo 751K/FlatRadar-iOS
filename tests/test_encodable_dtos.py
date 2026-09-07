@@ -34,7 +34,12 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-SOURCE_ROOT = Path(__file__).resolve().parent.parent / "FlatRadar"
+REPO_ROOT = Path(__file__).resolve().parent.parent
+# 两个源码根。2026-09-07 把 Models / Networking / Stores 挪进 FlatRadarCore/，
+# 为将来的 macOS target 共享这一层做准备——而绝大多数 DTO 正住在那里。
+# 只留 "FlatRadar" 的话这条测试会缩到扫不着任何 DTO；那种失败由
+# test_the_scan_actually_finds_something 兜着，但先在这里写清楚为什么是两个。
+SOURCE_ROOTS = (REPO_ROOT / "FlatRadar", REPO_ROOT / "FlatRadarCore")
 
 _STRUCT_HEAD = re.compile(r"\bstruct\s+(\w+)\s*:\s*([^{\n]+?)\s*\{")
 # 存储属性：`let x: T` / `var x: T`，行内不能出现 `{`（那是计算属性）。
@@ -101,7 +106,8 @@ def _coding_keys(body: str) -> set[str] | None:
 
 
 def _encodable_structs_with_custom_keys():
-    for path in sorted(SOURCE_ROOT.rglob("*.swift")):
+    paths = sorted(q for root in SOURCE_ROOTS for q in root.rglob("*.swift"))
+    for path in paths:
         src = path.read_text(encoding="utf-8")
         for head in _STRUCT_HEAD.finditer(src):
             name, conformances = head.group(1), head.group(2)
@@ -134,7 +140,7 @@ def test_every_stored_property_has_a_coding_key():
     for path, name, props, keys in _encodable_structs_with_custom_keys():
         missing = [p for p in props if p not in keys]
         if missing:
-            rel = path.relative_to(SOURCE_ROOT.parent)
+            rel = path.relative_to(REPO_ROOT)
             problems.append(f"{rel} 的 {name} 漏了：{missing}")
     assert not problems, (
         "以下属性不在 CodingKeys 里，Encodable 合成时会被**安静地丢掉**"
