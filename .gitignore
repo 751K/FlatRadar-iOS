@@ -28,3 +28,9 @@ __pycache__/
 /screenshots/
 *.xcresult
 *.xcresult.zip
+
+# 图标：设计源 SVG 和生成脚本入库；生成物不入库
+# （AppIcon.icon 本身是构建输入，在 FlatRadar/ 下，必须入库）
+/output/icon/*.png
+/output/icon/layers/
+/output/icon/FlatRadar.icon/

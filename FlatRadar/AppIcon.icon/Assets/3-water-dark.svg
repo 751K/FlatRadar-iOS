@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="53.7 37.7 804.6 804.6">
+  <rect id="canal-line" x="89.5" y="659" width="733" height="30" rx="15" fill="#7892A6"/><g id="reflections">
+    <g id="ochre-reflections" fill="#735F45">
+      <rect x="127.5" y="703" width="197" height="35" rx="17.5"/>
+      <rect x="145" y="751.5" width="165" height="35" rx="17.5"/>
+    </g>
+    <g id="red-reflections" fill="#77474A">
+      <rect x="344.5" y="703" width="226.5" height="35" rx="17.5"/>
+      <rect x="358" y="751.5" width="198.5" height="35" rx="17.5"/>
+    </g>
+    <g id="navy-reflections" fill="#3B5268">
+      <rect x="591" y="703" width="193.5" height="35" rx="17.5"/>
+      <rect x="605.5" y="751.5" width="160" height="35" rx="17.5"/>
+    </g>
+  </g>
+</svg>

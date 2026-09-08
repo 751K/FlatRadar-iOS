@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024" role="img" aria-labelledby="title desc">
+  <title id="title">FlatRadar canal houses icon</title>
+  <desc id="desc">Three ochre, brick red and navy canal houses with short reflections on an ivory background. Editable vector reconstruction of the generated icon.</desc>
+  <rect id="background" width="1024" height="1024" fill="#F3F0E8"/>
+  <g id="houses">
+    <path id="ochre-house" fill="#AA8050" d="M143 749V416L149 414L217 331H316L364 414H372V749Z"/>
+    <path id="red-house" fill="#AE4540" d="M388 749V316H410V294C447 287 467 265 467 224V222C467 218 473 216 482 214V187H543V214C552 216 558 218 558 222V224C558 265 578 287 615 294V316H637V749Z"/>
+    <path id="navy-house" fill="#293E4D" d="M652 749V415H658L710 322H822L874 415H882V749Z"/>
+  </g>
+  <g id="reflections">
+    <rect id="ochre-reflection" x="166" y="775" width="183" height="35" fill="#AA8050"/>
+    <rect id="red-reflection" x="410" y="775" width="205" height="35" fill="#AE4540"/>
+    <rect id="navy-reflection" x="675" y="775" width="184" height="35" fill="#293E4D"/>
+  </g>
+</svg>

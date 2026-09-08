@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="53.7 37.7 804.6 804.6">
+  <g id="windows" fill="#F3F0E8">
+    <g id="ochre-windows">
+      <rect id="ochre-window-1-1" x="170" y="374" width="38" height="52" rx="3"/>
+      <rect id="ochre-window-1-2" x="254" y="374" width="38" height="52" rx="3"/>
+      <rect id="ochre-window-2-1" x="170" y="462" width="38" height="52" rx="3"/>
+      <rect id="ochre-window-2-2" x="254" y="462" width="38" height="52" rx="3"/>
+      <rect id="ochre-window-3-1" x="170" y="550" width="38" height="52" rx="3"/>
+      <rect id="ochre-window-3-2" x="254" y="550" width="38" height="52" rx="3"/>
+    </g>
+    <g id="red-windows">
+      <rect id="red-window-1-1" x="394" y="286" width="38" height="52" rx="3"/>
+      <rect id="red-window-1-2" x="479" y="286" width="38" height="52" rx="3"/>
+      <rect id="red-window-2-1" x="394" y="374" width="38" height="52" rx="3"/>
+      <rect id="red-window-2-2" x="479" y="374" width="38" height="52" rx="3"/>
+      <rect id="red-window-3-1" x="394" y="462" width="38" height="52" rx="3"/>
+      <rect id="red-window-3-2" x="479" y="462" width="38" height="52" rx="3"/>
+      <rect id="red-window-4-1" x="394" y="550" width="38" height="52" rx="3"/>
+      <rect id="red-window-4-2" x="479" y="550" width="38" height="52" rx="3"/>
+    </g>
+    <g id="navy-windows">
+      <rect id="navy-window-1-1" x="621" y="374" width="38" height="52" rx="3"/>
+      <rect id="navy-window-1-2" x="705" y="374" width="38" height="52" rx="3"/>
+      <rect id="navy-window-2-1" x="621" y="462" width="38" height="52" rx="3"/>
+      <rect id="navy-window-2-2" x="705" y="462" width="38" height="52" rx="3"/>
+      <rect id="navy-window-3-1" x="621" y="550" width="38" height="52" rx="3"/>
+      <rect id="navy-window-3-2" x="705" y="550" width="38" height="52" rx="3"/>
+    </g>
+  </g>
+</svg>
