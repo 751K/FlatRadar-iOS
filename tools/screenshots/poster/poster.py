@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Compose six localized App Store posters from raw screenshots.
 
-Requires Python 3.10+, Pillow and macOS system fonts. See README.md for usage.
+Requires Python 3.10+, Pillow, NumPy, SciPy and macOS system fonts. See README.md.
 All layout dimensions derive from the target canvas; screenshots remain unedited.
 """
 from __future__ import annotations
@@ -9,36 +9,63 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
+import numpy as np
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from scipy.ndimage import distance_transform_edt
 
 HERE = pathlib.Path(__file__).parent
 DEVICES = {
-    "iphone67": {"size": (1320, 2868), "display_type": "APP_IPHONE_67", "island": True},
-    "iphone61": {"size": (1206, 2622), "display_type": "APP_IPHONE_61", "island": True},
-    "ipad13": {"size": (2064, 2752), "display_type": "APP_IPAD_PRO_3GEN_129", "island": False},
-    "ipad13l": {"size": (2752, 2064), "display_type": "APP_IPAD_PRO_3GEN_129", "island": False},
+    "iphone67": {"size": (1320, 2868), "display_type": "APP_IPHONE_67", "island": True, "bezel": .0205},
+    "iphone61": {"size": (1206, 2622), "display_type": "APP_IPHONE_61", "island": True, "bezel": .0224},
+    "ipad13": {"size": (2064, 2752), "display_type": "APP_IPAD_PRO_3GEN_129", "island": False, "bezel": .0436},
+    "ipad13l": {"size": (2752, 2064), "display_type": "APP_IPAD_PRO_3GEN_129", "island": False, "bezel": .0327},
 }
 PLAN = [
     {"out": "00-Alerts", "src": "05-Notifications"},
     {"out": "01-Inbox", "src": "02-Listings"},
     {"out": "02-Map", "src": "03-Map"},
-    {"out": "03-Dashboard", "src": "01-Dashboard"},
+    {"out": "03-Notify", "src": "05-Notifications"},
     {"out": "04-Views", "src": ["01-Dashboard", "02-Listings", "03-Map", "04-Calendar"]},
     {"out": "05-Calendar", "src": "04-Calendar"},
 ]
 # Ink, paper and mint form one visual identity across the sequence.
+#
+# 六张全是浅色，没有深色页。深色页在商店的搜索结果列表里会缩成一块黑砖，
+# 旁边一水儿浅色卡片，第一眼读到的是"暗"而不是内容。
+# 节奏改由**饱和度**给：第 5 张那块偏实的薄荷绿是全组里最浓的一处，
+# 替掉了原先靠深色制造的那个断点。
 THEMES = [
-    ((13, 35, 49), (247, 249, 244), (168, 238, 205), (29, 65, 76)),
+    ((250, 248, 243), (18, 45, 57), (29, 78, 150), (234, 233, 227)),
     ((239, 244, 239), (18, 45, 57), (37, 112, 91), (218, 231, 222)),
     ((224, 239, 232), (18, 45, 57), (37, 112, 91), (198, 221, 210)),
     ((236, 241, 248), (18, 45, 57), (41, 95, 155), (211, 223, 240)),
-    ((13, 35, 49), (247, 249, 244), (168, 238, 205), (29, 65, 76)),
+    ((211, 230, 228), (18, 45, 57), (21, 88, 84), (190, 215, 212)),
     ((246, 242, 233), (18, 45, 57), (123, 91, 47), (232, 224, 206)),
 ]
 
 
 def _unit(W, H):
     return min(W, H)
+
+
+# 横屏的分栏只有这一个来源。
+#
+# 早先文字列写 0.33W、设备列写 0.40W，是两个各自独立的魔数；把设备列拓宽后
+# 文字列没跟着退，标题和胶囊的右端就顶到衬底板上了。两者从同一个分界算出来，
+# 就不会再各走各的。
+LAND_SPLIT = .42          # 设备列起点占画布宽的比例
+LAND_PANEL_PAD = .045     # 衬底板比设备各向外扩的量（占短边）
+LAND_GUTTER = .030        # 文字列与衬底板之间留的空当（占短边）
+LAND_BLEED = 1.10         # 横屏单机时设备列右缘占画布宽的比例；>1 = 从右边出血
+
+
+def _land_columns(W, H):
+    """→ (文字列左缘, 文字列可用宽, 设备列左缘, 设备列右缘)"""
+    U = min(W, H)
+    margin = U * .085
+    dev_left = W * LAND_SPLIT
+    text_right = dev_left - U * LAND_PANEL_PAD - U * LAND_GUTTER
+    return margin, max(text_right - margin, U * .20), dev_left, W * .955
 
 
 def _rounded_mask(size, radius):
@@ -82,6 +109,37 @@ def _text(d, xy, s, font, fill, stroke=0):
            stroke_width=stroke, stroke_fill=fill if stroke else None)
 
 
+# `bezel` 只是兜底默认；实际取值在 DEVICES 里按设备给，来源是 Xcode 自带的
+# 设备外框素材，不是"看着像"。
+#
+#   /Library/Developer/CoreSimulator/Profiles/DeviceTypes/<机型>.simdevicetype
+#       profile.plist → chromeIdentifier / framebufferMask
+#   /Library/Developer/DeviceKit/Chrome/<chrome>.devicechrome/Contents/Resources
+#       chrome.json  → paths.simpleOutsideBorder.cornerRadius = 机身圆角
+#
+# 边框 = 机身圆角 − 屏幕圆角，屏幕圆角量 masks/（就是 framebufferMask 抠的）：
+#
+#             chrome    机身圆角   屏幕圆角   边框
+#   iPhone    phone12     80pt     70.7pt    9.3 → 9pt
+#   iPad      tablet5     75pt     30.0pt    45pt
+#
+# iPhone 这条有三重印证：chrome.json 的 sizing 18 − devicePadding 9 = 9pt；
+# PhoneComposite.pdf 474×990 减两侧 sizing 得 438×954 ≈ 屏幕 440×956；
+# 9pt × 0.1625mm/pt ≈ 1.46mm，与"真机边框约 1.5mm"吻合。
+# iPad 用同一把尺：45pt × 0.192mm/pt ≈ 8.6mm，而 13" iPad 机身 215.5mm、
+# 屏宽约 198mm，两边各 8.75mm——对得上。
+#
+# **系数是相对各自截图宽算的，所以四个值都不一样**（同样 9pt，1320px 宽的
+# 截图上是 .0205，1206px 上就是 .0224）：
+#
+#             截图px    =pt    边框pt   边框px   bezel
+#   iphone67    1320    440       9      27    .0205
+#   iphone61    1206    402       9      27    .0224
+#   ipad13      2064   1032      45      90    .0436
+#   ipad13l     2752   1376      45      90    .0327
+#
+# 这段推导在引入 masks/ 那次被整块删掉过，.015 就成了没出处的魔数（它其实
+# 是 6.6pt，比自己写的 1.5mm 目标还薄三成），之后只能靠眼睛调。别再删。
 GEOM = {"bezel": 0.015, "island_w": 0.284, "island_h": 0.0841,
         "island_top": 0.0319, "button_out": 0.006}
 
@@ -94,10 +152,42 @@ def _screen_mask(device_key: str, size) -> Image.Image:
     return _rounded_mask(size, round(size[0] * 0.16))
 
 
+_BODY_CACHE: dict = {}
+
+
+def _body_mask(device_key: str, size, grow: int) -> Image.Image:
+    """屏幕掩膜**向外等距扩张** grow 像素，得到机身轮廓。
+
+    原来是 `mask.resize((W+2b, H+2b))`——整体缩放。缩放把圆角按同一比例放大，
+    而等距外扩是给圆角**加上**边框宽度，两者只在边框极细时才近似相等：
+
+                屏幕圆角   缩放法机身圆角   等距外扩   chrome.json 实测
+        iPhone   70.7pt      73.6pt        79.7pt      80pt
+        iPad     30.0pt      32.0pt        75.0pt      75pt
+
+    边框从 6.6pt 加到 9/45pt 之后，iPad 那栏差了 43pt（86px）——机身该有的圆
+    角只画出不到一半，看着就是方的。等距外扩两个设备都对上 chrome.json，
+    这也反过来印证了边框取值没错。
+
+    用距离变换做，保留 Apple 掩膜本身的连续曲率（squircle）；换成画一个圆弧
+    圆角矩形会让边框宽度在转角处忽宽忽窄。
+    """
+    key = (device_key, size, grow)
+    if key not in _BODY_CACHE:
+        W, H = size
+        base = Image.new("L", (W + 2 * grow, H + 2 * grow), 0)
+        base.paste(_screen_mask(device_key, size), (grow, grow))
+        dist = distance_transform_edt(np.asarray(base) <= 127)
+        alpha = np.clip(grow + .5 - dist, 0, 1) * 255      # 边缘留 1px 抗锯齿
+        _BODY_CACHE[key] = Image.fromarray(alpha.astype(np.uint8), "L")
+    return _BODY_CACHE[key]
+
+
 def _device(shot: Image.Image, device_key: str, island: bool) -> Image.Image:
     W, H = shot.size
     g = GEOM
-    bezel, out = round(W * g["bezel"]), round(W * g["button_out"])
+    bezel = round(W * DEVICES.get(device_key, {}).get("bezel", g["bezel"]))
+    out = round(W * g["button_out"])
     mask = _screen_mask(device_key, (W, H))
 
     screen = shot.convert("RGBA")
@@ -108,17 +198,15 @@ def _device(shot: Image.Image, device_key: str, island: bool) -> Image.Image:
         screen.alpha_composite(pill, ((W - iw) // 2, round(W * g["island_top"])))
     screen.putalpha(mask)
 
-    # 机身轮廓由屏幕掩膜放大得到。严格说该是"向外等距扩张"，缩放只是近似
-    # （圆角少长约 14px），设备缩到版面后差不足两像素，不值得做形态学膨胀。
     fw, fh = W + 2 * bezel, H + 2 * bezel
     pad = out if island else 0
     body = Image.new("RGBA", (fw + 2 * pad, fh), (0, 0, 0, 0))
 
     shell = Image.new("RGBA", (fw, fh), (118, 118, 126, 255))
-    shell.putalpha(mask.resize((fw, fh), Image.LANCZOS))
+    shell.putalpha(_body_mask(device_key, (W, H), bezel))
     inset = max(round(bezel * 0.28), 2)
     dark = Image.new("RGBA", (fw - 2 * inset, fh - 2 * inset), (18, 18, 20, 255))
-    dark.putalpha(mask.resize(dark.size, Image.LANCZOS))
+    dark.putalpha(_body_mask(device_key, (W, H), bezel - inset))
     shell.alpha_composite(dark, (inset, inset))
     shell.alpha_composite(screen, (bezel, bezel))
 
@@ -139,13 +227,23 @@ def _device(shot: Image.Image, device_key: str, island: bool) -> Image.Image:
 
 def _place(canvas, dev, x, y, W, H) -> None:
     """贴设备 + 投影。投影取设备自己的 alpha，不画圆角矩形——设备一旦旋转，
-    矩形阴影就对不上机身轮廓。"""
-    U = _unit(W, H)
+    矩形阴影就对不上机身轮廓。
+
+    两个尺度都跟着**设备**走，不跟画布走：
+
+    - 原来模糊半径写 `U*.024`（U = 画布短边），于是四视图里 800px 宽的小机器
+      和整版 1900px 的大机器共用 50px 模糊。小机器被一圈和自己不成比例的影子
+      裹住；而网格间距 62px 还不到模糊半径的两倍，四台的影子直接糊成一片。
+    - 原来下移 `U*.008` = 17px，只有模糊半径的三分之一，影子就在设备**上方**
+      也铺开 33px。实测 iPad 顶边上方漏出 110px、贴边处把底色压暗 22%——那是
+      光晕不是投影。下移取模糊的 .85 倍，影子上沿基本压在机身上沿。
+    """
+    blur = max(round(dev.width * .020), 5)
     sh = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     blot = Image.new("RGBA", dev.size, (0, 0, 0, 255))
-    blot.putalpha(dev.getchannel("A").point(lambda v: round(v * 0.45)))
-    sh.alpha_composite(blot, (x, y + round(U * 0.008)))
-    canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(round(U * 0.024))))
+    blot.putalpha(dev.getchannel("A").point(lambda v: round(v * 0.38)))
+    sh.alpha_composite(blot, (x, y + round(blur * .85)))
+    canvas.alpha_composite(sh.filter(ImageFilter.GaussianBlur(blur)))
     canvas.alpha_composite(dev, (x, y))
 
 
@@ -169,14 +267,29 @@ def _label(canvas, text, x, y, size, width, cjk, heavy, color):
     return box[3] - box[1]
 
 
+def _logo(idx, side):
+    """按主题明暗取品牌标。
+
+    BrandLogo 的 light/dark 两版都是**带底色**的方块（不是透明前景），所以
+    浅底海报必须用 light、深底必须用 dark；用错的那一版会在页眉上糊出一块
+    和底色打架的方形。按主题底色的明度自动选，不用手维护一张对照表。
+    """
+    bg = THEMES[idx][0]
+    name = "logo-dark.png" if sum(bg) / 3 < 128 else "logo-light.png"
+    path = HERE / name
+    if not path.exists():
+        return None
+    with Image.open(path) as image:
+        icon = image.convert("RGBA").resize((side, side), Image.Resampling.LANCZOS)
+    icon.putalpha(_rounded_mask(icon.size, round(side * .23)))
+    return icon
+
+
 def _brand(canvas, idx, margin, U, color, accent):
     side = round(U * .044)
     x, y = margin, round(U * .072)
-    icon_path = HERE / "appicon.png"
-    if icon_path.exists():
-        with Image.open(icon_path) as image:
-            icon = image.convert("RGBA").resize((side, side), Image.Resampling.LANCZOS)
-        icon.putalpha(_rounded_mask(icon.size, round(side * .23)))
+    icon = _logo(idx, side)
+    if icon:
         canvas.alpha_composite(icon, (x, y))
     _label(canvas, "FlatRadar", x + side + U * .016, y + U * .009,
            U * .029, U * .35, False, True, color)
@@ -184,17 +297,23 @@ def _brand(canvas, idx, margin, U, color, accent):
            y + U * .012, U * .020, U * .13, False, False, accent)
 
 
-def _background(size, idx):
+def _background(size, idx, rect=None):
+    """`rect` 由调用方按设备的实际落点给出。
+
+    横屏上这块板不能写死：横机身宽高比 1.33，而写死的 0.44W..0.95W ×
+    0.17H..0.95H 是一块**竖着**的板（1403×1610），装横着的机器必然对不上——
+    机身下方空出五百多像素的空板，看着像图没加载完。
+    """
     W, H = size
     bg, ink, accent, surface = THEMES[idx]
     canvas = Image.new("RGBA", size, bg + (255,))
     # A single architectural panel anchors the device; rings suggest the radar.
     d = ImageDraw.Draw(canvas)
     U = min(W, H)
-    if W > H:
-        rect = (round(W * .44), round(H * .17), round(W * .95), round(H * .95))
-    else:
-        rect = (round(W * .045), round(H * .32), round(W * .955), round(H * 1.08))
+    if rect is None:
+        rect = ((round(W * .44), round(H * .17), round(W * .95), round(H * .95))
+                if W > H else
+                (round(W * .045), round(H * .32), round(W * .955), round(H * 1.08)))
     d.rounded_rectangle(rect, radius=round(U * .08), fill=surface)
     if idx in (0, 2, 4):
         cx, cy = W * (.74 if W > H else .52), H * .72
@@ -212,10 +331,23 @@ def _headline(canvas, copy, idx, cjk):
     margin = round(U * .085)
     _, ink, accent, _ = THEMES[idx]
     _brand(canvas, idx, margin, U, ink, accent)
-    x, y = margin, round(H * (.29 if land else .112))
-    width = W * .33 if land else W - margin * 2
+    width = _land_columns(W, H)[1] if land else W - margin * 2
     lead_size = U * (.056 if cjk else .062)
     head_size = U * (.106 if cjk else .105)
+
+    # 横屏时标题**纵向对齐设备带中线**。原来钉死在 H*.29，标题只占左栏顶部
+    # 四分之一，下面留一条 826×1200 的纯空白——横屏最扎眼的空就是这块。
+    # 高度先在废弃画布上量一遍再定位：`_label` 会按列宽缩字号，不实际排一次
+    # 拿不到真高度（同一句英文和中文能差出两行）。
+    if land:
+        probe = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+        h = _label(probe, copy["lead"], margin, 0, lead_size, width, cjk, False, ink)
+        h += U * .024
+        h += _label(probe, copy["head"], margin, h, head_size, width, cjk, True, accent)
+        y = round(H * .16 + (H * .94 - H * .16 - h) / 2)
+    else:
+        y = round(H * .112)
+    x = margin
     y += _label(canvas, copy["lead"], x, y, lead_size, width, cjk, False, ink)
     y += U * .024
     y += _label(canvas, copy["head"], x, y, head_size, width, cjk, True, accent)
@@ -229,11 +361,14 @@ def _feature(canvas, badges, top, idx, cjk):
     _, ink, accent, surface = THEMES[idx]
     value, label = badges[0]
     x, y = round(U * .085), round(top + U * .05)
-    width = round(W * .32 if land else W * .83)
+    width = round(_land_columns(W, H)[1] if land else W * .83)
     height = round(U * .064)
     d = ImageDraw.Draw(canvas)
     d.rounded_rectangle((x, y, x + width, y + height), radius=height // 2, fill=surface)
-    _label(canvas, f"{value}  {label}", x + U * .024, y + U * .017,
+    # 拼接跳过空段：中文那条把数字写进了句子里（「同时监测七个平台」），
+    # 没有独立的数字段，按 f"{value}  {label}" 硬拼会留下两个前导空格。
+    _label(canvas, "  ".join(p for p in (value, label) if p),
+           x + U * .024, y + U * .017,
            U * .030, width - U * .048, cjk, True, accent)
     return y + height
 
@@ -247,42 +382,82 @@ def _resize_fit(dev, max_w, max_h):
 def build(spec, copy, src, idx, dev_spec, cjk, device_key, badges=None):
     W, H = dev_spec["size"]
     U, land = min(W, H), W > H
-    canvas = _background((W, H), idx)
-    top = _headline(canvas, copy, idx, cjk)
-    if idx == 0 and badges:
-        top = _feature(canvas, badges, top, idx, cjk)
 
     def load(name):
         with Image.open(src / f"{name}.png") as image:
             return _device(image.convert("RGB"), device_key, dev_spec["island"])
 
-    # Landscape uses a text column and a separate device column.
-    left, right = (W * .47, W * .925) if land else (W * .09, W * .91)
-    start = H * .21 if land else max(H * .315, top + U * .06)
+    # 文本列 / 设备列。横屏给设备 0.555W——原来只给 0.455W，横机身在那个宽度下
+    # 被**宽度**卡住（只长到 943 高，可用 1507），高度白白空掉三分之一。
+    left, right = _land_columns(W, H)[2:] if land else (W * .09, W * .91)
+    start = H * .16 if land else H * .315
     bottom = H * .94
+
+    # 先摆好设备、拿到它们的包围盒，再据此画衬底板——板的形状必须跟着机身走。
+    placed = []
     if isinstance(spec["src"], list):
         gap = U * .030
         cell_w = (right - left - gap) / 2
         cell_h = (bottom - start - gap) / 2
-        for i, name in enumerate(spec["src"]):
-            dev = _resize_fit(load(name), cell_w, cell_h)
-            x = left + (i % 2) * (cell_w + gap) + (cell_w - dev.width) / 2
-            y = start + (i // 2) * (cell_h + gap)
-            _place(canvas, dev, round(x), round(y), W, H)
+        devs = [_resize_fit(load(n), cell_w, cell_h) for n in spec["src"]]
+        # 格子按可用区等分，机身按比例缩进去，两者形状对不上——横机身塞进
+        # 竖格子只长到格高的 70%，四个格子各自在**下方**空一条。改成用机身
+        # 实际尺寸重新组网格，再把整块居中：空白挪到外圈当留白，不再是四个洞。
+        rw = max(d.width for d in devs)
+        rh = max(d.height for d in devs)
+        gx = left + (right - left - (2 * rw + gap)) / 2
+        gy = start + (bottom - start - (2 * rh + gap)) / 2
+        for i, d in enumerate(devs):
+            placed.append((d, gx + (i % 2) * (rw + gap) + (rw - d.width) / 2,
+                              gy + (i // 2) * (rh + gap) + (rh - d.height) / 2))
     else:
         dev = load(spec["src"])
-        # Phone portraits deliberately bleed at the bottom; tablets stay whole.
+        # 竖屏手机刻意从底部出血；平板整台留全。
         max_h = H * 1.045 - start if dev_spec["island"] and not land else bottom - start
-        dev = _resize_fit(dev, right - left, max_h)
-        x = (left + right - dev.width) / 2
-        _place(canvas, dev, round(x), round(start), W, H)
+        if land:
+            # 横机身宽高比 1.31，和文字列并排时被**宽度**卡死：设备带高 1610，
+            # 机身只长到 1127，上下白空 483px（占带高 30%）。要让它改由高度
+            # 卡住，设备列得有 2104px 宽，文字列就只剩 194px——标题没法看。
+            # 折中：设备列右缘推到画布外 LAND_BLEED，机身按高度吃满，右边裁掉
+            # 一条。裁的是 iPad 右侧那片留白居多的区域，比上下空着划算。
+            dev = _resize_fit(dev, W * LAND_BLEED - left, max_h)
+            x = left
+        else:
+            dev = _resize_fit(dev, right - left, max_h)
+            x = (left + right - dev.width) / 2
+        y = start + (bottom - start - dev.height) / 2 if land else start
+        placed.append((dev, x, y))
+
+    box = (min(x for _, x, _ in placed), min(y for _, _, y in placed),
+           max(x + d.width for d, x, _ in placed), max(y + d.height for d, _, y in placed))
+    if land:
+        px, py = U * LAND_PANEL_PAD, U * .055
+        # 机身出血时衬底板得跟着顶到画布边，否则右侧会露出一条底色。
+        rx = W if box[2] > W * .985 else min(box[2] + px, W * .985)
+        rect = (round(box[0] - px), round(box[1] - py), round(rx), round(box[3] + py))
+    else:
+        rect = None
+
+    canvas = _background((W, H), idx, rect)
+    top = _headline(canvas, copy, idx, cjk)
+    if idx == 0 and badges:
+        top = _feature(canvas, badges, top, idx, cjk)
+    for dev, x, y in placed:
+        _place(canvas, dev, round(x), round(y), W, H)
     return canvas.convert("RGB")
 
 
 def build_hero_pair(strings, src, dev_spec, cjk, device_key):
     """An editorial cover: one promise, one proof point, one spanning device."""
     W, H = dev_spec["size"]
+    # 跨页专用的**纵向尺度**，不能直接用 U = min(W,H)。
+    #
+    # U/H 在两种朝向下差 2.2 倍（竖屏 0.46、横屏 1.00），于是同一个 `U * k`
+    # 纵向偏移在横屏上占页高的比例翻了一倍多：标题、正文一路把数字块顶到
+    # 1706，而页脚钉死在 H*.89 = 1837，数字块底部 1997 直接压上去。
+    # S 让两种朝向下"占页高的比例"一致——竖屏时 S≈U，横屏时按页高折算。
     U = min(W, H)
+    S = min(U, H * .55)
     paper, ink, accent = (247, 246, 242), (24, 31, 46), (44, 83, 220)
     muted = (100, 108, 122)
     canvas = Image.new("RGBA", (2 * W, H), paper + (255,))
@@ -299,8 +474,21 @@ def build_hero_pair(strings, src, dev_spec, cjk, device_key):
         dev = _device(shot.convert("RGB"), device_key, dev_spec["island"])
     dev = _resize_fit(dev, W * .94, H * .88)
     dev = dev.rotate(-7, resample=Image.Resampling.BICUBIC, expand=True)
-    # Anchor the rotated bounding box: keep a real margin at the right edge.
-    x = round(2 * W - U * .105 - dev.width)
+    # 锚点是**接缝**，右页留白降级成兜底。
+    #
+    # 原先只有 `x = 2W - S*.105 - dev.width` 一条：它保证的是右页边距，设备能
+    # 不能够回接缝，全看它自己有多宽。竖屏设备占跨页宽 57%，自然压过接缝；
+    # 横屏跨页宽 5504，而设备被短边 H*.88 卡在 1584（只占 29%），x 落到 3801
+    # ——接缝在 2752，设备整个待在页 2，页 1 变成没有设备的纯文字页。
+    #
+    #            2W     设备宽   x 旧 → 新    页1 设备宽 旧 → 新
+    #   iphone67 2640   1494    1007 → 1006      313 → 314
+    #   ipad13l  5504   1584    3801 → 2420        0 → 332
+    #
+    # 取两者较小值：先按「露在页 1 上的比例」定位，右页留白仍不许被越过。
+    SEAM_OVERHANG = .21
+    x = min(round(W - dev.width * SEAM_OVERHANG),
+            round(2 * W - S * .105 - dev.width))
     y = round(H * .12)
     _place(canvas, dev, x, y, W, H)
 
@@ -312,20 +500,19 @@ def build_hero_pair(strings, src, dev_spec, cjk, device_key):
         if bounds:
             left_edge = min(left_edge, x + bounds[0])
     left = round(W * .095)
-    width = min(round(W * .76), left_edge - left - round(U * .035))
+    width = min(round(W * .76), left_edge - left - round(S * .035))
     hero = strings.get("_hero", {})
     title = hero.get("title", [strings["00-Alerts"]["lead"], strings["00-Alerts"]["head"]])
     body = hero.get("body", [])
 
     # Compact horizontal brand lockup; the headline carries the visual weight.
-    side = round(U * .070)
+    side = round(S * .070)
     brand_y = round(H * .065)
-    with Image.open(HERE / "appicon.png") as image:
-        icon = image.convert("RGBA").resize((side, side), Image.Resampling.LANCZOS)
-    icon.putalpha(_rounded_mask(icon.size, round(side * .23)))
-    canvas.alpha_composite(icon, (left, brand_y))
-    _label(canvas, "FlatRadar", left + side + U * .022, brand_y + U * .015,
-           U * .041, width - side - U * .022, False, True, ink)
+    icon = _logo(0, side)
+    if icon:
+        canvas.alpha_composite(icon, (left, brand_y))
+    _label(canvas, "FlatRadar", left + side + S * .022, brand_y + S * .015,
+           S * .041, width - side - S * .022, False, True, ink)
 
     # Fit both headline lines to one size, preserving the typographic hierarchy.
     size = min(_fit(line, round(U * (.143 if cjk else .127)), width, cjk, True).size
@@ -333,27 +520,31 @@ def build_hero_pair(strings, src, dev_spec, cjk, device_key):
     yy = H * .235
     for i, line in enumerate(title):
         height = _label(canvas, line, left, yy, size, width, cjk, True, ink if i == 0 else accent)
-        yy += height + U * .033
-    yy += U * .040
+        yy += height + S * .033
+    yy += S * .040
     for line in body:
-        height = _label(canvas, line, left, yy, U * .033, width, cjk, False, muted)
-        yy += height + U * .017
+        height = _label(canvas, line, left, yy, S * .033, width, cjk, False, muted)
+        yy += height + S * .017
 
     # A single evidence block replaces three evenly spaced feature labels.
-    proof_y = max(H * .66, yy + U * .10)
-    d.line((left, round(proof_y - U * .055), left + round(width * .91),
-            round(proof_y - U * .055)), fill=(207, 212, 221), width=max(2, round(U * .001)))
-    value = strings.get("_badges", [["7"]])[0][0]
-    _label(canvas, value, left, proof_y, U * .19, U * .20, False, True, accent)
+    proof_y = max(H * .66, yy + S * .10)
+    d.line((left, round(proof_y - S * .055), left + round(width * .91),
+            round(proof_y - S * .055)), fill=(207, 212, 221), width=max(2, round(S * .001)))
+    # 数字从 `_hero` 自己取，不再伸手去够 `_badges[0][0]`。
+    # 那个字段是给单页版的胶囊用的，改胶囊文案（把数字写进句子里）时它被
+    # 清成空串，封面这个大数字就跟着没了——两处共用一个字段却各有各的
+    # 用法，改一处必然打断另一处。
+    value = strings.get("_hero", {}).get("number", "7")
+    _label(canvas, value, left, proof_y, S * .19, S * .20, False, True, accent)
     for i, line in enumerate(hero.get("proof", ["platforms", "One place."])):
-        _label(canvas, line, left + U * .17, proof_y + U * (.045 + i * .049),
-               U * .036, width - U * .17, cjk, i == 1, ink)
+        _label(canvas, line, left + S * .17, proof_y + U * (.045 + i * .049),
+               S * .036, width - S * .17, cjk, i == 1, ink)
 
     # Small footer belongs to the left page; it never rides over the device.
     footer_y = H * .89
-    _label(canvas, hero.get("tagline", ""), left, footer_y, U * .026, width, cjk, False, muted)
-    _label(canvas, "FLATRADAR  /  NETHERLANDS", left, footer_y + U * .051,
-           U * .017, width, False, True, muted)
+    _label(canvas, hero.get("tagline", ""), left, footer_y, S * .026, width, cjk, False, muted)
+    _label(canvas, "FLATRADAR  /  NETHERLANDS", left, footer_y + S * .051,
+           S * .017, width, False, True, muted)
     return [canvas.crop((0, 0, W, H)).convert("RGB"),
             canvas.crop((W, 0, 2 * W, H)).convert("RGB")]
 
@@ -417,14 +608,14 @@ def main():
     dev_spec = DEVICES[args.device]
     pair = build_hero_pair(strings, args.src, dev_spec, args.lang.startswith("zh"), args.device)
     for idx, spec in enumerate(PLAN):
-        image = pair[idx] if idx < 2 else build(spec, strings[spec["out"]], args.src, idx, dev_spec,
-                      args.lang.startswith("zh"), args.device, strings.get("_badges"))
+        image = pair[idx] if idx < 2 else build(
+            spec, strings[spec["out"]], args.src, idx, dev_spec,
+            args.lang.startswith("zh"), args.device, strings.get("_badges"))
         assert image.size == dev_spec["size"] and image.mode == "RGB"
         image.save(args.out / f"{spec['out']}.png")
         images.append(image)
     if args.preview:
         contact_sheet(images, args.preview)
-        spread_preview(images, args.preview.with_name(args.preview.stem + "-spread.png"))
     print(f"✓ {args.lang}/{args.device}: {len(images)} 张 → {args.out} "
           f"({dev_spec['size'][0]}x{dev_spec['size'][1]})")
     return 0

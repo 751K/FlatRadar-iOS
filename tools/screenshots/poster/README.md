@@ -4,7 +4,8 @@
 
 ## 运行
 
-需要 Python 3.10+、Pillow，以及 macOS 的 SFNS / Hiragino Sans GB 字体。
+需要 Python 3.10+、Pillow、NumPy、SciPy，以及 macOS 的 SFNS / Hiragino Sans GB 字体。
+（SciPy 只用来做机身轮廓的距离变换外扩，见 `poster.py` 的 `_body_mask`。）
 
 ```bash
 python3 tools/screenshots/poster/poster.py \
@@ -34,7 +35,9 @@ python3 tools/screenshots/poster/poster.py \
 - `poster.py` 的 `THEMES`：底色、正文色、强调色、设备衬底色。
 - `build_hero_pair`：跨页设备、文字安全区域及切图。
 - `_headline` / `build`：标题比例、边距、设备及四视图排版。
-- `masks/`：现有设备屏幕遮罩；`appicon.png`：品牌图标。
+- `masks/`：现有设备屏幕遮罩，抠自 CoreSimulator 的 framebufferMask。
+- `logo-light.png` / `logo-dark.png`：**生成物，别手动改**。跑 `python3 tools/screenshots/poster/make-logo.py` 从 `AppIcon.appiconset` 重建。
+  源图把圆角烤进去了、圆角外是纯白，直接拿来用会在非白底上留一圈白边；脚本把渐变外推填满四角。同一个缺陷也让主屏图标四角挂白牙，见脚本内注释。
 
 截图成品保存在仓库根目录的 `screenshots/`，已被 Git 忽略。工具源码不应被忽略。
 

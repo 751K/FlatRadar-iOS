@@ -27,13 +27,9 @@
       "lead": "See what's",
       "head": "within reach"
     },
-    "03-Dashboard": {
-      "lead": "The whole market",
-      "head": "at a glance"
-    },
     "04-Views": {
       "lead": "Same listings",
-      "head": "four ways"
+      "head": "four views"
     },
     "05-Calendar": {
       "lead": "Every move-in date",
@@ -52,14 +48,19 @@
       "proof": [
         "platforms.",
         "One place."
-      ]
+      ],
+      "number": "7"
+    },
+    "03-Notify": {
+      "lead": "The moment it's listed",
+      "head": "it's on your phone"
     }
   },
   "zh-Hans": {
     "_badges": [
       [
-        "7",
-        "个平台同时盯着"
+        "",
+        "同时监测七个平台"
       ],
       [
         "推送",
@@ -82,13 +83,9 @@
       "lead": "十分钟能到的",
       "head": "都在圈里"
     },
-    "03-Dashboard": {
-      "lead": "整个市场",
-      "head": "一眼看完"
-    },
     "04-Views": {
       "lead": "同一批房源",
-      "head": "四种看法"
+      "head": "四种视图"
     },
     "05-Calendar": {
       "lead": "所有起租日",
@@ -107,14 +104,19 @@
       "proof": [
         "个平台",
         "一处掌握"
-      ]
+      ],
+      "number": "7"
+    },
+    "03-Notify": {
+      "lead": "房源一上线",
+      "head": "手机就响"
     }
   },
   "zh-Hant": {
     "_badges": [
       [
-        "7",
-        "個平台同時盯著"
+        "",
+        "同時監測七個平台"
       ],
       [
         "推播",
@@ -137,13 +139,9 @@
       "lead": "十分鐘能到的",
       "head": "都在圈裡"
     },
-    "03-Dashboard": {
-      "lead": "整個市場",
-      "head": "一眼看完"
-    },
     "04-Views": {
       "lead": "同一批房源",
-      "head": "四種看法"
+      "head": "四種視圖"
     },
     "05-Calendar": {
       "lead": "所有起租日",
@@ -162,7 +160,12 @@
       "proof": [
         "個平台",
         "一處掌握"
-      ]
+      ],
+      "number": "7"
+    },
+    "03-Notify": {
+      "lead": "房源一上線",
+      "head": "手機就響"
     }
   },
   "nl-NL": {
@@ -192,10 +195,6 @@
       "lead": "Zie wat er",
       "head": "binnen bereik is"
     },
-    "03-Dashboard": {
-      "lead": "De hele markt",
-      "head": "in één oogopslag"
-    },
     "04-Views": {
       "lead": "Dezelfde woningen",
       "head": "vier weergaven"
@@ -217,7 +216,12 @@
       "proof": [
         "platforms.",
         "Eén plek."
-      ]
+      ],
+      "number": "7"
+    },
+    "03-Notify": {
+      "lead": "Zodra het online staat",
+      "head": "weet jij het"
     }
   },
   "es-ES": {
@@ -247,10 +251,6 @@
       "lead": "Mira qué tienes",
       "head": "a diez minutos"
     },
-    "03-Dashboard": {
-      "lead": "Todo el mercado",
-      "head": "de un vistazo"
-    },
     "04-Views": {
       "lead": "Los mismos anuncios",
       "head": "cuatro vistas"
@@ -272,7 +272,12 @@
       "proof": [
         "plataformas.",
         "Un solo lugar."
-      ]
+      ],
+      "number": "7"
+    },
+    "03-Notify": {
+      "lead": "En cuanto se publica",
+      "head": "lo sabes tú"
     }
   }
 }
