@@ -285,6 +285,12 @@ struct LoginView: View {
                     // 扣在深蓝色的 hero 背景上是一块硬邦邦的黑饼。
                     // BrandLogo 图集里浅深两版各自带背景（与 App 图标同源），
                     // SwiftUI 按 colorScheme 自己挑，不需要在这里判断主题。
+                    //
+                    // 「同源」靠脚本保证，不靠人记：图集由
+                    // `output/icon/make-brandlogo.py` 从 AppIcon.png 出。
+                    // 2.2 换图标时这里漏了一轮——主屏已经是运河屋，登录页还是
+                    // 上一版的蓝房子。`tests/test_brand_logo.py` 现在把四角底色
+                    // 钉在 icon.json 的声明上，再漏就是红的。
                     Image("BrandLogo")
                         .resizable()
                         .frame(width: 48, height: 48)
