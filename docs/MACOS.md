@@ -218,11 +218,11 @@ Stores 分别拆包。iOS 与 Mac 都只依赖包产品，不再直接编译这�
 | Keychain 增 / 查 / 删均返回成功 | ✅ | `--keychain-selftest`；`FlatRadarMacTests` 也钉住了 |
 | 没有触发 `UserDefaults` token 回退 | ✅ | 窗口显示 `none`；Mac 上那条回退根本不编译 |
 | 重新启动能恢复会话 | ✅ | `--session-report` → `RESTORED`（真·进程重启，走钥匙串 + `/auth/me`） |
-| 登出后不能恢复旧会话 | ⏳ | 需要在窗口里点一次 Sign Out，再跑 `--session-report` |
-| 拒绝网络 / 凭据错误时显示可理解的错误 | ⏳ | 待手工触发 |
+| 登出后不能恢复旧会话 | ✅ | 点 Sign Out 后 `--session-report` → `NO SESSION`；紧接着自检仍 `PASS`，排除「钥匙串坏了」这种解释 |
+| 拒绝网络 / 凭据错误时显示可理解的错误 | ⏳ | 待手工触发一次错误登录 |
 | 不得把凭据写入源码或日志 | ✅ | 自检和报告都只打结果与用户名，不打 token；密码用完即清 |
 
-两个 `⏳` 都不是代码问题，是需要人操作一次才能触发的路径。
+剩下那个 `⏳` 不是代码问题，是需要人故意输一次错密码才能触发的路径。
 
 原文：签名且开启 Sandbox 的 macOS app 能从 `flatradar.app` 登录并显示房源数量；
 Keychain 写入、读取、删除均返回成功，确认没有触发 `UserDefaults` token 回退；重新启动能恢复
