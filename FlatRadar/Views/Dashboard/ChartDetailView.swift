@@ -1,5 +1,6 @@
 import Charts
 import SwiftUI
+import FlatRadarCore
 
 struct ChartDetailView: View {
     let chartKey: String

@@ -1,4 +1,5 @@
 import SwiftUI
+import FlatRadarCore
 
 struct DashboardView: View {
     @Environment(DashboardStore.self) private var store

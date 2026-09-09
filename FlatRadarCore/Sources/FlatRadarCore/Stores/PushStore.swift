@@ -1,0 +1,239 @@
+import Foundation
+import SwiftUI
+import UserNotifications
+
+/// APNs 设备注册状态机。
+///
+/// 生命周期
+/// --------
+/// 1. App 启动：``FlatRadarApp.task`` 调 ``setup()``——挂 PushDelegate 钩子，
+///    等待登录完成
+/// 2. 登录成功：``AuthStore.login`` 触发 ``requestPermissionAndRegister()``
+///    → 系统弹通知权限框 → 同意后向 APNs 注册 → 拿到 token
+/// 3. PushDelegate 把 token 回传 ``handleDeviceToken(_:)``
+/// 4. token 通过 ``APIClient.registerDevice`` 上报后端
+/// 5. 登出：``logout()`` 删除后端绑定 + 解除 APNs 注册
+///
+/// 环境切换
+/// --------
+/// Xcode 直接 Run（DEBUG）拿到的 token 只对 sandbox 端点有效；
+/// TestFlight / App Store（RELEASE）拿到的 token 对 production 有效。
+/// ``Self.currentEnv`` 通过 ``#if DEBUG`` 自动切换。
+@MainActor
+@Observable
+public final class PushStore {
+
+    /// 隐式 init 随 `public` 一起变成 internal，宿主 app 构造不了。
+    /// 这些 store 的属性全有默认值，空实现与迁移前的隐式构造等价。
+    public init() {}
+
+    public enum PermissionStatus: Sendable {
+        case notDetermined, denied, authorized, provisional, ephemeral
+    }
+
+    public var permissionStatus: PermissionStatus = .notDetermined
+    var lastToken: String?
+    public var lastError: String?
+    public var registeredDeviceId: Int?
+
+    private let client = APIClient.shared
+    private var hasInstalledDelegate = false
+
+    /// 平台推送桥接。``setup(bridge:)`` 注入，之后 ``requestPermissionAndRegister``
+    /// 用它触发注册。Core 不认识具体的 app delegate。
+    private weak var bridge: (any PushPlatformBridge)?
+
+    /// DEBUG / RELEASE → "sandbox" / "production"。
+    /// 与 ``FlatRadar.entitlements`` 的 ``aps-environment`` 互相对应；
+    /// 也是 ``/api/v1/devices/register`` 的 ``env`` 字段值。
+    static var currentEnv: String {
+        #if DEBUG
+        return "sandbox"
+        #else
+        return "production"
+        #endif
+    }
+
+    /// 硬件标识符。iOS 上是 "iPhone16,2" 这类机型串。
+    /// 迁移前直接读 `utsname.machine`；那个值在 Mac 上是 CPU 架构不是机型，
+    /// 所以改成由宿主注入，见 ``PlatformInfo/hardwareModel``。
+    static var currentModel: String { PlatformEnvironment.info.hardwareModel }
+
+    /// 系统版本，如 "18.5"。随 `/devices/register` 一起上报。
+    ///
+    /// 为什么要报
+    /// ----------
+    /// App Store Connect 的 Analytics 已经给了系统版本的**聚合**分布，所以这里
+    /// 报它不是为了看「有多少人在 iOS 18」——那个问题已经有免费答案了。
+    ///
+    /// 要的是**逐设备**的组合：`model` 报的是硬件标识符（iPhone16,2 这种），
+    /// 加上系统版本，后端才能算出「机型够格 **且** 系统够新」的那批设备占多少。
+    /// 这是端上模型（Foundation Models）三道门里的前两道，ASC 的聚合报表拼不出来
+    /// ——它给的是两张互相独立的分布，不是交叉表。
+    ///
+    /// 第三道门「用户有没有开 Apple Intelligence」这里还报不了，那要读
+    /// `SystemLanguageModel.default.availability`，需要 iOS 26 SDK。见 docs/NEXT.md。
+    static var currentOSVersion: String { PlatformEnvironment.info.systemVersion }
+
+    static var currentBundleId: String {
+        Bundle.main.bundleIdentifier ?? ""
+    }
+
+    /// 设备当前语言，取 primary language code（"en" / "zh" / ...）。
+    /// 上报给后端的 ``/api/v1/devices/register``，用于 APNs 双语推送。
+    ///
+    /// 曾经带一个 `if #available(iOS 16, *)` 的分支，回退到已废弃的
+    /// `Locale.current.languageCode`。最低支持版本升到 18.0 之后那条分支
+    /// 永远不会执行，连同它里面那个废弃 API 一起删掉。
+    static var currentLanguage: String {
+        Locale.current.language.languageCode?.identifier ?? "en"
+    }
+
+    // MARK: - Setup
+
+    /// App 启动时调一次：挂回调，让 PushDelegate 把 token 转给我们。
+    public func setup(bridge: any PushPlatformBridge) {
+        guard !hasInstalledDelegate else { return }
+        hasInstalledDelegate = true
+        self.bridge = bridge
+        bridge.onDeviceToken = { [weak self] data in
+            Task { @MainActor in
+                await self?.handleDeviceToken(data)
+            }
+        }
+        bridge.onRegistrationError = { [weak self] err in
+            Task { @MainActor in
+                self?.lastError = err.localizedDescription
+                print("[PushStore] registration error: \(err)")
+            }
+        }
+        // ⚠️ 时序救援：iOS 可能在 setup() 前就调过 didRegister（cached token
+        // 重放），那时 onDeviceToken 还是 nil 把 token 丢了。这里挂完回调
+        // 立刻让 delegate 把缓存 token 重发一次。
+        bridge.flushPendingToken()
+        Task { await refreshPermissionStatus() }
+    }
+
+    // MARK: - Permission + register
+
+    /// 登录成功后调：弹通知权限框 + APNs 注册。
+    /// guest 角色不应调（没 token 调不通 ``/devices/register``）。
+    public func requestPermissionAndRegister() async {
+        // 截图自动化下**不弹**系统权限框。
+        //
+        // 它是一个系统 alert，会盖在界面正中间，而带系统弹窗的截图不能上架
+        // App Store。2026-09-04 的那批产出里，每种语言的 01-Dashboard 与
+        // 02-Listings 都被它挡住——测试全过、尺寸全对，图却不能用。
+        //
+        // 拦在这里而不是逐个调用点：这个方法有六处调用（App 启动、登录、注册、
+        // 设置页重新注册…），漏掉任何一处，弹窗就会在某张截图上重新出现。
+        guard !CommandLine.arguments.contains("UI_TEST_SCREENSHOT_MODE") else {
+            #if DEBUG
+            print("[PushStore] 截图模式，跳过通知权限申请")
+            #endif
+            return
+        }
+        let center = UNUserNotificationCenter.current()
+        do {
+            let granted = try await center.requestAuthorization(
+                options: [.alert, .badge, .sound])
+            print("[PushStore] requestAuthorization granted=\(granted)")
+        } catch {
+            lastError = error.localizedDescription
+            print("[PushStore] requestAuthorization error: \(error)")
+            return
+        }
+        await refreshPermissionStatus()
+        guard permissionStatus == .authorized
+            || permissionStatus == .provisional
+            || permissionStatus == .ephemeral else {
+            print("[PushStore] permission not granted, skip APNs register")
+            return
+        }
+        // 触发 APNs 注册；token 异步回到桥接层的 onDeviceToken
+        bridge?.registerForRemoteNotifications()
+    }
+
+    private func refreshPermissionStatus() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        permissionStatus = Self.map(settings.authorizationStatus)
+    }
+
+    private static func map(_ s: UNAuthorizationStatus) -> PermissionStatus {
+        switch s {
+        case .notDetermined: return .notDetermined
+        case .denied:        return .denied
+        case .authorized:    return .authorized
+        case .provisional:   return .provisional
+        // `UNAuthorizationStatusEphemeral` 在 macOS SDK 里标了
+        // API_UNAVAILABLE(macos)，只能在 iOS 上匹配。App Clip 专用状态，
+        // Mac 上不存在对应概念，落到 @unknown default 即可。
+        #if os(iOS)
+        case .ephemeral:     return .ephemeral
+        #endif
+        @unknown default:    return .notDetermined
+        }
+    }
+
+    // MARK: - Device token → backend
+
+    /// PushDelegate 转发的 device token，写库 + 上报。
+    func handleDeviceToken(_ data: Data) async {
+        let hex = data.map { String(format: "%02x", $0) }.joined()
+        print("[PushStore] APNs token hex \(hex.prefix(12))… (\(hex.count) chars)")
+        lastToken = hex
+
+        // APNs token 是异步到达的。如果它在 requestPermissionAndRegister 后到
+        // 但用户已经登出（auth token 已清），此时调 /devices/register 会要么
+        // 401 要么把 token 错误地绑到没有 bearer 的请求上。守一道门：没 token
+        // 就先存 `lastToken`、等下次 setup() 再注册（PushDelegate.shared 仍持有）。
+        guard client.currentToken() != nil else {
+            print("[PushStore] no auth token, defer device registration until login")
+            return
+        }
+
+        do {
+            let resp = try await client.registerDevice(
+                token: hex,
+                env: Self.currentEnv,
+                model: Self.currentModel,
+                bundleId: Self.currentBundleId,
+                language: Self.currentLanguage,
+                osVersion: Self.currentOSVersion)
+            registeredDeviceId = resp.deviceId
+            lastError = nil
+            print("[PushStore] backend registered device_id=\(resp.deviceId) env=\(resp.env)")
+        } catch {
+            lastError = error.localizedDescription
+            print("[PushStore] backend registerDevice failed: \(error)")
+        }
+    }
+
+    // MARK: - Logout
+
+    /// 登出时删除当前会话的设备绑定；APNs token 本身保留（同设备重登可复用）。
+    public func logout() async {
+        if let id = registeredDeviceId {
+            _ = try? await client.deleteDevice(id: id)
+        }
+        registeredDeviceId = nil
+        lastToken = nil
+        lastError = nil
+    }
+
+    // MARK: - User-facing toggle
+
+    /// 设置里 "Enable Notifications" 开关用：开 → 申请权限 + 注册；关 → 仅删
+    /// 后端设备绑定。区别于 ``logout``：不清 lastToken / lastError，
+    /// 用户重新打开时可立即用现存 APNs token 再注册。
+    public func setEnabled(_ enabled: Bool) async {
+        if enabled {
+            await requestPermissionAndRegister()
+        } else {
+            if let id = registeredDeviceId {
+                _ = try? await client.deleteDevice(id: id)
+            }
+            registeredDeviceId = nil
+        }
+    }
+}

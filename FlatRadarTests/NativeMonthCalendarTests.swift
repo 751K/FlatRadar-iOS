@@ -1,5 +1,6 @@
 import XCTest
 @testable import FlatRadar
+@testable import FlatRadarCore
 
 /// ``NativeMonthCalendar`` 里两个纯函数。
 ///

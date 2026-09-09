@@ -1,6 +1,7 @@
 import CoreLocation
 import Foundation
 import MapKit
+import FlatRadarCore
 
 /// MapView 的"单个点 or 一簇"统一抽象。
 ///

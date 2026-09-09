@@ -1,4 +1,5 @@
 import SwiftUI
+import FlatRadarCore
 
 struct LoginView: View {
     @Environment(AuthStore.self) private var auth

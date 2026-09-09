@@ -1,6 +1,7 @@
 import StoreKit
 import SwiftUI
 import UIKit
+import FlatRadarCore
 
 struct SettingsView: View {
     @Environment(AuthStore.self) private var auth
@@ -33,366 +34,426 @@ struct SettingsView: View {
     // 修改密码 sheet 状态
     @State private var showChangePassword = false
 
-    var body: some View {
-        NavigationStack {
-            Form {
-                // 1. Push Filter (user only)
-                if auth.isUser, let info = auth.userInfo {
-                    Section {
-                        Button {
-                            showFilterEdit = true
-                        } label: {
-                            filterSummaryRow(info.listingFilter)
-                        }
-                        .buttonStyle(.plain)
-                    } header: {
-                        Text("Notification Filter")
-                    } footer: {
-                        Text("Only listings matching this filter trigger APNs and notification tab updates.")
-                    }
-                }
+    /// 内联的 `Binding(get:set:)` 会把整条 modifier 链的类型检查拖到超时
+    /// （Core 拆成独立模块后跨模块推断更贵，2026-09-09 迁移时就是这里先炸的）。
+    /// 提成具名属性，类型立刻确定，链上其余部分不受影响。
+    private var thanksBinding: Binding<Bool> {
+        Binding(get: { coffee.showThanks }, set: { coffee.showThanks = $0 })
+    }
 
-                // 2. Appearance
-                Section("Appearance") {
-                    Picker("Color Scheme", selection: $colorScheme) {
-                        Text("System").tag("system")
-                        Text("Light").tag("light")
-                        Text("Dark").tag("dark")
-                    }
-                }
+    /// 同上：通知开关的内联 binding。
+    private var notificationsBinding: Binding<Bool> {
+        Binding(
+            get: { push.registeredDeviceId != nil },
+            set: { enable in Task { await push.setEnabled(enable) } })
+    }
 
-                // 3. Push Notifications (authenticated, non-guest)
-                if auth.isAuthenticated, auth.role != .guest {
-                    Section {
-                        if auth.isUser {
-                            // User: 一个开关，开启/关闭通知
-                            Toggle("Enable Notifications", isOn: Binding(
-                                get: { push.registeredDeviceId != nil },
-                                set: { enable in
-                                    Task { await push.setEnabled(enable) }
-                                }
-                            ))
-                            .disabled(push.permissionStatus == .denied)
-                            if push.permissionStatus == .denied {
-                                Text("Notifications are disabled in iOS Settings. Enable them in Settings → Notifications → FlatRadar.")
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
+    /// 同上：Face ID 开关的内联 binding。开永远是 true（有凭据才显示这个开关），
+    /// 关触发确认弹窗，真正的删除在 confirmationDialog 里做。
+    private var biometricBinding: Binding<Bool> {
+        Binding(
+            get: { true },
+            set: { enable in if !enable { showRemoveBiometric = true } })
+    }
+
+    // MARK: - Form sections
+    //
+    // 原本是一个 `Form { 8 段 }` 巨型表达式。Core 拆成独立模块后跨模块
+    // 推断变贵，整块的类型检查会超时。按原有的编号注释逐段抽成属性，
+    // 顺序和内容都没动。
+
+    /// Form 第 1 段：Push Filter
+    @ViewBuilder
+    private var section1: some View {
+        // 1. Push Filter (user only)
+        if auth.isUser, let info = auth.userInfo {
+            Section {
+                Button {
+                    showFilterEdit = true
+                } label: {
+                    filterSummaryRow(info.listingFilter)
+                }
+                .buttonStyle(.plain)
+            } header: {
+                Text("Notification Filter")
+            } footer: {
+                Text("Only listings matching this filter trigger APNs and notification tab updates.")
+            }
+        }
+
+    }
+
+    /// Form 第 2 段：Appearance
+    @ViewBuilder
+    private var section2: some View {
+        // 2. Appearance
+        Section("Appearance") {
+            Picker("Color Scheme", selection: $colorScheme) {
+                Text("System").tag("system")
+                Text("Light").tag("light")
+                Text("Dark").tag("dark")
+            }
+        }
+
+    }
+
+    /// Form 第 3 段：Push Notifications
+    @ViewBuilder
+    private var section3: some View {
+        // 3. Push Notifications (authenticated, non-guest)
+        if auth.isAuthenticated, auth.role != .guest {
+            Section {
+                if auth.isUser {
+                    // User: 一个开关，开启/关闭通知
+                    Toggle("Enable Notifications", isOn: notificationsBinding)
+                    .disabled(push.permissionStatus == .denied)
+                    if push.permissionStatus == .denied {
+                        Text("Notifications are disabled in iOS Settings. Enable them in Settings → Notifications → FlatRadar.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    // Admin: 保留 permission / device id 诊断信息
+                    HStack {
+                        Text("Permission")
+                        Spacer()
+                        Text(pushPermissionLabel)
+                            .foregroundStyle(pushPermissionColor)
+                            .font(.subheadline)
+                    }
+                    HStack {
+                        Text("Device ID")
+                        Spacer()
+                        if let id = push.registeredDeviceId {
+                            Text("\(id)").foregroundStyle(.secondary)
                         } else {
-                            // Admin: 保留 permission / device id 诊断信息
-                            HStack {
-                                Text("Permission")
-                                Spacer()
-                                Text(pushPermissionLabel)
-                                    .foregroundStyle(pushPermissionColor)
-                                    .font(.subheadline)
-                            }
-                            HStack {
-                                Text("Device ID")
-                                Spacer()
-                                if let id = push.registeredDeviceId {
-                                    Text("\(id)").foregroundStyle(.secondary)
-                                } else {
-                                    Text("not registered").foregroundStyle(.secondary)
-                                }
-                            }
-                        }
-                        if let err = push.lastError {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Label("Registration failed", systemImage: "exclamationmark.triangle")
-                                    .foregroundStyle(.red)
-                                    .font(.subheadline)
-                                Text(err)
-                                    .font(.caption)
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        if auth.isAdmin {
-                            Button {
-                                sendTestPush()
-                            } label: {
-                                HStack {
-                                    if isSendingTest {
-                                        ProgressView().controlSize(.small)
-                                    }
-                                    Text(isSendingTest ? "Sending…" : "Send Test Push")
-                                }
-                            }
-                            .disabled(isSendingTest || push.registeredDeviceId == nil)
-                        }
-                        if auth.isAdmin {
-                            Button {
-                                Task { await push.requestPermissionAndRegister() }
-                            } label: {
-                                Text("Re-register Device")
-                            }
-                            .disabled(push.permissionStatus == .denied)
-                        }
-                    } header: {
-                        Text("Push Notifications")
-                    } footer: {
-                        if auth.isUser {
-                            Text("Receive push notifications for new listings matching your filter.")
-                        } else {
-                            Text("User accounts receive push notifications for listings matching their filter. Test push verifies this device session end-to-end.")
+                            Text("not registered").foregroundStyle(.secondary)
                         }
                     }
                 }
-
-                // 4. Account
-                if auth.isAuthenticated, auth.role != .guest {
-                    Section("Account") {
-                        if auth.isUser, BiometricAuthService.isAvailable {
-                            let name = BiometricAuthService.biometryName
-                            if BiometricAuthService.hasStoredCredentials {
-                                Toggle("Sign in with \(name)", isOn: Binding(
-                                    get: { true },
-                                    set: { enable in
-                                        if !enable { showRemoveBiometric = true }
-                                    }
-                                ))
-                            } else {
-                                // 这里**不能**是开关。启用要把明文密码写进 Keychain，
-                                // 而设置页手里只有 token——密码只在登录那一刻存在，
-                                // 所以得让用户重新输一次（见 EnableBiometricSheet）。
-                                //
-                                // 之前这里是个开关，set 闭包只处理 enable == false：
-                                // 往开的方向拨，什么都不写，get 再读一次仍是 false，
-                                // 开关弹回原位，没有任何提示。
-                                Button {
-                                    showEnableBiometric = true
-                                } label: {
-                                    HStack {
-                                        Text("Sign in with \(name)")
-                                            .foregroundStyle(.primary)
-                                        Spacer()
-                                        Text("Set Up")
-                                            .foregroundStyle(Color.accentColor)
-                                    }
-                                    .contentShape(.rect)
-                                }
-                                .buttonStyle(.plain)
-                            }
-                        }
-
-                        if auth.isUser {
-                            Button {
-                                Task { await exportData() }
-                            } label: {
-                                HStack {
-                                    if isExporting {
-                                        ProgressView().controlSize(.small)
-                                        Text("Exporting…").padding(.leading, 8)
-                                    } else {
-                                        Text("Export My Data")
-                                    }
-                                }
-                            }
-                            .disabled(isExporting)
-                            .sheet(isPresented: $showShareSheet, onDismiss: { exportString = nil }) {
-                                if let str = exportString {
-                                    ActivitySheet(activityItems: [str])
-                                }
-                            }
-                        }
-
-                        // 修改密码：仅 user 可用。admin 密码在 .env 不走 API。
-                        if auth.isUser {
-                            Button {
-                                showChangePassword = true
-                            } label: {
-                                Text("Change Password")
-                            }
-                        }
-
-                        Button(role: .destructive) {
-                            showLogoutConfirm = true
-                        } label: {
-                            Text("Log Out")
+                if let err = push.lastError {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Label("Registration failed", systemImage: "exclamationmark.triangle")
                             .foregroundStyle(.red)
-                        }
-                        .confirmationDialog("Log Out", isPresented: $showLogoutConfirm) {
-                            Button("Log Out", role: .destructive) {
-                                Task {
-                                    await push.logout()
-                                    await auth.logout()
-                                }
+                            .font(.subheadline)
+                        Text(err)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                if auth.isAdmin {
+                    Button {
+                        sendTestPush()
+                    } label: {
+                        HStack {
+                            if isSendingTest {
+                                ProgressView().controlSize(.small)
                             }
-                            Button("Cancel", role: .cancel) {}
-                        }
-
-                        if auth.isUser {
-                            Button(role: .destructive) {
-                                showDeleteConfirm = true
-                            } label: {
-                                Text("Delete Account")
-                                .foregroundStyle(.red)
-                            }
-                            .confirmationDialog(
-                                "Permanently delete your account?",
-                                isPresented: $showDeleteConfirm,
-                                titleVisibility: .visible
-                            ) {
-                                Button("Delete Account", role: .destructive) {
-                                    Task {
-                                        await push.logout()
-                                        await auth.deleteAccount()
-                                    }
-                                }
-                                Button("Cancel", role: .cancel) {}
-                            } message: {
-                                Text("Your account data, saved filters, alert history, and preferences will be permanently removed. This cannot be undone.")
-                            }
+                            Text(isSendingTest ? "Sending…" : "Send Test Push")
                         }
                     }
-                } else if auth.isGuest {
-                    Section("Account") {
-                        // 注册入口。访客是纯本地状态，手里没有 token，此前要变成
-                        // 真账号只能先「退出访客模式」回登录页——而那个按钮看起来
-                        // 像是要把人赶出去，没人会为了注册去点它。
+                    .disabled(isSendingTest || push.registeredDeviceId == nil)
+                }
+                if auth.isAdmin {
+                    Button {
+                        Task { await push.requestPermissionAndRegister() }
+                    } label: {
+                        Text("Re-register Device")
+                    }
+                    .disabled(push.permissionStatus == .denied)
+                }
+            } header: {
+                Text("Push Notifications")
+            } footer: {
+                if auth.isUser {
+                    Text("Receive push notifications for new listings matching your filter.")
+                } else {
+                    Text("User accounts receive push notifications for listings matching their filter. Test push verifies this device session end-to-end.")
+                }
+            }
+        }
+
+    }
+
+    /// Form 第 4 段：Account
+    @ViewBuilder
+    private var section4: some View {
+        // 4. Account
+        if auth.isAuthenticated, auth.role != .guest {
+            Section("Account") {
+                if auth.isUser, BiometricAuthService.isAvailable {
+                    let name = BiometricAuthService.biometryName
+                    if BiometricAuthService.hasStoredCredentials {
+                        Toggle("Sign in with \(name)", isOn: biometricBinding)
+                    } else {
+                        // 这里**不能**是开关。启用要把明文密码写进 Keychain，
+                        // 而设置页手里只有 token——密码只在登录那一刻存在，
+                        // 所以得让用户重新输一次（见 EnableBiometricSheet）。
+                        //
+                        // 之前这里是个开关，set 闭包只处理 enable == false：
+                        // 往开的方向拨，什么都不写，get 再读一次仍是 false，
+                        // 开关弹回原位，没有任何提示。
                         Button {
-                            showGuestRegister = true
+                            showEnableBiometric = true
                         } label: {
                             HStack {
-                                Text("Create an Account")
+                                Text("Sign in with \(name)")
                                     .foregroundStyle(.primary)
                                 Spacer()
-                                Image(systemName: "chevron.right")
-                                    .font(.caption).foregroundStyle(.tertiary)
+                                Text("Set Up")
+                                    .foregroundStyle(Color.accentColor)
                             }
                             .contentShape(.rect)
                         }
                         .buttonStyle(.plain)
-
-                        // 不再显示 "Role: Guest" —— 底下那个按钮就叫
-                        // "Sign Out of Guest Mode"，已经把身份说清楚了。
-                        Button(role: .destructive) {
-                            showLogoutConfirm = true
-                        } label: {
-                            Text("Sign Out of Guest Mode")
-                            .foregroundStyle(.red)
-                        }
-                        .confirmationDialog("Sign Out", isPresented: $showLogoutConfirm) {
-                            Button("Sign Out", role: .destructive) {
-                                Task { await auth.logout() }
-                            }
-                            Button("Cancel", role: .cancel) {}
-                        }
                     }
                 }
 
-                // Admin tools
-                if auth.isAdmin {
-                    Section {
-                        NavigationLink {
-                            AdminUsersView()
-                        } label: {
-                            Label("Manage Users", systemImage: "person.2.fill")
-                        }
-                        NavigationLink {
-                            AdminMonitorView()
-                        } label: {
-                            Label("Monitor Control", systemImage: "gauge.with.dots.needle.50percent")
-                        }
-                    } header: {
-                        Text("Admin")
-                    } footer: {
-                        Text("Toggle users on/off, delete accounts, and control the scraping process.")
-                    }
-                }
-
-                // 6. Legal — admin 是后端运维者，自己维护条款 / 隐私政策文本，
-                // 设置里再放一遍是噪音；只对普通用户 / guest 展示
-                if !auth.isAdmin {
-                    Section("Legal") {
-                        Button {
-                            showLegalTerms = true
-                        } label: {
-                            Text("Terms of Use")
-                            .foregroundStyle(.primary)
-                        }
-                        Button {
-                            showLegalPrivacy = true
-                        } label: {
-                            Text("Privacy Policy")
-                            .foregroundStyle(.primary)
-                        }
-                    }
-                }
-
-                // 7. Coffee — admin 是后端运维者，不展示打赏/反馈入口
-                // （admin 自己维护项目，给自己买咖啡 + 给自己发反馈都没意义）
-                if !auth.isAdmin {
-                    Section {
-                        if coffee.products.isEmpty && !coffee.isLoading {
-                            HStack {
-                                Text("Unable to load products")
-                                    .foregroundStyle(.secondary)
-                                Spacer()
-                                Button("Retry") {
-                                    Task { await coffee.loadProducts() }
-                                }
-                                .font(.subheadline)
-                            }
-                        } else if coffee.isLoading {
-                            HStack {
+                if auth.isUser {
+                    Button {
+                        Task { await exportData() }
+                    } label: {
+                        HStack {
+                            if isExporting {
                                 ProgressView().controlSize(.small)
-                                Text("Loading…").foregroundStyle(.secondary).padding(.leading, 8)
-                            }
-                        } else {
-                            ForEach(coffee.products, id: \.id) { product in
-                                Button {
-                                    Task { await coffee.purchase(product) }
-                                } label: {
-                                    HStack {
-                                        Text(product.displayName)
-                                            .foregroundStyle(.primary)
-                                        Spacer()
-                                        Text(product.displayPrice)
-                                            .fontWeight(.semibold)
-                                            .foregroundStyle(.blue)
-                                    }
-                                }
+                                Text("Exporting…").padding(.leading, 8)
+                            } else {
+                                Text("Export My Data")
                             }
                         }
-
-                        if let err = coffee.purchaseError {
-                            Text(err)
-                                .font(.caption)
-                                .foregroundStyle(.red)
+                    }
+                    .disabled(isExporting)
+                    .sheet(isPresented: $showShareSheet, onDismiss: { exportString = nil }) {
+                        if let str = exportString {
+                            ActivitySheet(activityItems: [str])
                         }
-                    } header: {
-                        // 用 SF Symbol 替代 ☕ emoji——iOS HIG 推荐 UI chrome 用
-                        // SF Symbol，跟系统字体度量、字重一致，且 VoiceOver 会朗读
-                        // "cup and saucer"语义而非泛指 emoji。
-                        Text("Buy me a coffee")
-                    } footer: {
-                        Text("A one-time tip to support development.\nDoes not unlock any features.")
                     }
                 }
 
-                // 8. About — admin 隐藏 Send Feedback，仅保留版本号
-                Section("About") {
+                // 修改密码：仅 user 可用。admin 密码在 .env 不走 API。
+                if auth.isUser {
+                    Button {
+                        showChangePassword = true
+                    } label: {
+                        Text("Change Password")
+                    }
+                }
+
+                Button(role: .destructive) {
+                    showLogoutConfirm = true
+                } label: {
+                    Text("Log Out")
+                    .foregroundStyle(.red)
+                }
+                .confirmationDialog("Log Out", isPresented: $showLogoutConfirm) {
+                    Button("Log Out", role: .destructive) {
+                        Task {
+                            await push.logout()
+                            await auth.logout()
+                        }
+                    }
+                    Button("Cancel", role: .cancel) {}
+                }
+
+                if auth.isUser {
+                    Button(role: .destructive) {
+                        showDeleteConfirm = true
+                    } label: {
+                        Text("Delete Account")
+                        .foregroundStyle(.red)
+                    }
+                    .confirmationDialog(
+                        "Permanently delete your account?",
+                        isPresented: $showDeleteConfirm,
+                        titleVisibility: .visible
+                    ) {
+                        Button("Delete Account", role: .destructive) {
+                            Task {
+                                await push.logout()
+                                await auth.deleteAccount()
+                            }
+                        }
+                        Button("Cancel", role: .cancel) {}
+                    } message: {
+                        Text("Your account data, saved filters, alert history, and preferences will be permanently removed. This cannot be undone.")
+                    }
+                }
+            }
+        } else if auth.isGuest {
+            Section("Account") {
+                // 注册入口。访客是纯本地状态，手里没有 token，此前要变成
+                // 真账号只能先「退出访客模式」回登录页——而那个按钮看起来
+                // 像是要把人赶出去，没人会为了注册去点它。
+                Button {
+                    showGuestRegister = true
+                } label: {
                     HStack {
-                        Text("App")
+                        Text("Create an Account")
+                            .foregroundStyle(.primary)
                         Spacer()
-                        Text(AppVersion.displayName)
-                            .foregroundStyle(.secondary)
+                        Image(systemName: "chevron.right")
+                            .font(.caption).foregroundStyle(.tertiary)
                     }
-                    if !auth.isAdmin {
-                        Button {
-                            showFeedback = true
-                        } label: {
-                            Text("Send Feedback")
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+
+                // 不再显示 "Role: Guest" —— 底下那个按钮就叫
+                // "Sign Out of Guest Mode"，已经把身份说清楚了。
+                Button(role: .destructive) {
+                    showLogoutConfirm = true
+                } label: {
+                    Text("Sign Out of Guest Mode")
+                    .foregroundStyle(.red)
+                }
+                .confirmationDialog("Sign Out", isPresented: $showLogoutConfirm) {
+                    Button("Sign Out", role: .destructive) {
+                        Task { await auth.logout() }
+                    }
+                    Button("Cancel", role: .cancel) {}
+                }
+            }
+        }
+
+        // Admin tools
+        if auth.isAdmin {
+            Section {
+                NavigationLink {
+                    AdminUsersView()
+                } label: {
+                    Label("Manage Users", systemImage: "person.2.fill")
+                }
+                NavigationLink {
+                    AdminMonitorView()
+                } label: {
+                    Label("Monitor Control", systemImage: "gauge.with.dots.needle.50percent")
+                }
+            } header: {
+                Text("Admin")
+            } footer: {
+                Text("Toggle users on/off, delete accounts, and control the scraping process.")
+            }
+        }
+
+    }
+
+    /// Form 第 5 段：Legal — admin 是后端运维者，自己维护条款 / 隐私政策文本，
+    @ViewBuilder
+    private var section5: some View {
+        // 6. Legal — admin 是后端运维者，自己维护条款 / 隐私政策文本，
+        // 设置里再放一遍是噪音；只对普通用户 / guest 展示
+        if !auth.isAdmin {
+            Section("Legal") {
+                Button {
+                    showLegalTerms = true
+                } label: {
+                    Text("Terms of Use")
+                    .foregroundStyle(.primary)
+                }
+                Button {
+                    showLegalPrivacy = true
+                } label: {
+                    Text("Privacy Policy")
+                    .foregroundStyle(.primary)
+                }
+            }
+        }
+
+    }
+
+    /// Form 第 6 段：Coffee — admin 是后端运维者，不展示打赏/反馈入口
+    @ViewBuilder
+    private var section6: some View {
+        // 7. Coffee — admin 是后端运维者，不展示打赏/反馈入口
+        // （admin 自己维护项目，给自己买咖啡 + 给自己发反馈都没意义）
+        if !auth.isAdmin {
+            Section {
+                if coffee.products.isEmpty && !coffee.isLoading {
+                    HStack {
+                        Text("Unable to load products")
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Button("Retry") {
+                            Task { await coffee.loadProducts() }
                         }
-                        // 手动入口必须是 **链接**，不能是 `requestReview()`。
-                        // Apple 明确禁止把系统评分框挂在按钮上；
-                        // `?action=write-review` 直接打开撰写评论界面。
-                        Link(destination: ReviewPromptStore.writeReviewURL) {
-                            Text("Rate FlatRadar")
+                        .font(.subheadline)
+                    }
+                } else if coffee.isLoading {
+                    HStack {
+                        ProgressView().controlSize(.small)
+                        Text("Loading…").foregroundStyle(.secondary).padding(.leading, 8)
+                    }
+                } else {
+                    ForEach(coffee.products, id: \.id) { product in
+                        Button {
+                            Task { await coffee.purchase(product) }
+                        } label: {
+                            HStack {
+                                Text(product.displayName)
+                                    .foregroundStyle(.primary)
+                                Spacer()
+                                Text(product.displayPrice)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(.blue)
+                            }
                         }
                     }
                 }
+
+                if let err = coffee.purchaseError {
+                    Text(err)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+            } header: {
+                // 用 SF Symbol 替代 ☕ emoji——iOS HIG 推荐 UI chrome 用
+                // SF Symbol，跟系统字体度量、字重一致，且 VoiceOver 会朗读
+                // "cup and saucer"语义而非泛指 emoji。
+                Text("Buy me a coffee")
+            } footer: {
+                Text("A one-time tip to support development.\nDoes not unlock any features.")
+            }
+        }
+
+    }
+
+    /// Form 第 7 段：About — admin 隐藏 Send Feedback，仅保留版本号
+    @ViewBuilder
+    private var section7: some View {
+        // 8. About — admin 隐藏 Send Feedback，仅保留版本号
+        Section("About") {
+            HStack {
+                Text("App")
+                Spacer()
+                Text(AppVersion.displayName)
+                    .foregroundStyle(.secondary)
+            }
+            if !auth.isAdmin {
+                Button {
+                    showFeedback = true
+                } label: {
+                    Text("Send Feedback")
+                }
+                // 手动入口必须是 **链接**，不能是 `requestReview()`。
+                // Apple 明确禁止把系统评分框挂在按钮上；
+                // `?action=write-review` 直接打开撰写评论界面。
+                Link(destination: ReviewPromptStore.writeReviewURL) {
+                    Text("Rate FlatRadar")
+                }
+            }
+        }
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                section1
+                section2
+                section3
+                section4
+                section5
+                section6
+                section7
             }
             .navigationTitle("Settings")
             .onAppear { editedURL = serverURL }
@@ -415,10 +476,7 @@ struct SettingsView: View {
             } message: { msg in
                 Text(msg)
             }
-            .alert("Thank you! 🙏", isPresented: Binding(
-                get: { coffee.showThanks },
-                set: { coffee.showThanks = $0 }
-            )) {
+            .alert("Thank you! 🙏", isPresented: thanksBinding) {
                 // 打赏成功是最强的正向信号，比任何启发式都准，所以这一路不看
                 // 「用过几天 / 看过几条」的门槛（见 ReviewPromptPolicy）。
                 //

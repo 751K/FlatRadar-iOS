@@ -1,4 +1,4 @@
-"""并发相关的构建设置：语言模式必须是 6.0，而且六处都得是。
+"""并发相关的构建设置：语言模式必须是 6.0，而且每一处都得是。
 
 为什么值得一条测试
 ------------------
@@ -22,8 +22,8 @@ Swift 6 模式的时候。编译照样过、包照样上架，而 MapView 里那
 1. **回退**。Xcode 的 "Update to recommended settings" 和手工改设置都可能把
    SWIFT_VERSION 写回去。写回去之后，所有并发错误重新降级成警告，构建依然是
    绿的——没有任何一处会喊。
-2. **改了一半**。SWIFT_VERSION 在 pbxproj 里出现 6 次（3 个 target ×
-   Debug/Release）。只改 Release 的话，Debug 构建仍在 Swift 5 模式下编译，
+2. **改了一半**。SWIFT_VERSION 在 pbxproj 里每个 target 的 Debug/Release
+   各出现一次。只改 Release 的话，Debug 构建仍在 Swift 5 模式下编译，
    于是「本地编得过、CI 编不过」或者反过来。
 3. **默认隔离被摘掉**。SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor 是这套代码
    的前提：模型层那几个 `nonisolated` 标注（MapClustering / MapListing /
@@ -41,8 +41,14 @@ PBXPROJ = Path(__file__).resolve().parent.parent / "FlatRadar.xcodeproj" / "proj
 _SWIFT_VERSION = re.compile(r"SWIFT_VERSION = ([^;]+);")
 _DEFAULT_ISOLATION = re.compile(r"SWIFT_DEFAULT_ACTOR_ISOLATION = ([^;]+);")
 
-# 3 个 target（FlatRadar / FlatRadarTests / FlatRadarUITests）× Debug/Release。
-EXPECTED_CONFIG_COUNT = 6
+# 4 个 target（FlatRadar / FlatRadarMac / FlatRadarTests / FlatRadarUITests）
+# × Debug/Release。
+#
+# 2026-09-09 从 6 改到 8：加了 macOS target（docs/MACOS.md Phase 1 探针）。
+# 注意 Core 的语言模式**不在这里**——它迁进本地 SwiftPM 包之后由
+# `FlatRadarCore/Package.swift` 的 `.swiftLanguageMode(.v6)` 管，
+# 见下面 test_core_package_pins_language_mode_and_isolation。
+EXPECTED_CONFIG_COUNT = 8
 
 
 def _source() -> str:
@@ -59,13 +65,28 @@ def test_every_configuration_is_in_the_swift_6_language_mode():
         "构建照样是绿的，没有任何一处会喊。")
 
 
-def test_all_six_configurations_are_covered():
+def test_all_configurations_are_covered():
     """挡「改了一半」：漏掉的那几处会安静地留在旧模式里。"""
     versions = _SWIFT_VERSION.findall(_source())
     assert len(versions) == EXPECTED_CONFIG_COUNT, (
         f"SWIFT_VERSION 出现 {len(versions)} 次，预期 {EXPECTED_CONFIG_COUNT} 次"
-        "（3 个 target × Debug/Release）。加减 target 时请一并更新这条测试，"
+        "（4 个 target × Debug/Release）。加减 target 时请一并更新这条测试，"
         "顺便确认新 target 也是 6.0。")
+
+
+def test_core_package_pins_language_mode_and_isolation():
+    """Core 迁成本地 SwiftPM 包后，隔离设置不再从 app target 继承。
+
+    `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` 是 **Xcode target** 的构建设置，
+    对包无效；包必须在 `Package.swift` 里自己声明 `.defaultIsolation(MainActor.self)`。
+    漏了的话 Core 会退回 nonisolated 默认——编译多半仍然通过，但 `@MainActor` /
+    `nonisolated` 标注的含义整体漂移，而没有任何一处会喊。
+    """
+    manifest = (PBXPROJ.parent.parent / "FlatRadarCore" / "Package.swift").read_text(encoding="utf-8")
+    assert ".defaultIsolation(MainActor.self)" in manifest, \
+        "Package.swift 没声明默认 MainActor 隔离，Core 的隔离语义会跟 app 不一致"
+    assert ".swiftLanguageMode(.v6)" in manifest, \
+        "Package.swift 没钉 Swift 6 语言模式，并发错误会降级成警告"
 
 
 def test_the_app_target_still_defaults_to_main_actor_isolation():

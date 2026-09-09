@@ -1,5 +1,6 @@
 import XCTest
 @testable import FlatRadar
+@testable import FlatRadarCore
 
 /// TabView 的 selection 永远不能指向一个隐藏的 tab。
 ///

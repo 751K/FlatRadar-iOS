@@ -1,4 +1,5 @@
 import SwiftUI
+import FlatRadarCore
 
 /// admin role 在 Settings 里点 "Manage Users" 进入。
 /// 只读列表 + toggle enabled + delete；新建 / 详细编辑仍在 Web 后台。

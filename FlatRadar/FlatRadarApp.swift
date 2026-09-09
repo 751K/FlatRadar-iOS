@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import FlatRadarCore
 
 @main
 struct FlatRadarApp: App {
@@ -59,6 +60,10 @@ struct FlatRadarApp: App {
                 .environment(reviewStore)
                 .environment(coordinator)
                 .task {
+                    // 0'. 注入平台信息。必须在任何网络调用之前——`APIClient` 上报
+                    //     设备型号 / 系统版本、`/devices/register` 的 platform 字段
+                    //     都读它，漏了会发出占位值（DEBUG 下直接断言）。
+                    PlatformEnvironment.configure(.iOS)
                     // 0. 注册 MetricKit：上一次 launch 间 OS 收集的崩溃/卡顿
                     //    会在接下来 24h 内通过 didReceive 回调送达。越早注册
                     //    越不会丢漏。清理 7 天前已被拒绝的旧报告。
@@ -67,7 +72,7 @@ struct FlatRadarApp: App {
                     // 1. 全局 401/403 监听 → 自动登出
                     authStore.observeAuthFailures()
                     // 2. 把 PushStore 与 PushDelegate 桥接好（一次性）
-                    pushStore.setup()
+                    pushStore.setup(bridge: pushDelegate)
                     // 3. 恢复 token 会话
                     await authStore.restoreSession()
                     // 4. 若已登录（非 guest），自动尝试注册 APNs

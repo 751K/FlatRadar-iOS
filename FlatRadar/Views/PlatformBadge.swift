@@ -1,4 +1,5 @@
 import SwiftUI
+import FlatRadarCore
 
 /// 平台徽标（"H2S" / "OC" / …）——**全 App 唯一一份**。
 ///

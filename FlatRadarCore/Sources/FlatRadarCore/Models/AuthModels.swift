@@ -1,0 +1,48 @@
+import Foundation
+
+// MARK: - Request
+
+public nonisolated struct LoginRequest: Encodable {
+    let username: String
+    let password: String
+    let deviceName: String
+    let ttlDays: Int
+
+    public enum CodingKeys: String, CodingKey {
+        case username, password
+        case deviceName = "device_name"
+        case ttlDays = "ttl_days"
+    }
+}
+
+// MARK: - Responses
+
+public nonisolated struct LoginResponse: Decodable, Sendable {
+    let token: String
+    let tokenID: Int
+    public let role: String
+    let userID: String?
+    let deviceName: String
+    let ttlDays: Int
+
+    public enum CodingKeys: String, CodingKey {
+        case token
+        case tokenID = "token_id"
+        case role
+        case userID = "user_id"
+        case deviceName = "device_name"
+        case ttlDays = "ttl_days"
+    }
+}
+
+nonisolated struct MeResponse: Decodable {
+    let role: String
+    let userID: String?
+    let user: UserInfo?
+
+    enum CodingKeys: String, CodingKey {
+        case role
+        case userID = "user_id"
+        case user
+    }
+}

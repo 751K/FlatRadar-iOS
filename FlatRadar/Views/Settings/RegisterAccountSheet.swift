@@ -1,4 +1,5 @@
 import SwiftUI
+import FlatRadarCore
 
 /// 访客模式下从设置页直接注册账号。
 ///

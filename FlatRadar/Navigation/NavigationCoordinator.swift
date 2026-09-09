@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import FlatRadarCore
 
 /// Tab 标识——MainTabView 用 ``selection`` 绑定。
 ///

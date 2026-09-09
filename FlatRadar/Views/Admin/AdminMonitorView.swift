@@ -1,4 +1,5 @@
 import SwiftUI
+import FlatRadarCore
 
 /// admin 远程控制监控进程：状态 / Start / Stop / Reload。
 struct AdminMonitorView: View {

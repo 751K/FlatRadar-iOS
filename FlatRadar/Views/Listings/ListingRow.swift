@@ -1,4 +1,5 @@
 import SwiftUI
+import FlatRadarCore
 
 /// 紧凑型 listing 行（V1 设计）
 ///

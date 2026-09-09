@@ -1,6 +1,7 @@
 import CoreLocation
 import MapKit
 import SwiftUI
+import FlatRadarCore
 
 /// 房源地图视图。
 ///
@@ -326,105 +327,130 @@ struct MapView: View {
         return qa != qb
     }
 
-    var body: some View {
+    /// 内联 `Binding(get:set:)` 会把整条 Map modifier 链的类型检查拖到超时
+    /// （Core 独立成模块后跨模块推断更贵）。提成具名属性，类型立刻确定。
+    /// `.alert` 重载很多，标题位置放 `String? ?? String` 会让求解器逐个试。
+    /// 先定死类型再传进去（同 ListingsView）。
+    private var refreshErrorTitle: String {
+        store.lastError?.errorDescription ?? "Refresh Failed"
+    }
+
+    private var refreshErrorMessage: String {
+        store.errorMessage ?? ""
+    }
+
+    private var sheetListingBinding: Binding<MapListing?> {
+        Binding(
+            get: { usesFloatingCard ? nil : store.selected },
+            set: { _ in store.selectedID = nil })
+    }
+
+    /// `Map(...)` 加上它那一长串 modifier，原本是 `body` 里的一整个表达式。
+    /// Core 拆成独立模块后跨模块推断变贵，整条链的类型检查会超时。
+    /// 整体抽成属性单独求解；层级、顺序和渲染结果都不变。
+    private var mapLayer: some View {
+        // `$store.selectedID` 需要 @Bindable；原先它在 `body` 里声明，
+        // 拆出来之后这一份也要有。
         @Bindable var store = store
+        return Map(position: $camera, selection: $store.selectedID) {
+            // 放在最前面：MapContent 按声明顺序叠，圈要压在图钉下面。
+            walkingRings
+            ForEach(clusters) { cluster in
+                if cluster.isSingle, let l = cluster.single {
+                    Annotation(l.name, coordinate: l.displayCoordinate) {
+                        pinView(for: l)
+                            .transition(Self.pinTransition)
+                    }
+                    .tag(l.id)
+                } else {
+                    Annotation("\(cluster.count) listings",
+                               coordinate: cluster.coordinate) {
+                        clusterBubble(for: cluster)
+                            .transition(Self.bubbleTransition)
+                    }
+                    .annotationTitles(.hidden)
+                }
+            }
+        }
+        .onChange(of: store.selectedID) { _, id in
+            // 只在"选中了某一套"时更新锚点；取消选中（id == nil）不清，
+            // 圈留在图上。
+            if id != nil, let l: MapListing = store.selected { ringsListing = l }
+        }
+        .onMapCameraChange(frequency: .continuous) { context in
+            // 关键：**只在跨 log2 桶时更新 currentRegion**。
+            //
+            // 为什么不更新 same-bucket：
+            // 1. cluster 计算只依赖 cellSize（同桶内不变）和房源绝对坐标
+            //    （永远不变）—— 中心点移动不影响 grid 分桶
+            // 2. 拖动时每帧更新 currentRegion → body 重算 → ForEach
+            //    迭代触发 SwiftUI 内部 diff，即便 cluster id 没变也可能
+            //    让 .transition 误触发动画 → 拖动时无关 pin 闪烁
+            // 3. 同桶时根本不更新就根本不重算，零开销零闪烁
+            if Self.bucketsDiffer(currentRegion, context.region) {
+                withAnimation(.easeInOut(duration: 0.22)) {
+                    currentRegion = context.region
+                }
+                recomputeClusters()
+            }
+        }
+        .onAppear { recomputeClusters() }
+        .onChange(of: store.listings.count) { _, _ in
+            recomputeClusters()
+        }
+        // 筛选是本地的，改一下就要立刻重画。visibleCount 变化能覆盖
+        // 状态 chip / 城市 / 平台 / 租金 / 面积任意一项的改动。
+        .onChange(of: store.visibleCount) { _, _ in
+            recomputeClusters()
+        }
+        .onChange(of: store.focusExtra?.id) { _, _ in
+            recomputeClusters()
+        }
+        .onChange(of: clusters.count) { _, _ in
+            focusIfNeeded()
+        }
+        // .realistic 会把地形高程画出来——深色模式下整张图变成一片
+        // 诡异的蓝绿，房源图钉全被淹没。找房子跟地形没有关系。
+        .mapStyle(.standard(elevation: .flat,
+                            pointsOfInterest: visiblePointsOfInterest))
+        .mapControls {
+            MapCompass()
+            MapScaleView()
+        }
+        .ignoresSafeArea(edges: .bottom)
+        // 左上角：避开右上的 MapUserLocationButton/Compass/ScaleView
 
-        // 不再自带 NavigationStack；外层 BrowseView 提供。
+        // 只在放不下浮层时走 sheet（iPhone、以及 iPad 竖屏）。
+        // 够宽时改成右下角的浮层——见 floatingCard。
+        .sheet(item: sheetListingBinding) { l in
+            // 卡片高度随房源变：标题可能换行，同址提示可能占两行。
+            // 写死 detent 必然一边留白、一边裁掉——0.4 时下半截是空的，
+            // 收到 0.34 又把标题切了。套一层 ScrollView：装得下就不滚
+            // （scrollBounceBehavior(.basedOnSize)），装不下也丢不了内容。
+            ScrollView {
+                listingCard(l)
+                    // iOS 18 的 onGeometryChange：把卡片的**实际**高度报
+                    // 上来，档位直接贴着内容，不用再靠调分数去猜。
+                    .onGeometryChange(for: CGFloat.self) { proxy in
+                        proxy.size.height
+                    } action: { cardHeight = $0 }
+            }
+            .scrollBounceBehavior(.basedOnSize)
+                .presentationDetents([cardDetent, .large])
+                // 小尺寸下地图仍可拖动：这是张地图，卡片弹出来不该把
+                // 它锁死。上界必须跟档位是同一个值，写死的分数对不上。
+                .presentationBackgroundInteraction(
+                    .enabled(upThrough: cardDetent))
+                .presentationDragIndicator(.visible)
+        }
+    }
+
+    /// `body` = ZStack 内容 + 十几个 overlay/sheet/task modifier，整块一起
+    /// 求解会超时（同 mapLayer 的原因）。内容和 modifier 链切开各自求解。
+    @ViewBuilder
+    private var mapStack: some View {
         ZStack(alignment: .top) {
-                Map(position: $camera, selection: $store.selectedID) {
-                    // 放在最前面：MapContent 按声明顺序叠，圈要压在图钉下面。
-                    walkingRings
-                    ForEach(clusters) { cluster in
-                        if cluster.isSingle, let l = cluster.single {
-                            Annotation(l.name, coordinate: l.displayCoordinate) {
-                                pinView(for: l)
-                                    .transition(Self.pinTransition)
-                            }
-                            .tag(l.id)
-                        } else {
-                            Annotation("\(cluster.count) listings",
-                                       coordinate: cluster.coordinate) {
-                                clusterBubble(for: cluster)
-                                    .transition(Self.bubbleTransition)
-                            }
-                            .annotationTitles(.hidden)
-                        }
-                    }
-                }
-                .onChange(of: store.selectedID) { _, id in
-                    // 只在"选中了某一套"时更新锚点；取消选中（id == nil）不清，
-                    // 圈留在图上。
-                    if id != nil, let l = store.selected { ringsListing = l }
-                }
-                .onMapCameraChange(frequency: .continuous) { context in
-                    // 关键：**只在跨 log2 桶时更新 currentRegion**。
-                    //
-                    // 为什么不更新 same-bucket：
-                    // 1. cluster 计算只依赖 cellSize（同桶内不变）和房源绝对坐标
-                    //    （永远不变）—— 中心点移动不影响 grid 分桶
-                    // 2. 拖动时每帧更新 currentRegion → body 重算 → ForEach
-                    //    迭代触发 SwiftUI 内部 diff，即便 cluster id 没变也可能
-                    //    让 .transition 误触发动画 → 拖动时无关 pin 闪烁
-                    // 3. 同桶时根本不更新就根本不重算，零开销零闪烁
-                    if Self.bucketsDiffer(currentRegion, context.region) {
-                        withAnimation(.easeInOut(duration: 0.22)) {
-                            currentRegion = context.region
-                        }
-                        recomputeClusters()
-                    }
-                }
-                .onAppear { recomputeClusters() }
-                .onChange(of: store.listings.count) { _, _ in
-                    recomputeClusters()
-                }
-                // 筛选是本地的，改一下就要立刻重画。visibleCount 变化能覆盖
-                // 状态 chip / 城市 / 平台 / 租金 / 面积任意一项的改动。
-                .onChange(of: store.visibleCount) { _, _ in
-                    recomputeClusters()
-                }
-                .onChange(of: store.focusExtra?.id) { _, _ in
-                    recomputeClusters()
-                }
-                .onChange(of: clusters.count) { _, _ in
-                    focusIfNeeded()
-                }
-                // .realistic 会把地形高程画出来——深色模式下整张图变成一片
-                // 诡异的蓝绿，房源图钉全被淹没。找房子跟地形没有关系。
-                .mapStyle(.standard(elevation: .flat,
-                                    pointsOfInterest: visiblePointsOfInterest))
-                .mapControls {
-                    MapCompass()
-                    MapScaleView()
-                }
-                .ignoresSafeArea(edges: .bottom)
-                // 左上角：避开右上的 MapUserLocationButton/Compass/ScaleView
-
-                // 只在放不下浮层时走 sheet（iPhone、以及 iPad 竖屏）。
-                // 够宽时改成右下角的浮层——见 floatingCard。
-                .sheet(item: Binding(
-                    get: { usesFloatingCard ? nil : store.selected },
-                    set: { _ in store.selectedID = nil }
-                )) { l in
-                    // 卡片高度随房源变：标题可能换行，同址提示可能占两行。
-                    // 写死 detent 必然一边留白、一边裁掉——0.4 时下半截是空的，
-                    // 收到 0.34 又把标题切了。套一层 ScrollView：装得下就不滚
-                    // （scrollBounceBehavior(.basedOnSize)），装不下也丢不了内容。
-                    ScrollView {
-                        listingCard(l)
-                            // iOS 18 的 onGeometryChange：把卡片的**实际**高度报
-                            // 上来，档位直接贴着内容，不用再靠调分数去猜。
-                            .onGeometryChange(for: CGFloat.self) { proxy in
-                                proxy.size.height
-                            } action: { cardHeight = $0 }
-                    }
-                    .scrollBounceBehavior(.basedOnSize)
-                        .presentationDetents([cardDetent, .large])
-                        // 小尺寸下地图仍可拖动：这是张地图，卡片弹出来不该把
-                        // 它锁死。上界必须跟档位是同一个值，写死的分数对不上。
-                        .presentationBackgroundInteraction(
-                            .enabled(upThrough: cardDetent))
-                        .presentationDragIndicator(.visible)
-                }
+                mapLayer
 
                 if store.isLoading && store.listings.isEmpty {
                     ProgressView("Loading map…")
@@ -444,56 +470,76 @@ struct MapView: View {
                     }
                 }
             }
-        .navigationBarTitleDisplayMode(.inline)
-        // 控件全部沉到底部。浮在地图中上部时它们既盖住内容、又离拇指最远——
-        // 单手拿 iPhone 时够不着。用 safeAreaInset 而不是 overlay：它会自动落在
-        // tab bar 之上，不必去猜 tab bar 有多高，换机型/换系统版本也不会错位。
-        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { mapWidth = $0 }
-        .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
-        .overlay(alignment: .top) { topNotice }
-        .overlay(alignment: .bottomTrailing) { floatingCard }
-        // 必须**居中**。放进上面那个 ZStack(alignment: .top) 的话会跟 topBar
-        // 叠在一起——真机上第一版就是这样：计数、三个圆钮、chip 条全部压在
-        // 说明卡上面，一个字都读不清。
-        .overlay(alignment: .center) {
-            if !store.listings.isEmpty && store.visibleCount == 0 {
-                emptyFilterNotice
-                    .padding(.horizontal, 24)
-                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
+    }
+
+    /// body 的 modifier 链有 15 段，一起求解会超时。按「视觉层 / 生命周期层」
+    /// 切成两半：这半是布局与叠层，另一半（`body` 里）是 task / onChange / alert。
+    /// 顺序不变，所以渲染和事件时序都跟切之前一致。
+    private var mapChrome: some View {
+        // 不再自带 NavigationStack；外层 BrowseView 提供。
+        // （`@Bindable var store` 留在 `mapLayer` 里——只有那里用 `$store`。）
+        mapStack
+            .navigationBarTitleDisplayMode(.inline)
+            // 控件全部沉到底部。浮在地图中上部时它们既盖住内容、又离拇指最远——
+            // 单手拿 iPhone 时够不着。用 safeAreaInset 而不是 overlay：它会自动落在
+            // tab bar 之上，不必去猜 tab bar 有多高，换机型/换系统版本也不会错位。
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { mapWidth = $0 }
+            .safeAreaInset(edge: .bottom, spacing: 0) { bottomBar }
+            .overlay(alignment: .top) { topNotice }
+            .overlay(alignment: .bottomTrailing) { floatingCard }
+            // 必须**居中**。放进上面那个 ZStack(alignment: .top) 的话会跟 topBar
+            // 叠在一起——真机上第一版就是这样：计数、三个圆钮、chip 条全部压在
+            // 说明卡上面，一个字都读不清。
+            .overlay(alignment: .center) {
+                if !store.listings.isEmpty && store.visibleCount == 0 {
+                    emptyFilterNotice
+                        .padding(.horizontal, 24)
+                        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+                }
             }
-        }
-        .animation(.easeInOut(duration: 0.2), value: store.visibleCount)
-        .sheet(isPresented: $showFilters) { MapFilterSheet() }
-        .task {
-            if store.listings.isEmpty {
-                await store.fetch()
+            .animation(.easeInOut(duration: 0.2), value: store.visibleCount)
+            .sheet(isPresented: $showFilters) { MapFilterSheet() }
+    }
+
+    /// 再切一刀：`.alert(_:isPresented:actions:message:)` 的重载最多，
+    /// 挂在一条已经很长的链尾上仍然会超时。让两个 alert 各自挂在
+    /// 这个已定型的属性上，顺序和行为不变。
+    private var mapLifecycle: some View {
+            mapChrome
+            .task {
+                if store.listings.isEmpty {
+                    await store.fetch()
+                }
+                await consumePendingFocus()
             }
-            await consumePendingFocus()
-        }
-        // 地图已经挂载时再点「在地图上查看」，.task 不会重跑，靠这个接住。
-        .onChange(of: coord.pendingMapFocusID) { _, _ in
-            Task { await consumePendingFocus() }
-        }
-        .onChange(of: store.focusID) { _, id in
-            focusConsumed = (id == nil)
-            focusIfNeeded()
-        }
-        .onDisappear {
-            // 离开地图就把深链状态清掉：留着的话下次进来会莫名其妙又飞过去，
-            // 而那次进入跟那条链接已经没有关系了。
-            store.clearFocus()
-            focusConsumed = false
-        }
-        .onChange(of: store.errorMessage) { _, new in
-            showRefreshError = new != nil && !store.listings.isEmpty
-        }
+            // 地图已经挂载时再点「在地图上查看」，.task 不会重跑，靠这个接住。
+            .onChange(of: coord.pendingMapFocusID) { _, _ in
+                Task { await consumePendingFocus() }
+            }
+            .onChange(of: store.focusID) { _, id in
+                focusConsumed = (id == nil)
+                focusIfNeeded()
+            }
+            .onDisappear {
+                // 离开地图就把深链状态清掉：留着的话下次进来会莫名其妙又飞过去，
+                // 而那次进入跟那条链接已经没有关系了。
+                store.clearFocus()
+                focusConsumed = false
+            }
+            .onChange(of: store.errorMessage) { _, new in
+                showRefreshError = new != nil && !store.listings.isEmpty
+            }
+    }
+
+    var body: some View {
+        mapLifecycle
         .alert(
-            store.lastError?.errorDescription ?? "Refresh Failed",
+            refreshErrorTitle,
             isPresented: $showRefreshError
         ) {
             Button("OK") {}
         } message: {
-            Text(store.errorMessage ?? "")
+            Text(refreshErrorMessage)
         }
         .alert("Location Unavailable", isPresented: $showLocationError) {
             Button("OK") {}

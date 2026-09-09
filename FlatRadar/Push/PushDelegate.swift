@@ -1,6 +1,7 @@
 import Foundation
 import UIKit
 import UserNotifications
+import FlatRadarCore
 
 /// UIApplicationDelegate + UNUserNotificationCenterDelegate for APNs.
 ///
@@ -23,7 +24,7 @@ import UserNotifications
 /// We post a `Notification.Name.flatRadarOpenListing` so any view in the
 /// SwiftUI tree can subscribe and navigate without coupling to this delegate.
 @MainActor
-final class PushDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+final class PushDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate, PushPlatformBridge {
 
     /// **关键**：iOS 通过 ``@UIApplicationDelegateAdaptor(PushDelegate.self)``
     /// 自己 ``init()`` 一份实例并持有；如果再 ``static let shared = PushDelegate()``
@@ -47,6 +48,11 @@ final class PushDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCen
     /// 就调 ``didRegister``。这里保留最新一次的 token，``PushStore.setup()``
     /// 完成回调挂载后会主动 ``flushPendingToken()`` 把缓存的 token 投递出去。
     private(set) var latestDeviceToken: Data?
+
+    /// ``PushPlatformBridge``：Core 不认识 `UIApplication`，由这里代劳。
+    func registerForRemoteNotifications() {
+        UIApplication.shared.registerForRemoteNotifications()
+    }
 
     func flushPendingToken() {
         guard let data = latestDeviceToken else { return }

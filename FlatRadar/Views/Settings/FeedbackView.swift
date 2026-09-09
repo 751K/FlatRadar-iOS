@@ -1,4 +1,5 @@
 import SwiftUI
+import FlatRadarCore
 
 // MARK: - In-app feedback submission
 

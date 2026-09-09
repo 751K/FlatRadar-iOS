@@ -36,7 +36,14 @@ ROOT = Path(__file__).resolve().parent.parent
 #: 英文**。那个位置不经过任何目录，所以之前的扫描一次也没看见它。
 #:
 #: 用 glob 而不是写死两个文件名：以后再加目录（比如 widget 的）会自动纳入。
-CATALOGS = sorted((ROOT / "FlatRadar").rglob("*.xcstrings"))
+#:
+#: 2026-09-09 起包含 ``FlatRadarCore/``：Core 迁成本地 SwiftPM 包后自带一本
+#: 目录（通过 ``Bundle.module`` 读），只扫 ``FlatRadar/`` 的话包里的文案
+#: 缺译文不会被任何检查看见——正好是这个测试当初要堵的那种无声失败。
+CATALOGS = sorted(
+    q for root in ("FlatRadar", "FlatRadarCore")
+    for q in (ROOT / root).rglob("*.xcstrings")
+)
 
 #: 这些 key 故意不翻译，不是漏了。
 #:

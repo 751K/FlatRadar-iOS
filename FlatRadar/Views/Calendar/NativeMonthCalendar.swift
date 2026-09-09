@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import FlatRadarCore
 
 /// 把 UIKit 的 ``UICalendarView`` 包进 SwiftUI。
 ///

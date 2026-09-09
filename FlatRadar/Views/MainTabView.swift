@@ -1,4 +1,5 @@
 import SwiftUI
+import FlatRadarCore
 
 /// 给 NotificationsView 的 tab item 单独挂红点，**故意**抽成 ViewModifier：
 /// 让对 `NotificationsStore.unreadCount` 的观察只发生在这个小 modifier 的 body 里。

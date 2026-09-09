@@ -1,4 +1,5 @@
 import SwiftUI
+import FlatRadarCore
 
 /// V3 · 与 Dashboard / Browse 视觉语言对齐的 Alerts 屏
 ///
@@ -42,6 +43,16 @@ struct NotificationsView: View {
     @State private var allYesterday: [NotificationItem] = []
     @State private var allEarlier: [NotificationItem] = []
 
+    /// `.alert` 重载多，标题位置放 `String? ?? String` 会拖垮整条链的类型检查
+    /// （同 ListingsView / MapView）。先定死类型再传进去。
+    private var refreshErrorTitle: String {
+        store.lastError?.errorDescription ?? "Refresh Failed"
+    }
+
+    private var refreshErrorMessage: String {
+        store.errorMessage ?? ""
+    }
+
     var body: some View {
         NavigationStack(path: $notificationsPath) {
             Group {
@@ -82,12 +93,12 @@ struct NotificationsView: View {
                 applyTypeFilter()
             }
             .alert(
-                store.lastError?.errorDescription ?? "Refresh Failed",
+                refreshErrorTitle,
                 isPresented: $showRefreshError
             ) {
                 Button("OK") {}
             } message: {
-                Text(store.errorMessage ?? "")
+                Text(refreshErrorMessage)
             }
             .sensoryFeedback(.success, trigger: markAllReadTick)
         }
@@ -98,10 +109,10 @@ struct NotificationsView: View {
     @ViewBuilder
     private func errorState(_ err: String) -> some View {
         let apiErr = store.lastError
+        let title: String = apiErr?.errorDescription ?? "Unable to Load"
+        let icon: String = apiErr?.systemImage ?? "wifi.slash"
         ContentUnavailableView {
-            Label(
-                apiErr?.errorDescription ?? "Unable to Load",
-                systemImage: apiErr?.systemImage ?? "wifi.slash")
+            Label(title, systemImage: icon)
         } description: {
             Text(err)
         } actions: {

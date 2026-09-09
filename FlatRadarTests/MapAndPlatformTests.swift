@@ -1,6 +1,7 @@
 import SwiftUI   // Color —— 断言平台调色板时要用
 import XCTest
 @testable import FlatRadar
+@testable import FlatRadarCore
 
 /// 2026-09-02 那一轮地图改造要守住的东西。
 ///

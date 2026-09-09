@@ -1,4 +1,5 @@
 import SwiftUI
+import FlatRadarCore
 
 /// V3 · 与 Dashboard / Browse 视觉语言对齐的 Alerts 行
 ///

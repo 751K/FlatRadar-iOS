@@ -1,4 +1,5 @@
 import SwiftUI
+import FlatRadarCore
 
 /// Listings 视图 —— BrowseView 内嵌的"列表"模式。
 ///
@@ -28,35 +29,43 @@ struct ListingsView: View {
     @State private var cachedEarlier: [Listing] = []
     @State private var sortVersion = 0
 
-    var body: some View {
-        Group {
-            if store.isLoading && store.listings.isEmpty {
-                ProgressView().padding(.top, 60)
-            } else if let err = store.errorMessage, store.listings.isEmpty {
-                let apiErr = store.lastError
-                ContentUnavailableView {
-                    Label(
-                        apiErr?.errorDescription ?? "Unable to Load",
-                        systemImage: apiErr?.systemImage ?? "wifi.slash")
-                } description: {
-                    Text(err)
-                } actions: {
-                    Button("Try Again") {
-                        Task { await store.refresh() }
+    /// `body` 原本是「Group { 三分支 } + 9 个 modifier」一整个表达式。
+    /// Core 拆成独立模块后跨模块推断变贵，整条链的类型检查会超时。
+    /// 把内容和 modifier 链切成两段，各自独立求解；渲染结果不变。
+    @ViewBuilder
+    private var content: some View {
+            Group {
+                if store.isLoading && store.listings.isEmpty {
+                    ProgressView().padding(.top, 60)
+                } else if let err = store.errorMessage, store.listings.isEmpty {
+                    let apiErr = store.lastError
+                    let title: String = apiErr?.errorDescription ?? "Unable to Load"
+                    let icon: String = apiErr?.systemImage ?? "wifi.slash"
+                    ContentUnavailableView {
+                        Label(title, systemImage: icon)
+                    } description: {
+                        Text(err)
+                    } actions: {
+                        Button("Try Again") {
+                            Task { await store.refresh() }
+                        }
                     }
+                } else if store.listings.isEmpty {
+                    ContentUnavailableView(
+                        "No Listings",
+                        systemImage: "house",
+                        description: Text(store.isFiltered
+                            ? "No listings match your filter."
+                            : "No listings found."))
+                    .refreshable { await store.refresh() }
+                } else {
+                    listContent
                 }
-            } else if store.listings.isEmpty {
-                ContentUnavailableView(
-                    "No Listings",
-                    systemImage: "house",
-                    description: Text(store.isFiltered
-                        ? "No listings match your filter."
-                        : "No listings found."))
-                .refreshable { await store.refresh() }
-            } else {
-                listContent
             }
-        }
+    }
+
+    var body: some View {
+        content
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button {
@@ -129,16 +138,26 @@ struct ListingsView: View {
         .onChange(of: store.listings) { _, _ in recomputeCachedListings() }
         .onChange(of: sort) { _, _ in recomputeCachedListings() }
         .alert(
-            store.lastError?.errorDescription ?? "Refresh Failed",
+            refreshErrorTitle,
             isPresented: $showRefreshError
         ) {
             Button("OK") {}
         } message: {
-            Text(store.errorMessage ?? "")
+            Text(refreshErrorMessage)
         }
         // Filter Apply 轻触反馈 —— 用 .selection 比 .success 更合适：
         // 应用过滤器是 UI 选择确认动作，不是成功完成型操作。
         .sensoryFeedback(.selection, trigger: filterApplyTick)
+    }
+
+    /// `.alert` 有一大堆重载，标题位置放 `String?  ?? String` 会让求解器把
+    /// 每个重载都试一遍；Core 拆成独立模块后这条链就此超时。先定死类型再传进去。
+    private var refreshErrorTitle: String {
+        store.lastError?.errorDescription ?? "Refresh Failed"
+    }
+
+    private var refreshErrorMessage: String {
+        store.errorMessage ?? ""
     }
 
     private var listContent: some View {
