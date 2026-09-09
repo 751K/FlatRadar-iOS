@@ -35,6 +35,17 @@ public final class AuthStore {
     /// 层级会来不及弹出。提到这里让 ContentView 处理。
     public var pendingBiometricCredential: (username: String, password: String, role: String)?
 
+    /// 上一次登录 / 注册后，bearer token 有没有**真的**落进钥匙串。
+    ///
+    /// iOS 上写失败会静默回退到 `UserDefaults`——bearer token 明文躺在沙盒里，
+    /// 而用户以为它在钥匙串。这个既有行为这一版不动（线上有真实用户，改它要
+    /// 单独验证），但 **Mac 路径不继承**：写失败就是 `false`，且不写回退，
+    /// 由宿主 app 决定怎么告诉用户。见 docs/MACOS.md 风险 2。
+    ///
+    /// 名字说的就是字面意思：iOS 回退成功时会话确实持久化了，但**不在钥匙串**，
+    /// 所以这里同样是 `false`。目前只有 Mac 端读它。
+    public private(set) var sessionSavedToKeychain = true
+
     private let client = APIClient.shared
     private var server: String {
         UserDefaults.standard.string(forKey: "server_url") ?? APIClient.defaultServerHost
@@ -100,14 +111,7 @@ public final class AuthStore {
                 username: username, password: password,
                 deviceName: device, ttlDays: ttlDays)
             client.setToken(resp.token)
-            do {
-                try KeychainManager.save(token: resp.token, server: server)
-            } catch {
-                #if DEBUG
-                print("[AuthStore] Keychain save failed, falling back to UserDefaults")
-                #endif
-                UserDefaults.standard.set(resp.token, forKey: "auth_token")
-            }
+            persist(token: resp.token)
 
             let me = try await client.getMe()
             applyMe(me)
@@ -131,14 +135,7 @@ public final class AuthStore {
                 username: name, password: password,
                 deviceName: device, ttlDays: ttlDays)
             client.setToken(resp.token)
-            do {
-                try KeychainManager.save(token: resp.token, server: server)
-            } catch {
-                #if DEBUG
-                print("[AuthStore] Keychain save failed, falling back to UserDefaults")
-                #endif
-                UserDefaults.standard.set(resp.token, forKey: "auth_token")
-            }
+            persist(token: resp.token)
             let me = try await client.getMe()
             applyMe(me)
         } catch {
@@ -184,6 +181,34 @@ public final class AuthStore {
         userInfo = info
     }
 
+    /// 保存 bearer token，并记录它到底进没进钥匙串。
+    ///
+    /// 平台分歧在这一处收口，不散进 login / register 两个调用点——它们原先各写
+    /// 了一遍同样的 do/catch，改一处漏一处是迟早的事。
+    private func persist(token: String) {
+        do {
+            try KeychainManager.save(token: token, server: server)
+            sessionSavedToKeychain = true
+            // 钥匙串成功之后清掉回退副本。
+            //
+            // 在 2026-09-09 修好 `KeychainManager` 的非法属性之前，iOS 上**每一次**
+            // 保存都失败、每一次都落到这个回退，所以现有用户的沙盒里都有一份明文
+            // bearer token。不清的话它会一直留着——`restoreSession` 优先读钥匙串，
+            // 那份副本从此永远用不上，却永远在。
+            UserDefaults.standard.removeObject(forKey: "auth_token")
+        } catch {
+            sessionSavedToKeychain = false
+            #if DEBUG
+            // 不打 token，只打失败这件事。凭据不进日志。
+            print("[AuthStore] Keychain save failed: \(error.localizedDescription)")
+            #endif
+            #if os(iOS)
+            // iOS 既有行为，原样保留：宁可明文存也不让用户每次重开都重登。
+            UserDefaults.standard.set(token, forKey: "auth_token")
+            #endif
+        }
+    }
+
     // MARK: - Logout
 
     public func logout() async {
@@ -192,6 +217,7 @@ public final class AuthStore {
         KeychainManager.delete(server: server)
         UserDefaults.standard.removeObject(forKey: "auth_token")
         client.setToken(nil)
+        sessionSavedToKeychain = true
         role = .guest
         isAuthenticated = false
         userInfo = nil

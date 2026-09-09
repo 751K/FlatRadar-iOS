@@ -162,12 +162,46 @@ Stores 分别拆包。iOS 与 Mac 都只依赖包产品，不再直接编译这�
 - [x] 新建 macOS app target，最低版本定 **macOS 26**（新 app 没有存量用户，定低只是给自己上枷锁）
 - [x] 依赖 Phase 0 的 `FlatRadarCore` 包产品；另建 Mac 应用入口与探针视图，不加入 iOS 视图或重复编译包源码
 - [x] 编一次，把所有编译错误抄下来——**这就是边界审计的结果**（结果见下方「探针实测」）
-- [ ] 接入 Phase 0 的适配接口；Mac 首次登录前验证设备名为中性值，推送实现不执行注册
-- [ ] 确定 Bundle ID、签名和独立 entitlements；默认沿用同一 App Store 记录及相同 Bundle ID 的方向，
-  记录本地与现有 Designed for iPad 版本的共存 / 替换策略，实测容器、会话和 URL scheme 行为
-- [ ] 验证包资源进入 Mac app；配置 Mac 独有资源，并确定下文应用级 / 窗口级状态归属
-- [ ] 做最小登录窗口：输入凭据 → 登录 → 拉一页房源，窗口显示结果数量和错误状态
-- [ ] 建立 Mac scheme 与测试目标；验证两端 Debug / Release 构建及现有 iOS 测试
+- [x] 接入 Phase 0 的适配接口 —— `FlatRadarMac/PlatformInfo+macOS.swift`，`deviceName` 是常量
+      `"Mac"`（不是主机名，见风险 4）。推送整块没接：不申请权限、不注册 token、不调后端。
+      注入放在 `FlatRadarMacApp.init()` 而不是视图的 `.task`，保证早于任何网络调用。
+- [x] 签名与独立 entitlements —— Apple Development 签名 + App Sandbox + hardened runtime +
+      `network.client`。Bundle ID 沿用 `com.j.kong.FlatRadar`；本机没装 Designed for iPad 版，
+      暂无共存冲突可测（容器 / URL scheme 的实测留到有第二个安装源时再做）。
+- [x] 验证包资源进入 Mac app —— `FlatRadarMac.app/Contents/Resources/FlatRadarCore_FlatRadarCore.bundle`
+      里有 `Assets.car` 和五种语言的 `.lproj`。
+- [x] 做最小登录窗口 —— 见 `FlatRadarMac/FlatRadarMacApp.swift`：凭据输入 → 登录 → 拉一页房源 →
+      显示 `已加载 / 总数`，外加错误框和钥匙串状态面板。
+- [ ] 建立 Mac 测试目标 —— **未做**，等设备注册解决后一起做（Mac 单元测试要在签过名的宿主里跑，
+      不然测不出 entitlement 相关的问题，正是下面那个坑）。Mac scheme 已由 Xcode 自动生成。
+
+**钥匙串：两个独立的问题，一个已修、一个卡住**
+
+`--keychain-selftest` 是给这件事做的无头自检（跑的是签过名的真二进制，不是 `swift test`
+的可执行文件——后者既不是这个 Bundle ID 也没有这套 entitlements，在那儿跑通证明不了什么）。
+
+1. **`-25303 errSecNoSuchAttr`（已修，而且是 iOS 线上的洞）**
+   `KeychainManager` 的三条查询都带 `kSecAttrService`，而那是 generic password 的属性，
+   用在 `kSecClassInternetPassword` 上整条查询会被拒。后果不是报错是**静默**：`AuthStore`
+   回退把 bearer token 明文写进 `UserDefaults`，登录照常成功、界面毫无异样。写失败的同时
+   读也失败，所以连「上次存的还在不在」都查不出来——这个洞没有任何自曝途径。
+   在 iPad 上跑 `KeychainTests` 撞出来的，去掉该属性后增 / 查 / 删全过。
+
+2. **`-34018 errSecMissingEntitlement`（卡住）**
+   macOS 的 data protection 钥匙串要求签名带 `application-identifier`，而只有声明
+   `keychain-access-groups` 才会去签发带它的描述文件；签发 Mac App Development 描述文件
+   又要求**这台 Mac 已在开发者账号里注册**。那是账号层面的改动，没有擅自做。
+
+   实测对照（都是签名 + 沙盒的真二进制）：
+
+   | 配置 | 增 / 查 / 删 |
+   |---|---|
+   | data protection 钥匙串 + 无描述文件 | ❌ -34018 |
+   | 旧式文件式钥匙串 + 无描述文件 | ✅ 全过 |
+
+   所以 -34018 是 data protection 特有的，不是 App Sandbox 本身的限制。退回旧式钥匙串能
+   立刻跑通，但违反 TN3137，而且**日后再切回 data protection 时旧条目全部查不到**，
+   表现为所有人静默登出。所以不退，等注册。
 
 **完成判据**：签名且开启 Sandbox 的 macOS app 能从 `flatradar.app` 登录并显示房源数量；
 Keychain 写入、读取、删除均返回成功，确认没有触发 `UserDefaults` token 回退；重新启动能恢复
@@ -320,7 +354,14 @@ Core 对 `PushDelegate.shared` 的反向引用换成了 `PushPlatformBridge` 协
 ### 2. Keychain
 
 见 Phase 1。核心要求是统一使用 data protection 钥匙串、验证最终签名的访问权限，并直接验证
-增 / 查 / 删及会话恢复。`BiometricAuthService` 也在审计范围内；开启 Touch ID 前覆盖无生物识别
+增 / 查 / 删及会话恢复。
+
+**2026-09-09 进展**：`kSecUseDataProtectionKeychain` 已加进 `KeychainManager` 的三条查询
+（`#if os(macOS)`——iOS 上这个键被忽略，但线上有真实用户而本地没有凭据能实测登录路径，
+所以把影响面钉成零）。顺带修掉了一个让 iOS 钥匙串一直失败的非法属性，详见 Phase 1。
+`AuthStore` 的 `UserDefaults` 回退现在只在 iOS 编译，Mac 路径写失败就是
+`sessionSavedToKeychain == false`，由宿主如实显示；钥匙串写成功后还会清掉历史遗留的
+明文副本。剩下的 -34018 卡在设备注册。`BiometricAuthService` 也在审计范围内；开启 Touch ID 前覆盖无生物识别
 硬件、用户取消、认证失败、凭据失效和删除凭据。普通密码登录不能依赖生物识别可用性。
 
 ### 3. 推送要后端配合
