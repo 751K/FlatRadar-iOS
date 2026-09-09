@@ -351,8 +351,11 @@ public final class APIClient {
                      cities: [String]? = nil,
                      types: [String]? = nil,
                      contract: String? = nil,
-                     energy: String? = nil) async throws -> ListingsResponse {
+                     energy: String? = nil,
+                     sort: ListingSort? = nil) async throws -> ListingsResponse {
         var parts = ["api/v1/listings?limit=\(limit)&offset=\(offset)"]
+        // 不传 = 后端默认的 -first_seen（写进契约的，不是实现细节）。
+        if let sort { parts.append("sort=\(urlEncode(sort.wireValue))") }
         if let city { parts.append("city=\(urlEncode(city))") }
         if let status { parts.append("status=\(urlEncode(status))") }
         if let query, !query.isEmpty { parts.append("q=\(urlEncode(query))") }

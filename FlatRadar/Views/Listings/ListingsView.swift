@@ -16,7 +16,7 @@ struct ListingsView: View {
     /// Filter Apply 触觉反馈 trigger —— 每按一次 Apply 自增，驱动 `.sensoryFeedback`
     @State private var filterApplyTick = 0
     @State private var selectedStatus = ""
-    @State private var sort = ListingSort.newest
+    @State private var sort = ListingSortOption.newest
     @State private var selectedSources: [String] = []
     @State private var selectedCities: [String] = []
     @State private var selectedTypes: [String] = []
@@ -82,7 +82,7 @@ struct ListingsView: View {
 
                 Menu {
                     Picker("Sort", selection: $sort) {
-                        ForEach(ListingSort.allCases) { option in
+                        ForEach(ListingSortOption.allCases) { option in
                             Label(option.title, systemImage: option.systemImage)
                                 .tag(option)
                         }
@@ -136,7 +136,16 @@ struct ListingsView: View {
             showRefreshError = new != nil && !store.listings.isEmpty
         }
         .onChange(of: store.listings) { _, _ in recomputeCachedListings() }
-        .onChange(of: sort) { _, _ in recomputeCachedListings() }
+        // 换排序要**重新向服务端要**，不能只把已加载的重排——后者排出来的是
+        // 「已加载结果里最便宜的」，不是「全部里最便宜的」。见 ListingSort。
+        .onChange(of: sort) { _, newValue in
+            guard let server = newValue.serverSort else {
+                // `.name` 暂时没有服务端对应，退回本地排（只排已加载的）。
+                recomputeCachedListings()
+                return
+            }
+            Task { await store.setSort(server) }
+        }
         .alert(
             refreshErrorTitle,
             isPresented: $showRefreshError
@@ -376,7 +385,11 @@ struct ListingsView: View {
 
     /// 当 listings 或排序变化时重新计算缓存，避免 body 重渲染时反复 O(n log n)。
     private func recomputeCachedListings() {
-        let sorted = store.listings.sorted(using: sort)
+        // 有服务端排序时 `store.listings` 已经是排好的，原样用；
+        // 只有 `.name`（后端 enum 里还没有）才在本地排。
+        let sorted = sort.serverSort == nil
+            ? store.listings.sorted(using: sort)
+            : store.listings
         let now = Date()
         var new: [Listing] = []; new.reserveCapacity(sorted.count)
         var earlier: [Listing] = []; earlier.reserveCapacity(sorted.count)
@@ -521,7 +534,9 @@ struct ListingsView: View {
     }
 }
 
-private enum ListingSort: String, CaseIterable, Identifiable {
+/// 列表页排序选项的**展示**形态。真正的排序在服务端做，这里只负责标题、图标，
+/// 以及映射到 `FlatRadarCore.ListingSort`（后端 openapi 的 enum 镜像）。
+private enum ListingSortOption: String, CaseIterable, Identifiable {
     case newest
     case priceLow
     case priceHigh
@@ -530,6 +545,24 @@ private enum ListingSort: String, CaseIterable, Identifiable {
     case name
 
     var id: String { rawValue }
+
+    /// 对应的服务端排序。`nil` 表示后端没有这个键。
+    ///
+    /// ⚠️ `.name` 目前是 `nil` —— 后端 1.23.0 的 enum 里没有 `name`
+    /// （price / area / energy / first_seen / last_seen / available_from /
+    /// city / status / source）。它是唯一还在本地排的选项，因此仍然只排
+    /// 已加载的那几页。后端补上 `name` 之后把这里改成 `.init(key: .name, ...)`，
+    /// 下面 `sorted(using:)` 的整个 extension 就能删掉。
+    var serverSort: FlatRadarCore.ListingSort? {
+        switch self {
+        case .newest:        return .newestFirst
+        case .priceLow:      return .init(key: .price, ascending: true)
+        case .priceHigh:     return .init(key: .price, ascending: false)
+        case .availableSoon: return .init(key: .availableFrom, ascending: true)
+        case .city:          return .init(key: .city, ascending: true)
+        case .name:          return nil
+        }
+    }
 
     var title: String {
         switch self {
@@ -555,7 +588,7 @@ private enum ListingSort: String, CaseIterable, Identifiable {
 }
 
 private extension Array where Element == Listing {
-    func sorted(using sort: ListingSort) -> [Listing] {
+    func sorted(using sort: ListingSortOption) -> [Listing] {
         switch sort {
         case .newest:
             return sorted { ($0.firstSeen ?? "") > ($1.firstSeen ?? "") }
