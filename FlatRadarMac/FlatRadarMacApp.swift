@@ -45,6 +45,53 @@ struct FlatRadarMacApp: App {
         // 放 init 而不是视图的 .task：.task 在窗口出现后才跑，而
         // `restoreSession()` 也在 .task 里——两者的先后顺序没有保证。
         PlatformEnvironment.configure(.macOS)
+
+        if CommandLine.arguments.contains(Self.sessionReportFlag) {
+            Self.reportSessionAndExit()
+        }
+    }
+
+    /// 无头版「重启还能不能恢复会话」。
+    ///
+    /// docs/MACOS.md Phase 1 的完成判据里有「重新启动能恢复会话，登出后不能恢复
+    /// 旧会话」。这两条只能**重启**才验得了，而 GUI 里的验证要人盯着看。
+    /// 有了它就是两条命令：
+    ///
+    ///     FlatRadarMac --session-report   # 登录后：RESTORED
+    ///     # 在 app 里 Sign Out，再跑一次  → NO SESSION
+    static let sessionReportFlag = "--session-report"
+
+    @MainActor
+    private static func reportSessionAndExit() -> Never {
+        let auth = AuthStore()
+        let state = SessionReportState()
+
+        Task { @MainActor in
+            await auth.restoreSession()
+            state.authenticated = auth.isAuthenticated
+            state.name = auth.userInfo?.name
+            state.done = true
+        }
+
+        // `init()` 就跑在主线程上，而 `restoreSession()` 是 MainActor 隔离的——
+        // 用信号量阻塞会死锁（等的就是自己这条线程）。改成把主 run loop 泵起来，
+        // 主 actor 的执行器就是它，泵一下上面那个 Task 才有机会跑。
+        let deadline = Date().addingTimeInterval(20)
+        while !state.done && Date() < deadline {
+            RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.05))
+        }
+
+        if !state.done {
+            print("RESULT: TIMEOUT — restoreSession 20 秒没返回")
+            exit(2)
+        }
+        // 只报用户名，不报 token。
+        print(state.authenticated
+              ? "RESULT: RESTORED — 会话已从钥匙串恢复，用户 \(state.name ?? "?")"
+              : "RESULT: NO SESSION — 钥匙串里没有可用会话")
+        print("UserDefaults 回退 token: "
+              + (KeychainDiagnostics.hasUserDefaultsFallbackToken ? "有（不该有）" : "无"))
+        exit(state.authenticated ? 0 : 1)
     }
 
     var body: some Scene {
@@ -55,6 +102,14 @@ struct FlatRadarMacApp: App {
         }
         .defaultSize(width: 560, height: 640)
     }
+}
+
+/// `reportSessionAndExit` 的可变状态。全在主 actor 上，所以不需要任何同步。
+@MainActor
+private final class SessionReportState {
+    var done = false
+    var authenticated = false
+    var name: String?
 }
 
 // MARK: - 窗口

@@ -210,10 +210,21 @@ Stores 分别拆包。iOS 与 Mac 都只依赖包产品，不再直接编译这�
    描述文件签发并嵌入，`com.apple.application-identifier` 到位。`FlatRadarMacTests`
    把这条钉成了自动化断言，不再依赖手跑。
 
-**完成判据**（2026-09-09 状态：钥匙串三条已验证通过；登录 / 会话恢复 / 登出仍待用真实凭据
-手工走一遍——自动化测试拿不到凭据，不能拿「编过了」冒充）：
+**完成判据**（2026-09-09 实测状态）：
 
-签名且开启 Sandbox 的 macOS app 能从 `flatradar.app` 登录并显示房源数量；
+| 判据 | 状态 | 怎么验的 |
+|---|---|---|
+| 签名 + Sandbox 的 app 能登录并显示房源数量 | ✅ | 真实账号登录，窗口显示 `Listings 50 / 80` |
+| Keychain 增 / 查 / 删均返回成功 | ✅ | `--keychain-selftest`；`FlatRadarMacTests` 也钉住了 |
+| 没有触发 `UserDefaults` token 回退 | ✅ | 窗口显示 `none`；Mac 上那条回退根本不编译 |
+| 重新启动能恢复会话 | ✅ | `--session-report` → `RESTORED`（真·进程重启，走钥匙串 + `/auth/me`） |
+| 登出后不能恢复旧会话 | ⏳ | 需要在窗口里点一次 Sign Out，再跑 `--session-report` |
+| 拒绝网络 / 凭据错误时显示可理解的错误 | ⏳ | 待手工触发 |
+| 不得把凭据写入源码或日志 | ✅ | 自检和报告都只打结果与用户名，不打 token；密码用完即清 |
+
+两个 `⏳` 都不是代码问题，是需要人操作一次才能触发的路径。
+
+原文：签名且开启 Sandbox 的 macOS app 能从 `flatradar.app` 登录并显示房源数量；
 Keychain 写入、读取、删除均返回成功，确认没有触发 `UserDefaults` token 回退；重新启动能恢复
 会话，登出后不能恢复旧会话。拒绝网络或凭据错误时，窗口显示可理解的错误。不得把凭据写入源码或日志。
 
