@@ -9,26 +9,18 @@
 	<key>com.apple.security.network.client</key>
 	<true/>
 
-	<!-- ⚠️ 还缺一条 Keychain Sharing，钥匙串因此是坏的（-34018）：
+	<!-- Keychain Sharing。
+	     不是为了"共享"，是为了拿到 application-identifier：macOS 的
+	     data protection 钥匙串（见 KeychainManager.dataProtection）要求签名带它，
+	     否则每一次写入都是 -34018 errSecMissingEntitlement。只有声明了这个
+	     entitlement，automatic signing 才会去签发带 application-identifier 的
+	     描述文件——只勾 App Sandbox 是签不出来的。
 
-	         <key>keychain-access-groups</key>
-	         <array>
-	             <string>$(AppIdentifierPrefix)com.j.kong.FlatRadar</string>
-	         </array>
-
-	     macOS 的 data protection 钥匙串要求签名带 application-identifier，
-	     而只有声明了 keychain-access-groups，automatic signing 才会去签发带它的
-	     描述文件。但签发 Mac App Development 描述文件的前提是**这台 Mac 已在
-	     开发者账号里注册**，那是账号层面的改动（占一个每年才重置的设备名额），
-	     所以没有擅自做。
-
-	     2026-09-09 实测（`--keychain-selftest`，签名 + 沙盒的真二进制）：
-	         data protection + 无描述文件  →  写入失败 -34018 errSecMissingEntitlement
-	         旧式文件式钥匙串 + 无描述文件  →  增 / 查 / 删 全部成功
-
-	     也就是说 -34018 是 data protection 特有的，不是沙盒本身的限制。
-	     退回旧式钥匙串能立刻跑通，但那违反 Apple TN3137，而且**日后再切回
-	     data protection 时旧条目全部查不到**——表现为所有人静默登出。
-	     所以这里不退，等注册设备。见 docs/MACOS.md 风险 2。 -->
+	     连带要求：描述文件里内嵌允许运行的设备清单，所以这台 Mac 必须先在
+	     开发者账号里注册（2026-09-09 已注册）。 -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.j.kong.FlatRadar</string>
+	</array>
 </dict>
 </plist>

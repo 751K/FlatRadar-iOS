@@ -172,8 +172,10 @@ Stores 分别拆包。iOS 与 Mac 都只依赖包产品，不再直接编译这�
       里有 `Assets.car` 和五种语言的 `.lproj`。
 - [x] 做最小登录窗口 —— 见 `FlatRadarMac/FlatRadarMacApp.swift`：凭据输入 → 登录 → 拉一页房源 →
       显示 `已加载 / 总数`，外加错误框和钥匙串状态面板。
-- [ ] 建立 Mac 测试目标 —— **未做**，等设备注册解决后一起做（Mac 单元测试要在签过名的宿主里跑，
-      不然测不出 entitlement 相关的问题，正是下面那个坑）。Mac scheme 已由 Xcode 自动生成。
+- [x] 建立 Mac scheme 与测试目标 —— `FlatRadarMacTests`（5 条）。它必须存在的理由就是
+      「跑在哪儿」：`PlatformInfo.macOS` 只有 Mac app 看得见，而钥匙串的行为取决于宿主的
+      签名和 entitlements，包测试和 iOS 测试都替代不了。守两件事：设备名是中性常量
+      （风险 4），以及钥匙串在签名 + 沙盒 + 描述文件下真的能用。
 
 **钥匙串：两个独立的问题，一个已修、一个卡住**
 
@@ -187,23 +189,31 @@ Stores 分别拆包。iOS 与 Mac 都只依赖包产品，不再直接编译这�
    读也失败，所以连「上次存的还在不在」都查不出来——这个洞没有任何自曝途径。
    在 iPad 上跑 `KeychainTests` 撞出来的，去掉该属性后增 / 查 / 删全过。
 
-2. **`-34018 errSecMissingEntitlement`（卡住）**
+2. **`-34018 errSecMissingEntitlement`（已解决）**
    macOS 的 data protection 钥匙串要求签名带 `application-identifier`，而只有声明
-   `keychain-access-groups` 才会去签发带它的描述文件；签发 Mac App Development 描述文件
-   又要求**这台 Mac 已在开发者账号里注册**。那是账号层面的改动，没有擅自做。
+   `keychain-access-groups`（Keychain Sharing）才会去签发带它的描述文件；签发 Mac App
+   Development 描述文件又要求**这台 Mac 已在开发者账号里注册**。
 
-   实测对照（都是签名 + 沙盒的真二进制）：
+   实测对照（三种条件，都是签名 + 沙盒的真二进制，用 `--keychain-selftest` 跑）：
 
    | 配置 | 增 / 查 / 删 |
    |---|---|
-   | data protection 钥匙串 + 无描述文件 | ❌ -34018 |
+   | data protection + 无描述文件 | ❌ -34018 |
    | 旧式文件式钥匙串 + 无描述文件 | ✅ 全过 |
+   | **data protection + 有描述文件** | ✅ **全过** ← 现在这条 |
 
-   所以 -34018 是 data protection 特有的，不是 App Sandbox 本身的限制。退回旧式钥匙串能
-   立刻跑通，但违反 TN3137，而且**日后再切回 data protection 时旧条目全部查不到**，
-   表现为所有人静默登出。所以不退，等注册。
+   中间那行是关键对照：它说明 -34018 是 data protection **特有**的，不是 App Sandbox
+   本身的限制。当时也确实可以退回旧式钥匙串立刻跑通，但那违反 TN3137，而且**日后再切回
+   data protection 时旧条目全部查不到**，表现为所有人静默登出——所以没退，改成注册设备。
 
-**完成判据**：签名且开启 Sandbox 的 macOS app 能从 `flatradar.app` 登录并显示房源数量；
+   2026-09-09 已注册这台 Mac（Provisioning UDID `00008132-001870E01E03001C`），
+   描述文件签发并嵌入，`com.apple.application-identifier` 到位。`FlatRadarMacTests`
+   把这条钉成了自动化断言，不再依赖手跑。
+
+**完成判据**（2026-09-09 状态：钥匙串三条已验证通过；登录 / 会话恢复 / 登出仍待用真实凭据
+手工走一遍——自动化测试拿不到凭据，不能拿「编过了」冒充）：
+
+签名且开启 Sandbox 的 macOS app 能从 `flatradar.app` 登录并显示房源数量；
 Keychain 写入、读取、删除均返回成功，确认没有触发 `UserDefaults` token 回退；重新启动能恢复
 会话，登出后不能恢复旧会话。拒绝网络或凭据错误时，窗口显示可理解的错误。不得把凭据写入源码或日志。
 
