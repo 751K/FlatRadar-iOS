@@ -1,19 +1,18 @@
 import SwiftUI
 import FlatRadarCore
 
-/// macOS 客户端入口（Phase 1）。
+/// macOS 客户端入口。
 ///
-/// 这一版是**探针**，不是产品：一个窗口，登录 → 拉一页房源 → 报数量，外加
-/// 钥匙串自检。目标不是好看，是把 docs/MACOS.md Phase 1 的完成判据一条条
-/// 变成屏幕上能看见的东西。真正的表格 / 键盘浏览是 Phase 2。
+/// 应用级状态只有 ``AuthStore``（服务器 / 账户 / 认证），窗口级的一切在
+/// ``BrowseModel`` 里——docs/MACOS.md 风险 6 的划分。带查询状态的
+/// `ListingsStore` 不做全局单例，否则将来两个窗口会互相覆盖排序和筛选。
 ///
 /// 刻意**不做**的：推送（不申请权限、不注册 token、不调 `/devices/register`）、
-/// 游客入口、多窗口状态归属。都在文档里排在后面。
+/// 多窗口、地图 / 日历。都在文档里排在后面。
 @main
 struct FlatRadarMacApp: App {
 
     @State private var auth = AuthStore()
-    @State private var listings = ListingsStore()
 
     /// 无头钥匙串自检的启动参数。
     ///
@@ -96,11 +95,17 @@ struct FlatRadarMacApp: App {
 
     var body: some Scene {
         WindowGroup("FlatRadar") {
-            ProbeWindow()
+            RootView()
                 .environment(auth)
-                .environment(listings)
         }
-        .defaultSize(width: 560, height: 640)
+        .defaultSize(width: 1180, height: 720)
+        .commands {
+            // 命令读的是**当前聚焦那个窗口**的 model（focusedSceneValue），
+            // 所以将来开多窗口时 ⌘R 刷新的是你正在看的那一个。
+            CommandGroup(after: .toolbar) {
+                BrowseCommands()
+            }
+        }
     }
 }
 
@@ -114,36 +119,59 @@ private final class SessionReportState {
 
 // MARK: - 窗口
 
-private struct ProbeWindow: View {
+/// 按登录态分流：登录了看表格，没登录看登录页。
+private struct RootView: View {
     @Environment(AuthStore.self) private var auth
-    @Environment(ListingsStore.self) private var listings
+    @State private var didRestore = false
+
+    var body: some View {
+        Group {
+            if auth.isAuthenticated {
+                BrowseWindow()
+            } else {
+                SignInView()
+            }
+        }
+        .task {
+            guard !didRestore else { return }
+            didRestore = true
+            await auth.restoreSession()
+        }
+    }
+}
+
+/// 菜单命令。放在单独的 `Commands` 里才拿得到 `@FocusedValue`。
+private struct BrowseCommands: View {
+    @FocusedValue(\.browseModel) private var model
+
+    var body: some View {
+        Button("Reload Listings") { Task { await model?.reload() } }
+            .keyboardShortcut("r")
+            .disabled(model == nil)
+        Button("Filter…") { model?.requestSearchFocus() }
+            .keyboardShortcut("f")
+            .disabled(model == nil)
+    }
+}
+
+private struct SignInView: View {
+    @Environment(AuthStore.self) private var auth
 
     @State private var username = ""
     @State private var password = ""
     @State private var selfTest: KeychainSelfTest?
-    @State private var didRestore = false
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 header
                 Divider()
-                if auth.isAuthenticated {
-                    signedIn
-                } else {
-                    signInForm
-                }
+                signInForm
                 Divider()
                 keychainPanel
             }
             .padding(24)
             .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .task {
-            guard !didRestore else { return }
-            didRestore = true
-            await auth.restoreSession()
-            if auth.isAuthenticated { await listings.fetch() }
         }
     }
 
@@ -152,7 +180,7 @@ private struct ProbeWindow: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text("FlatRadar for Mac").font(.largeTitle.weight(.semibold))
-            Text("Phase 1 探针 · \(APIClient.defaultServerHost)")
+            Text(APIClient.defaultServerHost)
                 .font(.callout).foregroundStyle(.secondary)
             Text(AppVersion.displayName)
                 .font(.caption).foregroundStyle(.tertiary)
@@ -180,44 +208,6 @@ private struct ProbeWindow: View {
         }
         .textFieldStyle(.roundedBorder)
         .frame(maxWidth: 360, alignment: .leading)
-    }
-
-    // MARK: 已登录
-
-    private var signedIn: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            LabeledContent("Signed in as", value: auth.userInfo?.name ?? "—")
-            LabeledContent("Role", value: String(describing: auth.role))
-
-            // 完成判据：「能从 flatradar.app 登录并显示房源数量」
-            LabeledContent("Listings") {
-                if listings.isLoading {
-                    ProgressView().controlSize(.small)
-                } else if listings.errorMessage != nil {
-                    Text("—").foregroundStyle(.secondary)
-                } else {
-                    Text("\(listings.listings.count) / \(listings.total)")
-                        .monospacedDigit()
-                }
-            }
-
-            if let err = listings.errorMessage {
-                Label(err, systemImage: "exclamationmark.triangle")
-                    .font(.callout).foregroundStyle(.orange)
-            }
-
-            HStack {
-                Button("Reload listings") { Task { await listings.refresh() } }
-                Button("Sign Out") {
-                    Task {
-                        await auth.logout()
-                        listings.clear()
-                        selfTest = nil
-                    }
-                }
-            }
-            errorBox
-        }
     }
 
     @ViewBuilder
@@ -278,7 +268,6 @@ private struct ProbeWindow: View {
         Task {
             await auth.loginAsUser(name: username, password: password)
             password = ""                       // 不在内存里多留一秒
-            if auth.isAuthenticated { await listings.fetch() }
         }
     }
 }

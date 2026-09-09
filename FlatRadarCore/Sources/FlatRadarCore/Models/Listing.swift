@@ -138,7 +138,7 @@ public extension Listing {
 
     /// 归一化后的状态枚举。原始后端可能返回 "Available to book"/"available_to_book"/
     /// "Available in lottery"/"Reserved"/"Rented"/"Not available" 等多种写法。
-    public nonisolated var statusKind: StatusKind {
+    nonisolated var statusKind: StatusKind {
         let s = status.lowercased().replacingOccurrences(of: "_", with: " ")
         if s.contains("lottery") { return .lottery }
         if s.contains("available to book") || s == "book" { return .book }

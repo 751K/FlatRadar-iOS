@@ -1,4 +1,5 @@
 import Foundation
+import Security
 
 /// 钥匙串自检的结果。
 ///
@@ -12,6 +13,15 @@ public nonisolated struct KeychainSelfTest: Sendable, Equatable {
     public let deleted: Bool
     /// 逐步说明，直接显示给人看。**不含任何凭据**。
     public let steps: [String]
+
+    /// 写入失败时的 `OSStatus`。成功则为 `nil`。
+    ///
+    /// 结构化地留一份，是因为调用方需要**区分失败的种类**而不是看字符串：
+    /// `-34018 errSecMissingEntitlement` 说明宿主没被签上
+    /// `application-identifier`（未签名的模拟器就是这样），是环境的结构性限制；
+    /// 而 `-25303 errSecNoSuchAttr` 是查询本身写错了，任何环境下都必须红。
+    /// 拿 `steps.contains("-34018")` 去判会在文案一改时静默失效。
+    public let failureStatus: OSStatus?
 
     public var allPassed: Bool { saved && loadedMatches && deleted }
 }
@@ -46,8 +56,9 @@ public enum KeychainDiagnostics {
             steps.append("写入 成功")
         } catch {
             steps.append("写入 失败 — \(error.localizedDescription)")
-            return KeychainSelfTest(saved: false, loadedMatches: false,
-                                    deleted: false, steps: steps)
+            return KeychainSelfTest(saved: false, loadedMatches: false, deleted: false,
+                                    steps: steps,
+                                    failureStatus: (error as? KeychainError)?.status)
         }
 
         let back = KeychainManager.load(server: probeServer)
@@ -61,7 +72,7 @@ public enum KeychainDiagnostics {
         steps.append(gone ? "删除 成功" : "删除 失败 — 删完还能查到")
 
         return KeychainSelfTest(saved: true, loadedMatches: matches,
-                                deleted: gone, steps: steps)
+                                deleted: gone, steps: steps, failureStatus: nil)
     }
 
     /// `UserDefaults` 里有没有回退存下的 bearer token。

@@ -5,8 +5,13 @@ import Foundation
 public final class ListingsStore {
 
     /// 隐式 init 随 `public` 一起变成 internal，宿主 app 构造不了。
-    /// 这些 store 的属性全有默认值，空实现与迁移前的隐式构造等价。
-    public init() {}
+    ///
+    /// `pageSize` 可注入：iOS 是无限滚动的列表，一页 50 条正好；Mac 的表格要能
+    /// 用 ↑↓ 一路翻到底，分批加载会让键盘浏览断断续续，所以那边用大页一次拉完
+    /// （实测全量 822 条约 57 KB gzip、两个请求）。默认值保持 50，iOS 行为不变。
+    public init(pageSize: Int = 50) {
+        self.pageSize = pageSize
+    }
     public var listings: [Listing] = []
     public var total = 0
     public var isLoading = false
@@ -18,7 +23,7 @@ public final class ListingsStore {
     public var lastUpdated: Date?
 
     private let client = APIClient.shared
-    private let pageSize = 50
+    private let pageSize: Int
 
     // Current filter state
     private var currentCity: String?
@@ -54,7 +59,7 @@ public final class ListingsStore {
     /// 防止用户飞速改 filter 时旧请求的响应覆盖新结果。
     private var fetchGeneration: UInt64 = 0
 
-    var hasMore: Bool { listings.count < total }
+    public var hasMore: Bool { listings.count < total }
 
     public func fetch(city: String? = nil, status: String? = nil, query: String? = nil,
                sources: [String]? = nil, cities: [String]? = nil, types: [String]? = nil,
@@ -121,6 +126,25 @@ public final class ListingsStore {
             if !error.isCancellation { loadMoreFailed = true }
         }
         isLoadingMore = false
+    }
+
+    /// 一直翻到底。
+    ///
+    /// 给 Mac 表格用：完成判据要求「只用键盘跨页浏览」，而按滚动位置触发分页在
+    /// `Table` 上很别扭，也会让 ↑↓ 走到边界时卡一下。全量拉完之后 ↑↓ 就是纯本地的。
+    ///
+    /// `maxPages` 是防跑飞的闸：后端 total 若因为并发写入一直在涨，没有这个上限
+    /// 循环不会停。到闸还没拉完就当分页失败处理，界面上要能看见。
+    public func loadAllPages(maxPages: Int = 20) async {
+        var pages = 0
+        while hasMore, !loadMoreFailed, pages < maxPages {
+            let before = listings.count
+            await loadMore()
+            pages += 1
+            // 一页下来一条没多——再循环就是死循环。
+            if listings.count == before { break }
+        }
+        if hasMore && !loadMoreFailed { loadMoreFailed = true }
     }
 
     /// 换排序。重置分页从第一页重拉——**不能**只把已加载的重排，
