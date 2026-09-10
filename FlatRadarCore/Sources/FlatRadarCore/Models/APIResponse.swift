@@ -241,6 +241,12 @@ public nonisolated struct MeSummary: Decodable , Sendable {
     let new24hTotal: Int
     public let matchedTotal: Int
     let matchedAvailable: Int?
+
+    /// 契约里 `last_scrape` 在 `required` 里，但类型是 `["string", "null"]`
+    /// ——一次都还没抓过时后端发的就是 `null`。非可选 `String` 会在那一刻
+    /// `valueNotFound` 掉整个 `/me/summary`，仪表盘和登录页的"上次更新"
+    /// 一起变成连接失败。空串兜底：`DashboardView` / `LoginView` 已经在
+    /// 用 `.isEmpty` 和 `?? ""` 走"没有时间戳"那支。
     public let lastScrape: String
     public let filterActive: Bool
 
@@ -252,6 +258,17 @@ public nonisolated struct MeSummary: Decodable , Sendable {
         case matchedAvailable = "matched_available"
         case lastScrape = "last_scrape"
         case filterActive = "filter_active"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        role = try c.decode(String.self, forKey: .role)
+        totalInDb = try c.decode(Int.self, forKey: .totalInDb)
+        new24hTotal = try c.decode(Int.self, forKey: .new24hTotal)
+        matchedTotal = try c.decode(Int.self, forKey: .matchedTotal)
+        matchedAvailable = try c.decodeIfPresent(Int.self, forKey: .matchedAvailable)
+        lastScrape = try c.decodeIfPresent(String.self, forKey: .lastScrape) ?? ""
+        filterActive = try c.decode(Bool.self, forKey: .filterActive)
     }
 }
 
@@ -313,16 +330,40 @@ nonisolated struct DeviceListResponse: Decodable {
     let items: [DeviceInfo]
 }
 
+/// 一台已注册的推送设备——契约里的 `Device`。
+///
+/// 契约的 `required` 只有 `id / device_token_hint / env / platform / disabled`。
+/// 剩下四个键后端可以不发，`created_at` / `last_seen` 连类型都是
+/// `["string", "null"]`。合成的 `Decodable` 会把它们当必填，缺一个就
+/// `keyNotFound` → 整个 `items` 数组解不出来 → **设备列表整页打不开**，
+/// 而不是少列一台设备。同 ``MapListing`` / ``CalendarListing`` 那两处。
+///
+/// 今天的后端（`app/services/device_service.list_devices_for_token_safe`）
+/// 其实每个键都发，`model` / `disabled_reason` 也已经在 Python 侧
+/// `or ""` 兜过底了。所以这不是在修一条正在崩的线，是把客户端收回到
+/// **契约承诺的范围**——后端哪天照契约允许的样子少发一个键，不该由这里塌方。
 nonisolated struct DeviceInfo: Decodable, Identifiable {
+
+    /// 契约 required——缺了就该响。
     let id: Int
     let deviceTokenHint: String
     let env: String
     let platform: String
-    let model: String
-    let createdAt: String
-    let lastSeen: String
     let disabled: Bool
+
+    /// 机型和停用原因：契约 optional。空串就是"不知道"，
+    /// 和后端 Python 侧 `or ""` 的兜底口径一致。
+    let model: String
     let disabledReason: String
+
+    /// 时间戳用**可选**而不是空串。
+    ///
+    /// 契约把这两个写成 `["string", "null"]`，而 `""` 不是一个时间——拿它去
+    /// `DateFormatter` 只会得到 nil，却没法和"解析失败"分开。可选逼调用方
+    /// 明确处理"没有时间戳"这一支，也和包里既有的 ``Listing/firstSeen``、
+    /// ``Listing/lastSeen`` 同一个形状。
+    let createdAt: String?
+    let lastSeen: String?
 
     enum CodingKeys: String, CodingKey {
         case id
@@ -332,6 +373,21 @@ nonisolated struct DeviceInfo: Decodable, Identifiable {
         case lastSeen = "last_seen"
         case disabled
         case disabledReason = "disabled_reason"
+    }
+
+    /// 手写而不用合成，理由见上面各属性的注释。
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(Int.self, forKey: .id)
+        deviceTokenHint = try c.decode(String.self, forKey: .deviceTokenHint)
+        env = try c.decode(String.self, forKey: .env)
+        platform = try c.decode(String.self, forKey: .platform)
+        disabled = try c.decode(Bool.self, forKey: .disabled)
+
+        model = try c.decodeIfPresent(String.self, forKey: .model) ?? ""
+        disabledReason = try c.decodeIfPresent(String.self, forKey: .disabledReason) ?? ""
+        createdAt = try c.decodeIfPresent(String.self, forKey: .createdAt)
+        lastSeen = try c.decodeIfPresent(String.self, forKey: .lastSeen)
     }
 }
 

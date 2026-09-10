@@ -187,10 +187,14 @@ public final class MapStore {
         minAreaText = ""
     }
 
-    /// `"€ 1.647"` / `"€1,647"` → 1647。荷兰站点用点做千分位，分隔符一律去掉。
+    /// `"€ 1.647"` / `"€1,647"` → 1647。见 ``PriceText/parse(_:)``。
+    ///
+    /// 原来这里是「只留数字」：`"€1.067,50"` 会变成 106750，差一百倍。
+    /// 荷兰租金基本都是整数，所以线上没炸，但 `maxRentText` 的筛选和地图上的
+    /// 价格色带如果各用一套解析，同一条房源可能"通过了 ≤€900 的筛选、
+    /// 却被涂成 over €1,200"。收拢成一份。
     nonisolated static func price(from raw: String) -> Double? {
-        let digits = raw.filter { $0.isNumber }
-        return digits.isEmpty ? nil : Double(digits)
+        PriceText.parse(raw)
     }
 
     /// `"26.5 m²"` → 26.5。取第一段数字（含小数点）。

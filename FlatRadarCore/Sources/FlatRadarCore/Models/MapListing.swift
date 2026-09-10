@@ -13,9 +13,26 @@ import Foundation
 /// 进 `Task.detached` 做后台聚类。默认主 actor 隔离会把 ``displayCoordinate``
 /// 这类派生属性也推断成 @MainActor，后台任务里读它就成了跨 actor 访问。
 public nonisolated struct MapListing: Decodable, Identifiable, Hashable, Sendable {
+    /// 契约里 `required` 的五个——缺任何一个都该报错，见 ``init(from:)``。
     public let id: String
     public let name: String
     public let status: String
+
+    /// 以下全部**可缺省**。契约（`docs/openapi.json` 的 `MapListing`）只把
+    /// `id / name / status / lat / lng` 列进 `required`，其余键后端可以不发；
+    /// `available_from` / `city` / `address` 连类型都是 `["string", "null"]`，
+    /// 即使发了也可能是 `null`。而 `url` / `neighborhood` / `building` / `area`
+    /// 在契约的 `properties` 里**根本没有**，只靠 `additionalProperties: true`
+    /// 存在——它们是「后端愿意就发」的字段，不是承诺。
+    ///
+    /// 合成的 `Decodable` 会把每个非可选属性都当必填。少一个键就
+    /// `DecodingError.keyNotFound` → `MapResponse` 整个数组解不出来 →
+    /// ``MapStore/fetch()`` 抛错 → 地图**一条都不显示**。一个从未承诺过的
+    /// 字段，能让整张地图空掉。
+    ///
+    /// 所以这里用 `decodeIfPresent ?? ""` 而不是改成可选：调用方
+    /// （`MapView` 的弹卡、``MapStore/passes(_:)`` 的价格/面积筛选）本来就在
+    /// 用 `.isEmpty` 判空，空串正好落进它们已有的「没有这个值」分支。
     public let source: String?
     public let priceRaw: String
     public let availableFrom: String
@@ -25,6 +42,11 @@ public nonisolated struct MapListing: Decodable, Identifiable, Hashable, Sendabl
     public let building: String
     public let area: String
     let address: String
+
+    /// 坐标**保持必填**：没有坐标的房源本来就不该出现在 `/map` 的
+    /// `listings[]` 里，契约也把它们列进了 `required`。真的没坐标时，
+    /// 后端走的是 ``MapLocateResult`` 的 `no_coords` 那一支——那是一条
+    /// 说得出原因的路径，比在这里默默塞个 (0, 0) 把房源钉到几内亚湾好。
     let lat: Double
     let lng: Double
 
@@ -48,6 +70,35 @@ public nonisolated struct MapListing: Decodable, Identifiable, Hashable, Sendabl
         case displayLat = "display_lat"
         case displayLng = "display_lng"
         case stackN = "stack_n"
+    }
+
+    /// 手写而不用合成：合成版把非可选属性一律当必填，而契约只承诺五个键。
+    /// 逐字段对照见上面属性的注释。
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+
+        // 契约 required——缺了就该响，这几个键没有合理的默认值。
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        status = try c.decode(String.self, forKey: .status)
+        lat = try c.decode(Double.self, forKey: .lat)
+        lng = try c.decode(Double.self, forKey: .lng)
+
+        // 契约 optional / 压根没声明——缺失和显式 null 都退到空串。
+        // `decodeIfPresent` 两种情况都返回 nil，正好覆盖 `["string", "null"]`。
+        source = try c.decodeIfPresent(String.self, forKey: .source)
+        priceRaw = try c.decodeIfPresent(String.self, forKey: .priceRaw) ?? ""
+        availableFrom = try c.decodeIfPresent(String.self, forKey: .availableFrom) ?? ""
+        url = try c.decodeIfPresent(String.self, forKey: .url) ?? ""
+        city = try c.decodeIfPresent(String.self, forKey: .city) ?? ""
+        neighborhood = try c.decodeIfPresent(String.self, forKey: .neighborhood) ?? ""
+        building = try c.decodeIfPresent(String.self, forKey: .building) ?? ""
+        area = try c.decodeIfPresent(String.self, forKey: .area) ?? ""
+        address = try c.decodeIfPresent(String.self, forKey: .address) ?? ""
+
+        displayLat = try c.decodeIfPresent(Double.self, forKey: .displayLat)
+        displayLng = try c.decodeIfPresent(Double.self, forKey: .displayLng)
+        stackN = try c.decodeIfPresent(Int.self, forKey: .stackN)
     }
 
     /// 真实坐标。用于「这套房到底在哪」——比如日后接入导航。
@@ -82,7 +133,25 @@ nonisolated struct MapResponse: Decodable, Sendable {
     public let uncached: Int
 }
 
-/// `GET /api/v1/map/locate` 结果。
+/// 「按 id 找这套房的坐标」的结果，**面向界面**的形态。
+///
+/// 为什么不直接把 ``MapLocateResult`` 放出去
+/// --------------------------------------
+/// 那是个传输 DTO（`ok: Bool` + `reason: String?` + 可空的 listing），
+/// Phase 0 定的边界是**传输 DTO 一律留在包内**。把它 public 出去，调用方就得自己
+/// 处理「ok 为 true 但 listing 是 nil」这种本不该存在的组合。
+///
+/// 这个枚举把那三种情况收成三个互斥的 case，**没有非法状态**。
+/// 三种要分开报，不能合成一个 nil：`notFound` 是「后端不认识这条」，
+/// `noCoordinates` 是「认识但还没地理编码出来」——用户能做的事不一样。
+public nonisolated enum MapLocation: Sendable {
+    /// 找到了，带坐标。注意 `stackCount > 1` 时位置是近似的，界面必须说明。
+    case located(MapListing)
+    case notFound
+    case noCoordinates
+}
+
+/// `GET /api/v1/map/locate` 的**传输**形态。包内可见，界面拿到的是 ``MapLocation``。
 ///
 /// 三种「看不到」必须分开报——合并成一句「没找到」的话，「等管理员解析地址」
 /// 「这个链接作废了」「改一下筛选就能看到」在界面上长得一模一样，而用户能做的

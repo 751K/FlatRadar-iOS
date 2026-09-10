@@ -10,6 +10,11 @@ public nonisolated struct Listing: Decodable, Identifiable, Hashable, Sendable {
     public let availableFrom: String?
     public let features: [String]
     public let featureMap: [String: String]
+
+    /// 契约里 `url` 是 `["string", "null"]` 且**不在** `required`；`city` 虽在
+    /// `required`，类型同样允许 `null`。两个都空串兜底——调用方
+    /// （`ListingDetailView` / `ListingRow` / `BrowseWindow`）本来就在用
+    /// `!city.isEmpty`、`URL(string: url)` 判空，空串落进的正是那些分支。
     public let url: String
     public let city: String
     public let firstSeen: String?
@@ -47,8 +52,8 @@ public nonisolated struct Listing: Decodable, Identifiable, Hashable, Sendable {
         features = try c.decodeIfPresent([String].self, forKey: .features) ?? []
         let rawFeatureMap = try c.decodeIfPresent([String: String].self, forKey: .featureMap) ?? [:]
         featureMap = rawFeatureMap
-        url = try c.decode(String.self, forKey: .url)
-        city = try c.decode(String.self, forKey: .city)
+        url = try c.decodeIfPresent(String.self, forKey: .url) ?? ""
+        city = try c.decodeIfPresent(String.self, forKey: .city) ?? ""
         firstSeen = try c.decodeIfPresent(String.self, forKey: .firstSeen)
         lastSeen = try c.decodeIfPresent(String.self, forKey: .lastSeen)
 

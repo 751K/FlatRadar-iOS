@@ -13,7 +13,13 @@ public final class CalendarStore {
     /// 这些 store 的属性全有默认值，空实现与迁移前的隐式构造等价。
     public init() {}
     public var listings: [CalendarListing] = []
-    var listingsByDay: [String: [CalendarListing]] = [:]
+    /// 按日归组，key 是 `yyyy-MM-dd`。
+    ///
+    /// `public` 是为 Mac 端的月网格开的：它要一次铺 42 个格子，每格问一次
+    /// ``listings(on:)`` 也行，但那是 42 次字典查 + 42 次 `DateFormatter`
+    /// 格式化；直接把算好的这份给出去省掉后者。内容是同一批公开的
+    /// ``CalendarListing``，没有额外泄露什么。
+    public var listingsByDay: [String: [CalendarListing]] = [:]
     public var isLoading = false
     public var errorMessage: String?
     public var lastError: APIError?

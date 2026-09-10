@@ -419,6 +419,17 @@ public final class APIClient {
     /// 房源详情 →「在地图上查看」时，那一套可能并不在地图当前这批数据里：
     /// 超出 14 天窗口、或被用户自己的 listing_filter 排除。这个接口把
     /// 「看不到」分成三种分别报，界面才能说清楚用户该做什么。
+    /// 单条房源的坐标查询，**给包外用**。
+    ///
+    /// 包住 ``locateMapListing(id:)`` 那个传输 DTO，返回没有非法状态的
+    /// ``MapLocation``。Mac 端 inspector 的地图缩略图走这条——它只需要
+    /// 「这一套在哪儿」，不需要把整个 `MapStore`（带筛选、可达圈、聚合）拖进来。
+    public func locateListing(id: String) async throws -> MapLocation {
+        let r = try await locateMapListing(id: id)
+        if r.ok, let l = r.listing { return .located(l) }
+        return r.parsedReason == .noCoords ? .noCoordinates : .notFound
+    }
+
     func locateMapListing(id: String) async throws -> MapLocateResult {
         var comps = URLComponents()
         comps.queryItems = [URLQueryItem(name: "id", value: id)]

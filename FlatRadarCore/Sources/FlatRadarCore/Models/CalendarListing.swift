@@ -12,8 +12,18 @@ public nonisolated struct CalendarListing: Decodable, Identifiable, Hashable, Se
     public let name: String
     public let status: String
     public let source: String?
-    public let priceRaw: String
+
+    /// ``availableFrom`` **保持必填**：它在契约的 `required` 里，而且是这个
+    /// DTO 存在的理由——后端 SQL 已经 `WHERE available_from IS NOT NULL AND != ''`，
+    /// 日历没有它就没法分组。契约里它也是纯 `"string"`，不允许 `null`。
     public let availableFrom: String   // ISO yyyy-MM-dd
+
+    /// 以下都**可缺省**：`docs/openapi.json` 的 `CalendarListing.required` 只有
+    /// `id / name / status / available_from`。`price_raw` 是 optional，
+    /// `url` / `city` / `building` 更是 `["string", "null"]`——发了也可能是 null。
+    /// 合成的 `Decodable` 把它们当必填，少一个键整个 `CalendarResponse.listings`
+    /// 就解不出来，日历会整页空掉。同 ``MapListing`` 那处。
+    public let priceRaw: String
     public let url: String
     public let city: String
     public let building: String
@@ -24,11 +34,26 @@ public nonisolated struct CalendarListing: Decodable, Identifiable, Hashable, Se
         case availableFrom = "available_from"
     }
 
+    /// 手写而不用合成，理由见上面各属性的注释。
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        status = try c.decode(String.self, forKey: .status)
+        availableFrom = try c.decode(String.self, forKey: .availableFrom)
+
+        source = try c.decodeIfPresent(String.self, forKey: .source)
+        priceRaw = try c.decodeIfPresent(String.self, forKey: .priceRaw) ?? ""
+        url = try c.decodeIfPresent(String.self, forKey: .url) ?? ""
+        city = try c.decodeIfPresent(String.self, forKey: .city) ?? ""
+        building = try c.decodeIfPresent(String.self, forKey: .building) ?? ""
+    }
+
     /// 解析 ``availableFrom`` 为 ``Date``（按服务器 Amsterdam 日期）；解析失败返回 nil。
     public var date: Date? { Self.dateFormatter.date(from: availableFrom) }
 
     /// 用于按"日"分组的 key（YYYY-MM-DD），保证同一天的房源会聚合在一起。
-    var dayKey: String { String(availableFrom.prefix(10)) }
+    public var dayKey: String { String(availableFrom.prefix(10)) }
 
     var sourceShortText: String { Platform.shortName(source ?? "holland2stay") }
 

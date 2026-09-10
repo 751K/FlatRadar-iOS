@@ -122,15 +122,23 @@ public extension NotificationItem {
             return .alert
         }
         // 状态变化
-        if t.contains("status") || t.contains("change") || blob.contains("→") {
+        // ⚠️ 顺序要紧：**先认 `type`，正文启发式只作最后的兜底**。
+        //
+        // 之前是 `t.contains("status") || t.contains("change") || blob.contains("→")`
+        // 排在新房源分支前面。而 `notifier.py` 拼的新房源 body 是
+        // `f"{status} · {price}/mo · → {move_in}"`——**里面那个 `→` 是入住日**，
+        // 不是状态迁移。结果每一条 `new_listing` 都被判成 `.status`：
+        // Mac 通知屏实测 17 条里 Status 17 / New 0，iOS 的筛选标签同样中招。
+        if t.contains("new listing") || t.contains("booking") {
+            return blob.contains("lottery") || blob.contains("抽签") ? .lottery : .book
+        }
+        if t.contains("status") || t.contains("change") {
             return .status
         }
-        // 新房源 — 用 lottery 关键字细分
-        if t.contains("new listing") || t.contains("listing") || t.contains("booking") {
-            if blob.contains("lottery") || blob.contains("抽签") {
-                return .lottery
-            }
-            return .book
+        // 到这里说明 `type` 认不出，才轮到正文猜。
+        if blob.contains("→") { return .status }
+        if t.contains("listing") {
+            return blob.contains("lottery") || blob.contains("抽签") ? .lottery : .book
         }
         return .system
     }
@@ -212,7 +220,9 @@ public extension NotificationItem {
     }
 
     /// 兼容旧调用点：直接返回预计算好的 ``parsedDate``（零解析）。
-    nonisolated var createdDate: Date? { parsedDate }
+    /// `public` 是为 Mac 端的通知流开的：它要按天分组、按 2 小时分桶画柱状图，
+    /// 两件事都得拿到解析好的日期。`parsedDate` 本身留在包内（decode 时算一次）。
+    public nonisolated var createdDate: Date? { parsedDate }
 
     /// 相对年龄串：`now` / `38m` / `5h` / `2d`。
     nonisolated var ageText: String {
