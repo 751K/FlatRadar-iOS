@@ -36,7 +36,10 @@ ROOT = Path(__file__).resolve().parent.parent
 ICON = ROOT / "FlatRadar" / "AppIcon.icon"
 IMAGESET = ROOT / "FlatRadar" / "Assets.xcassets" / "BrandLogo.imageset"
 
-#: `LoginView` 里 `Image("BrandLogo")` 的 frame 是 48×48pt。
+#: 尺寸沿用 `LoginView` 当年那个 48×48pt 的 frame。
+#: 2026-09-10 登录页改版后头部不再放这枚徽标（插画本身就是图标的房子，
+#: 同一张图一屏出现两次），`BrandLogo` 目前在 App 代码里没有调用点——
+#: 这条测试守的是「素材和图标同源」，跟有没有人用它无关，先原样留着。
 SCALES = {"": 48, "@2x": 96, "@3x": 144}
 VARIANTS = {"light": None, "dark": "dark"}     # 文件名前缀 → icon.json 的 appearance
 

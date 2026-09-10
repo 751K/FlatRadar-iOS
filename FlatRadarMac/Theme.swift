@@ -163,7 +163,14 @@ enum Theme {
 
 // MARK: - 十六进制
 
-private extension Color {
+/// `nonisolated` 不能少。工程开着 `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`，
+/// 下面传给 `NSColor(name:dynamicProvider:)` 的闭包会被隐式钉到主 actor 上，而
+/// AppKit / SwiftUI 会在非主线程上调它解析颜色——隔离检查当场 trap。
+///
+/// iOS 那边同一份写法**实测崩过**（`LoginView.swift` 里贴了完整调用栈：
+/// `PlatformColorProvider.resolveHDR` → `UIDynamicProviderColor` →
+/// `swift_task_checkIsolatedSwift`）。Mac 这边目前没崩到，纯属运气。
+private nonisolated extension Color {
     /// 设计稿给的是浅 / 深两个 hex，这里直接照搬，不再绕 Asset Catalog——
     /// 那 8 个语义色进 catalog 是因为**两端共用**，这些只有 Mac 用。
     init(light: UInt32, dark: UInt32) {
@@ -174,7 +181,7 @@ private extension Color {
     }
 }
 
-private extension NSColor {
+private nonisolated extension NSColor {
     convenience init(hex: UInt32) {
         self.init(srgbRed: Double((hex >> 16) & 0xFF) / 255,
                   green: Double((hex >> 8) & 0xFF) / 255,

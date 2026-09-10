@@ -1,12 +1,30 @@
 import SwiftUI
 import FlatRadarCore
 
+/// 登录入口。视觉对齐设计稿 `FlatRadar iOS - Sign in.dc.html`（A 浅色 / B 深色）。
+///
+/// 这一版换掉了什么
+/// ----------------
+/// 结构没动——头部、三个统计胶囊、CONTINUE AS 两张卡、Face ID、法务页脚，
+/// 顺序和之前一样。换的是**配色和那张插画**：
+///
+/// - 原来是一套自成一体的蓝（`brandBlue` #0A84FF + 浅蓝渐变天空 + 手画的
+///   `MountainPath` 山脊）。那套颜色和 App 图标没有任何关系，登录页看着像另一个 App。
+/// - 现在整屏取自图标本身：暖底 `#F3F0E8`（正是图标里窗户的填充色）、
+///   墨蓝 `#293B49`（图标里那栋深色房子），深色模式的强调色是窗户点亮的暖黄
+///   `#F5D99B`。插画直接就是图标的三层素材横排三遍（见
+///   ``SignInSkyline`` / `output/icon/make-signin-skyline.py`）。
+///
+/// 与设计稿不一致的地方，都是无障碍对比度
+/// ------------------------------------
+/// 设计稿的浅色二级文字是墨色 62% 透明——压在 `#F3F0E8` 上只有 **4.0:1**，
+/// 低于 WCAG AA 的 4.5:1。这里统一提到 66%（4.53:1），肉眼分辨不出差别。
+/// 详见 ``mutedText``。开了「增加对比度」时再各自上一档。
 struct LoginView: View {
     @Environment(AuthStore.self) private var auth
     @Environment(PushStore.self) private var push
     @Environment(\.colorScheme) private var colorScheme
     /// "减弱动态效果"：用户在 设置 > 辅助功能 > 动态效果 里开启时为 true。
-    /// 受影响的动画（如 hero 图标呼吸）应在此 flag true 时跳过或显著弱化。
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// "增加对比度"系统开关。开启时把若干自定义灰阶 token 提到更深 / 更亮，
     /// 达到 WCAG AA 4.5:1。受影响的全是非语义自定义 RGB 颜色，Apple semantic
@@ -16,15 +34,11 @@ struct LoginView: View {
     @State private var expandedRole: LoginMode?
     @State private var username = ""
     @State private var password = ""
-    /// 是否显示密码明文（眼睛图标 toggle）。两套表单（登录卡片 / 注册 sheet）
-    /// 各一个，避免互相影响。
+    /// 是否显示密码明文（眼睛图标 toggle）。
     @State private var showPasswordPlain = false
-    @State private var showRegPasswordPlain = false
     @State private var liveCount = 0
     @State private var new24h = 0
-    @State private var changes24h = 0
     @State private var lastScrapeAt: Date?
-    @State private var breathe = false
     /// "live" 小绿点的两段动画相位，**各自独立的状态 + 各自的 repeatForever 曲线**：
     /// - liveRipple：外圈光晕，easeOut + 不回弹（放大渐隐后从头来）
     /// - liveCore  ：内核实心点，easeInOut + 回弹（1.0↔1.12 原地呼吸）
@@ -38,8 +52,6 @@ struct LoginView: View {
     /// 登录被拒且是 401 时，待确认建号的用户名。非 nil 即弹确认框。
     @State private var pendingRegistrationName: String?
     @State private var isAuthenticatingBiometric = false
-    @State private var contentWidth: CGFloat = 0
-    private var useLargeCards: Bool { contentWidth > 410 }
 
     /// 见 ``ServerTime`` 里的说明：`Date.ISO8601FormatStyle` 是 Sendable 值类型，
     /// 默认参数正好等价于 `.withInternetDateTime`。
@@ -63,139 +75,74 @@ struct LoginView: View {
         }
     }
 
-    // MARK: - Adaptive colors
+    // MARK: - 取自图标的调色板
 
     private var isDark: Bool { colorScheme == .dark }
 
-    private var brandBlue: Color { Color(red: 10/255, green: 132/255, blue: 255/255) }
-
-    private var heroGradient: [Color] {
-        isDark
-        ? [Color(red: 0.08, green: 0.12, blue: 0.22),
-           Color(red: 0.06, green: 0.10, blue: 0.18)]
-        : [Color(red: 0.90, green: 0.95, blue: 1.0),
-           Color(red: 0.82, green: 0.90, blue: 0.99)]
+    /// 二级正文：副标题、卡片说明、免责声明。
+    ///
+    /// 设计稿浅色给的是 62%（压在 `#F3F0E8` 上 4.0:1，**低于 AA 的 4.5:1**），
+    /// 这里用 66%（4.53:1）。两者肉眼没有区别，但一个达标一个不达标。
+    /// 深色那边设计稿的 62% 压在 `#111C29` 上是 6.5:1，本来就够，照搬。
+    private var mutedText: Color {
+        if highContrast { return SignInPalette.ink.opacity(isDark ? 0.86 : 0.90) }
+        return SignInPalette.ink.opacity(isDark ? 0.62 : 0.66)
     }
 
-    private var mountainBackColor: Color {
-        isDark ? Color(red: 0.10, green: 0.18, blue: 0.35) : Color(red: 0.66, green: 0.80, blue: 0.98)
+    /// 纯装饰的水印（`flatradar.app`）。
+    ///
+    /// 这一处**故意不达 AA**，和改版前的 `domainColor` 是同一个取舍：它不承载
+    /// 信息，压得很淡是设计意图的一部分。开了「增加对比度」就拉到 4.6:1。
+    private var watermark: Color {
+        if highContrast { return SignInPalette.ink.opacity(isDark ? 0.70 : 0.72) }
+        return SignInPalette.ink.opacity(isDark ? 0.34 : 0.36)
     }
 
-    private var mountainFrontColor: Color {
-        isDark ? Color(red: 0.06, green: 0.13, blue: 0.28) : Color(red: 0.50, green: 0.70, blue: 0.96)
+    /// 卡片右端那个 `›`。非文字元素，按 UI 组件的 3:1 看，不按 4.5:1。
+    private var chevron: Color {
+        SignInPalette.ink.opacity(highContrast ? 0.55 : 0.30)
     }
 
-    private var headlineColor: Color {
-        isDark ? Color(red: 0.92, green: 0.94, blue: 0.98) : Color(red: 0.05, green: 0.07, blue: 0.11)
-    }
-
-    private var descriptionColor: Color {
-        // 默认 light vs 白 ≈ 4.9:1（达标），但 12pt 用户字号放大时变体可能跌破。
-        // Increase Contrast 时拉到 ~7:1 给余量。
-        if highContrast {
-            return isDark ? Color(red: 0.85, green: 0.87, blue: 0.92)
-                          : Color(red: 0.20, green: 0.22, blue: 0.26)
-        }
-        return isDark ? Color(red: 0.60, green: 0.64, blue: 0.72) : Color(red: 0.43, green: 0.46, blue: 0.50)
-    }
-
-    private var subtitleColor: Color {
-        // 默认 light vs 白 ≈ 4.3:1（边缘失败，11pt INDEPENDENT 字号小风险更高）。
-        if highContrast {
-            return isDark ? Color(red: 0.82, green: 0.84, blue: 0.90)
-                          : Color(red: 0.25, green: 0.27, blue: 0.31)
-        }
-        return isDark ? Color(red: 0.55, green: 0.58, blue: 0.65) : Color(red: 0.49, green: 0.51, blue: 0.54)
-    }
-
-    private var badgeBackground: Color {
-        isDark ? Color(red: 0.15, green: 0.18, blue: 0.25).opacity(0.95) : .white.opacity(0.95)
-    }
-
-    private var badgeValueColor: Color {
-        isDark ? Color(red: 0.90, green: 0.92, blue: 0.95) : Color(red: 0.08, green: 0.10, blue: 0.13)
-    }
-
-    private var badgeLabelColor: Color {
-        isDark ? Color(red: 0.60, green: 0.64, blue: 0.72) : Color(red: 0.21, green: 0.23, blue: 0.27)
-    }
-
-    private var sectionLabelColor: Color {
-        isDark ? Color(red: 0.55, green: 0.58, blue: 0.65) : Color(red: 0.55, green: 0.56, blue: 0.58)
-    }
-
-    private var cardBackground: Color {
-        isDark ? Color(red: 0.14, green: 0.16, blue: 0.20) : .white
-    }
-
-    private var cardTitleColor: Color {
-        isDark ? Color(red: 0.92, green: 0.94, blue: 0.98) : Color(red: 0.06, green: 0.08, blue: 0.11)
-    }
-
-    private var cardDescColor: Color {
-        isDark ? Color(red: 0.55, green: 0.58, blue: 0.65) : Color(red: 0.55, green: 0.56, blue: 0.58)
-    }
-
-    private var cardIconBg: Color {
-        isDark ? Color(red: 0.12, green: 0.22, blue: 0.38) : Color(red: 0.91, green: 0.95, blue: 1.0)
-    }
-
-    private var cardBorderColor: Color {
-        isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06)
-    }
-
-    private var cardShadowColor: Color {
-        isDark ? .clear : .black
-    }
-
-    private var chevronMuted: Color {
-        isDark ? Color(red: 0.35, green: 0.38, blue: 0.45) : Color(red: 0.78, green: 0.80, blue: 0.82)
-    }
-
-    private var footerTextColor: Color {
-        // 默认值在 light mode 下 vs 白底约 3.9:1，刚好低于 WCAG AA 4.5:1。
-        // 开 Increase Contrast 时拉到 ~7.1:1（深灰），暗模式也同步提亮。
-        if highContrast {
-            return isDark ? Color(red: 0.82, green: 0.84, blue: 0.88)
-                          : Color(red: 0.32, green: 0.33, blue: 0.35)
-        }
-        return isDark ? Color(red: 0.50, green: 0.53, blue: 0.60) : Color(red: 0.55, green: 0.56, blue: 0.58)
-    }
-
-    private var domainColor: Color {
-        // 默认值 light mode 下 vs 白底仅 ~1.5:1（远低于 AA），属于"水印感"装饰。
-        // Increase Contrast 时硬拉到 ~4.6:1，保证 12pt mono 也能稳读。
-        if highContrast {
-            return isDark ? Color(red: 0.70, green: 0.72, blue: 0.78)
-                          : Color(red: 0.40, green: 0.40, blue: 0.42)
-        }
-        return isDark ? Color(red: 0.30, green: 0.33, blue: 0.38) : Color(red: 0.76, green: 0.76, blue: 0.78)
-    }
-
-    private var overscrollColor: Color {
-        isDark ? Color(red: 0.08, green: 0.12, blue: 0.22) : Color(red: 0.90, green: 0.95, blue: 1.0)
+    /// 胶囊 / 卡片 / 图标底的填充。浅色是墨色极淡的一层，深色是白色极淡的一层——
+    /// 深色下用墨色会直接消失在底里。
+    private func fill(_ light: Double, _ dark: Double) -> Color {
+        isDark ? Color.white.opacity(dark) : SignInPalette.accent.opacity(light)
     }
 
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(spacing: 0) {
-                    heroSection
-                    contentSection
-                    footerSection
+            // **宽度必须从外面量，再钉死到内容上。**
+            //
+            // 只写 `.frame(maxWidth: .infinity)` 是不够的：那个 modifier 在收到
+            // 「随便你多宽」的提案时会退回子视图的**理想宽度**，而理想宽度里最宽
+            // 的那个是页脚那句免责声明——排成一行是 964pt。于是整棵内容树被撑到
+            // 964（我那个按宽度铺插画的算法又把它顶到 1179），再整体居中：屏幕
+            // 402pt 只看得见正中间那一条，所有靠左的东西（品牌字、标题、卡片里的
+            // 文字和图标）全被推到屏幕左边外面去了。实测 frame：
+            // `FlatRadar` 在 x=-364，Face ID 那条按钮 x=-368 宽 1139。
+            //
+            // `.frame(width:)` 给的是**确定值**，不是上限，子视图再宽也改不了
+            // 外框的尺寸，这条反馈回路就断了。
+            GeometryReader { proxy in
+                ScrollView {
+                    VStack(spacing: 0) {
+                        heroSection
+                        skylineSection(width: proxy.size.width)
+                        sheetSection(compact: proxy.size.width <= 410)
+                    }
+                    .frame(width: proxy.size.width)
                 }
-                .background(GeometryReader { proxy in
-                    Color.clear.onAppear { contentWidth = proxy.size.width }
-                        .onChange(of: proxy.size.width) { _, w in contentWidth = w }
-                })
-            }
-            .scrollBounceBehavior(.basedOnSize)
-            .ignoresSafeArea(edges: .top)
-            .background(Color(.systemBackground))
-            .background(alignment: .top) {
-                overscrollColor
-                    .frame(height: 400)
-                    .ignoresSafeArea(edges: .top)
+                .scrollBounceBehavior(.basedOnSize)
+                // 上半截暖底、下半截白卡，一起顶出安全区——状态栏那一条要是暖的，
+                // 底下 home indicator 那一条要是白的。暖底给到 700，比
+                // hero + 插画（约 440）宽裕，多出来的被白卡自己的底盖住。
+                .background {
+                    VStack(spacing: 0) {
+                        SignInPalette.pitch.frame(height: 700)
+                        SignInPalette.sheet
+                    }
+                    .ignoresSafeArea()
+                }
             }
             .toolbar(.hidden)
             // 登录错误不再用 .alert 弹窗打断——改为在展开的角色卡片里
@@ -244,7 +191,6 @@ struct LoginView: View {
             let summary = try await APIClient.shared.getPublicSummary()
             liveCount = summary.total
             new24h = summary.new24h
-            changes24h = summary.changes24h
             let iso = summary.lastScrape
             if !iso.isEmpty, iso != "--" {
                 lastScrapeAt = (try? Self.isoFrac.parse(iso))
@@ -255,171 +201,117 @@ struct LoginView: View {
 
     // MARK: - Hero
 
+    /// 品牌字 + 标题 + 三个统计胶囊。设计稿里这一块坐在暖底上，不带任何容器。
+    ///
+    /// 改版前这里还有一枚 48pt 的 `Image("BrandLogo")`。设计稿把它拿掉了，
+    /// 理由站得住：下面那张插画本来就是图标的房子，同一张图在一屏里出现两次。
     private var heroSection: some View {
-        ZStack(alignment: .bottom) {
-            LinearGradient(colors: heroGradient, startPoint: .top, endPoint: .bottom)
+        VStack(alignment: .leading, spacing: 0) {
+            Text("FlatRadar")
+                .font(.system(size: 22, weight: .bold))
+                .tracking(-0.5)
+                .foregroundStyle(SignInPalette.wordmark)
 
-            MountainPath(points: [
-                (0, 0.70), (0.07, 0.52), (0.13, 0.68), (0.20, 0.45), (0.26, 0.28),
-                (0.34, 0.55), (0.42, 0.35), (0.50, 0.58), (0.56, 0.45), (0.63, 0.70),
-                (0.70, 0.30), (0.77, 0.62), (0.84, 0.48), (0.91, 0.70), (1.0, 0.48),
-                (1.0, 1.0), (0, 1.0)
-            ])
-            .fill(mountainBackColor)
-            .frame(height: 115)
+            Text("INDEPENDENT · v\(appVersion)")
+                .font(.system(size: 10.5, design: .monospaced))
+                .tracking(1.4)
+                .foregroundStyle(mutedText)
+                .padding(.top, 3)
 
-            MountainPath(points: [
-                (0, 0.72), (0.05, 0.50), (0.12, 0.72), (0.18, 0.40), (0.25, 0.24),
-                (0.34, 0.62), (0.41, 0.34), (0.49, 0.70), (0.55, 0.55), (0.63, 0.80),
-                (0.70, 0.42), (0.77, 0.72), (0.84, 0.45), (0.91, 0.72), (1.0, 0.58),
-                (1.0, 1.0), (0, 1.0)
-            ])
-            .fill(mountainFrontColor)
-            .frame(height: 95)
+            Text("Searching for a new\nhome in the Netherlands?")
+                .font(.system(size: 27, weight: .bold))
+                .tracking(-0.8)
+                .foregroundStyle(SignInPalette.ink)
+                .padding(.top, 18)
 
-            VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 12) {
-                    // App 自己的 logo，而不是手画的 houseShape 套一个白/黑圆。
-                    //
-                    // 圆底原本是 Color(.systemBackground)：深色模式下那是**纯黑**，
-                    // 扣在深蓝色的 hero 背景上是一块硬邦邦的黑饼。
-                    // BrandLogo 图集里浅深两版各自带背景（与 App 图标同源），
-                    // SwiftUI 按 colorScheme 自己挑，不需要在这里判断主题。
-                    //
-                    // 「同源」靠脚本保证，不靠人记：图集由
-                    // `output/icon/make-brandlogo.py` 从 AppIcon.png 出。
-                    // 2.2 换图标时这里漏了一轮——主屏已经是运河屋，登录页还是
-                    // 上一版的蓝房子。`tests/test_brand_logo.py` 现在把四角底色
-                    // 钉在 icon.json 的声明上，再漏就是红的。
-                    Image("BrandLogo")
-                        .resizable()
-                        .frame(width: 48, height: 48)
-                        .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
-                        // 呼吸幅度从 ±12% 收到 ±3%：原先缩放的是圆里那个小房子，
-                        // 现在缩放的是整枚徽标，同样的幅度会晃得很明显。
-                        .scaleEffect(reduceMotion ? 1.0 : (breathe ? 1.03 : 0.97))
-                    .onAppear {
-                        guard !reduceMotion else { return }
-                        withAnimation(.easeInOut(duration: 2.2).repeatForever(autoreverses: true)) {
-                            breathe = true
-                        }
-                    }
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("FlatRadar")
-                            .font(.system(size: 19, weight: .heavy))
-                            .foregroundStyle(brandBlue)
-                        Text("INDEPENDENT · v\(appVersion)")
-                            .font(.system(size: 11, design: .monospaced))
-                            .foregroundStyle(subtitleColor)
-                            .tracking(1.5)
-                    }
+            // 平台数由 Platform 推出来，不写死——写死的数字就是下一次
+            // "登录页还写着 H2S"。接第八个平台时这里自动跟上。
+            Text("Real-time availability across \(Platform.knownKeys.count) rental platforms.")
+                .font(.system(size: 15))
+                .foregroundStyle(mutedText)
+                .padding(.top, 9)
+
+            HStack(spacing: 8) {
+                chip(value: "\(liveCount)", label: "live") { liveDot }
+                chip(value: timeAgo, label: "ago") {
+                    // 设计稿是个空心圆环（`inset 0 0 0 1.5px`），不是时钟图标——
+                    // 和左边的实心绿点成对，一个"在线"一个"上一次"。
+                    Circle()
+                        .strokeBorder(SignInPalette.ink.opacity(0.45), lineWidth: 1.5)
+                        .frame(width: 9, height: 9)
                 }
-
-                Text(expandedRole == nil
-                     ? "Searching for a new\nhome in the Netherlands?"
-                     : (expandedRole == .guest ? "Browse listings\nread-only." : "Sign in to your\naccount."))
-                    .font(.system(size: 28, weight: .black))
-                    .foregroundStyle(headlineColor)
-                    .tracking(-0.8)
-                    .lineSpacing(4)
-                    .padding(.top, 26)
-
-                // 平台数由 Platform 推出来，不写死——写死的数字就是下一次
-                // "登录页还写着 H2S"。接第八个平台时这里自动跟上。
-                Text("Real-time availability across \(Platform.knownKeys.count) rental platforms.")
-                    .font(.system(size: 16))
-                    .foregroundStyle(descriptionColor)
-                    .padding(.top, 14)
-
-                HStack(spacing: 10) {
-                    badge(icon: "circle.fill", iconColor: .green, value: "\(liveCount)", label: "live", animatesIcon: true)
-                    badge(icon: "clock", iconColor: .secondary, value: timeAgo, label: "ago")
-                    badge(icon: "bell.fill", iconColor: .secondary, value: "\(new24h)", label: "new today")
+                chip(value: "\(new24h)", label: "new today") {
+                    // 45° 的小方块。浅色是图标里那栋红房子的红，深色是点亮的窗黄。
+                    Rectangle()
+                        .fill(SignInPalette.flagSolid)
+                        .frame(width: 7, height: 7)
+                        .rotationEffect(.degrees(45))
                 }
-                .padding(.top, 22)
-
-                Spacer()
             }
-            .padding(.horizontal, 22)
-            .padding(.top, 70)
-            // **占满整幅宽度、内容靠左。**
-            //
-            // 这个 VStack 虽然写着 `alignment: .leading`，但那只管**它内部**几行
-            // 之间的对齐；它自己的宽度是由最宽的那行（标题 ~440pt）撑出来的。
-            // 外面是 `ZStack(alignment: .bottom)`——.bottom 在水平方向就是居中，
-            // 于是整块被摆到了正中间。
-            //
-            // iPhone 上看不出来，因为标题本来就比屏宽还宽，VStack 铺满了；
-            // iPad 上（竖屏 834、横屏 1194+）富余出几百 pt，logo / 标题 / 三个
-            // 胶囊整体飘到中间，而下面 "CONTINUE AS" 那一栏是靠左的，两边对不上。
-            //
-            // 22 这个左边距和 contentSection 的 18 + "CONTINUE AS" 自己的
-            // leading 4 相加正好相等，所以铺满靠左之后标题和那行小标签是**同一条
-            // 左边线**。
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .frame(height: 350)
+            .padding(.top, 16)
         }
-        .frame(height: 350)
+        .padding(.horizontal, 24)
+        .padding(.top, 6)
+        .padding(.bottom, 20)
+        // **占满整幅宽度、内容靠左。**
+        //
+        // 这个 VStack 虽然写着 `alignment: .leading`，但那只管**它内部**几行
+        // 之间的对齐；它自己的宽度是由最宽的那行撑出来的。外面的 VStack 默认
+        // 居中，于是整块会被摆到正中间——iPhone 上标题本来就顶满看不出来，
+        // iPad 上富余几百 pt，标题就飘到中间去了，和下面靠左的 CONTINUE AS 对不上。
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    private func badge(
-        icon: String,
-        iconColor: Color,
-        value: String,
-        label: String,
-        animatesIcon: Bool = false
+    /// 三个统计胶囊共用的壳。设计稿：高 34、圆角 11、左右 13、字号 14，
+    /// 数字加粗、单位不加粗，**两者同色**（改版前单位是另一档更淡的灰，
+    /// 浅色下只有 3.6:1）。
+    private func chip<Icon: View>(
+        value: String, label: String, @ViewBuilder icon: () -> Icon
     ) -> some View {
-        // 只有 live 小绿点这种"实时/在线"语义的徽章才传 animatesIcon=true。
-        // reduceMotion 开启时即使要求动画也停下来——遵守 iOS HIG。
-        let shouldAnimate = animatesIcon && !reduceMotion
-        return HStack(spacing: 5) {
-            // animatesIcon=true 时（live 那条）改用裸 Circle，与 Dashboard
-            // liveBadge 的做法保持一致：
-            // - SF Symbol Image("circle.fill") 在 .font(size:7) 下 glyph box
-            //   比可见圆大（含字体上下空白），HStack 居中对齐时圆视觉偏下
-            // - 裸 Circle 是 Shape，无字体度量，frame 就是可见尺寸，对齐准
-            // 其他 badge (clock / bell.fill) 仍保留 Image，因为视觉上对齐没问题
-            if animatesIcon {
-                ZStack {
-                    if shouldAnimate {
-                        // 外层光晕：放大 + 渐隐反复。动画由 startLiveBreathing()
-                        // 的显式 withAnimation(.repeatForever) 驱动——这里不再挂
-                        // .animation(value:)，避免被外层转场事务捕获成弹跳。
-                        Circle()
-                            .fill(iconColor)
-                            .frame(width: 7, height: 7)
-                            .scaleEffect(liveRipple ? 2.4 : 1.0)
-                            .opacity(liveRipple ? 0.0 : 0.45)
-                    }
-                    // 内层实心点：原地轻微缩放呼吸（1.0↔1.12）
-                    Circle()
-                        .fill(iconColor)
-                        .frame(width: 7, height: 7)
-                        .scaleEffect(liveCore ? 1.12 : 1.0)
-                        .shadow(color: iconColor.opacity(0.4), radius: 5, x: 0, y: 0)
-                }
-                // 锁定布局尺寸，光晕 / ripple 只在视觉上溢出
-                .frame(width: 7, height: 7)
-            } else {
-                Image(systemName: icon)
-                    .font(.system(size: 7))
-                    .foregroundStyle(iconColor)
+        HStack(spacing: 7) {
+            icon()
+            HStack(spacing: 4) {
+                Text(value).font(.system(size: 14, weight: .bold))
+                Text(label).font(.system(size: 14))
             }
-            Text(value).font(.system(size: 14, weight: .bold))
-                .foregroundStyle(badgeValueColor)
-            Text(label).font(.system(size: 14))
-                .foregroundStyle(badgeLabelColor)
+            .foregroundStyle(SignInPalette.ink)
+            .fixedSize()
         }
-        .padding(.horizontal, 12).padding(.vertical, 8)
-        // ⚠️ 关键修正：原本用 `.background(...).clipShape(RoundedRectangle(...))`
-        // 会把 ripple 在 badge 圆角处剪掉一块，导致动画看起来不是"原地呼吸"
-        // 而是朝一个方向偏出。DashboardView.liveBadge 用的是 `.background(_, in:)`
-        // —— 圆角只作用于背景，content（含 ripple）不参与裁剪，与 dashboard 保持一致。
-        .background(badgeBackground, in: RoundedRectangle(cornerRadius: 12))
-        .shadow(color: .black.opacity(isDark ? 0 : 0.06), radius: 4, y: 2)
-        .onAppear {
-            if shouldAnimate { startLiveBreathing() }
+        .padding(.horizontal, 13)
+        .frame(height: 34)
+        // ⚠️ 用 `.background(_, in:)` 而不是 `.background().clipShape()`：
+        // 后者会把 live 绿点的光晕在圆角处剪掉一块，动画看起来不是"原地呼吸"
+        // 而是朝一个方向偏出。与 DashboardView.liveBadge 保持一致。
+        .background(SignInPalette.chip, in: RoundedRectangle(cornerRadius: 11))
+        .shadow(color: .black.opacity(isDark ? 0 : 0.08), radius: 4, y: 1)
+    }
+
+    /// live 那个会呼吸的绿点。
+    private var liveDot: some View {
+        let shouldAnimate = !reduceMotion
+        return ZStack {
+            if shouldAnimate {
+                // 外层光晕：放大 + 渐隐反复。动画由 startLiveBreathing()
+                // 的显式 withAnimation(.repeatForever) 驱动——这里不再挂
+                // .animation(value:)，避免被外层转场事务捕获成弹跳。
+                Circle()
+                    .fill(SignInPalette.live)
+                    .frame(width: 8, height: 8)
+                    .scaleEffect(liveRipple ? 2.4 : 1.0)
+                    .opacity(liveRipple ? 0.0 : 0.45)
+            }
+            // 内层实心点：原地轻微缩放呼吸（1.0↔1.12）。
+            // 用裸 Circle 而不是 SF Symbol：`circle.fill` 在这个字号下 glyph box
+            // 比可见圆大（含字体上下空白），HStack 居中对齐时圆会偏下。
+            Circle()
+                .fill(SignInPalette.live)
+                .frame(width: 8, height: 8)
+                .scaleEffect(liveCore ? 1.12 : 1.0)
+                .shadow(color: SignInPalette.live.opacity(0.4), radius: 5)
         }
+        // 锁定布局尺寸，光晕只在视觉上溢出
+        .frame(width: 8, height: 8)
+        .onAppear { if shouldAnimate { startLiveBreathing() } }
         // reduceMotion 切换时实时停/起。
         .onChange(of: shouldAnimate) { _, willAnimate in
             if willAnimate { startLiveBreathing() } else { stopLiveBreathing() }
@@ -460,46 +352,83 @@ struct LoginView: View {
         }
     }
 
-    // MARK: - Content
+    // MARK: - 插画
 
-    private var contentSection: some View {
+    /// 那条运河天际线。素材是 App 图标自己的三层，横排三遍（见
+    /// `output/icon/make-signin-skyline.py`），**不是另画的一张图**——
+    /// 上一版登录页那两道手绘山脊和图标毫无关系。
+    ///
+    /// 一"幅"的宽高比是 1980:705 ≈ 2.809:1，所以在 393pt 宽的 iPhone 上贴满
+    /// 宽度正好是设计稿写的 140pt 高，不裁不拉。
+    private func skylineSection(width: CGFloat) -> some View {
+        // 一幅按宽度等比放大；到不了封顶高度就一点都不裁（iPhone 正是这一档：
+        // 402 / 2.809 ≈ 143）。iPad 那种宽屏等比会高到 297，超过封顶的部分
+        // 从**上面**裁掉——设计稿写的就是 `xMidYMax slice`，保住贴着运河的下半截。
+        let natural = width / SignInPalette.skylineAspect
+        return Image("SignInSkyline")
+            .resizable()
+            .frame(width: width, height: natural)
+            .frame(width: width, height: min(natural, SignInPalette.skylineMaxHeight),
+                   alignment: .bottom)
+            .clipped()
+    }
+
+    // MARK: - 白卡片
+
+    /// 设计稿里下半屏那张卡：顶部两个 26pt 圆角、向上打一层投影，
+    /// 从插画底下"抬"起来。角色卡、Face ID、法务全在它里面。
+    private func sheetSection(compact: Bool) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("CONTINUE AS")
-                .font(.system(size: 12, weight: .heavy))
-                .foregroundStyle(sectionLabelColor)
-                .tracking(3.5)
+                .font(.system(size: 11.5, weight: .bold))
+                .tracking(1.6)
+                .foregroundStyle(mutedText)
                 .padding(.leading, 4)
-                .padding(.bottom, 14)
-                .padding(.top, 20)
 
-            expandableCard(
-                mode: .user, icon: "person.fill", title: "Tenant",
-                description: "Saved searches, alerts, watching history",
-                isExpanded: expandedRole == .user
-            )
-            expandableCard(
-                mode: .guest, icon: "eye.fill", title: "Guest",
-                description: "Browse current listings only",
-                isExpanded: expandedRole == .guest
-            )
-            // Staff 卡片已移除。后端 /auth/login 本来就按用户名分流——
-            // `__admin__` + 管理密码走 admin 分支，其余走 user 表，角色由服务端
-            // 在响应里给出（AuthStore.applyMe 读 me.role）。管理员从这同一个
-            // 表单登录即可，前端不需要一个独立入口，也不该在登录页上公示后台的
-            // 存在。
+            VStack(spacing: 10) {
+                expandableCard(
+                    mode: .user, icon: "person.fill", title: "Tenant",
+                    description: "Saved searches, alerts, watching history",
+                    isExpanded: expandedRole == .user, compact: compact
+                )
+                expandableCard(
+                    mode: .guest, icon: "eye.fill", title: "Guest",
+                    description: "Browse current listings only",
+                    isExpanded: expandedRole == .guest, compact: compact
+                )
+                // Staff 卡片已移除。后端 /auth/login 本来就按用户名分流——
+                // `__admin__` + 管理密码走 admin 分支，其余走 user 表，角色由服务端
+                // 在响应里给出（AuthStore.applyMe 读 me.role）。管理员从这同一个
+                // 表单登录即可，前端不需要一个独立入口，也不该在登录页上公示后台的
+                // 存在。
 
-            if BiometricAuthService.hasStoredCredentials {
-                biometricButton
-                    .padding(.top, 16)
+                // 设计稿把 Face ID 画成一条**实心**的主按钮，和上面两张淡底卡分开。
+                // 但它只在钥匙串里真有凭据时才有意义——没有的话点了什么也不会发生。
+                if BiometricAuthService.hasStoredCredentials {
+                    biometricButton
+                }
             }
+            .padding(.top, 12)
+
+            footerSection
         }
-        .padding(.horizontal, 18)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .padding(.top, 18)
+        .padding(.bottom, 24)
+        .background(
+            SignInPalette.sheet,
+            in: UnevenRoundedRectangle(topLeadingRadius: 26, topTrailingRadius: 26)
+        )
+        // 只向上打影（设计稿 `0 -6px 24px`）——它要表达的是这张卡压在插画上面。
+        .shadow(color: SignInPalette.accent.opacity(isDark ? 0 : 0.10), radius: 12, y: -3)
     }
 
     // MARK: - Expandable card
 
     private func expandableCard(
-        mode: LoginMode, icon: String, title: String, description: String, isExpanded: Bool
+        mode: LoginMode, icon: String, title: String, description: String,
+        isExpanded: Bool, compact: Bool
     ) -> some View {
         VStack(spacing: 0) {
             Button {
@@ -508,39 +437,57 @@ struct LoginView: View {
                 }
                 if mode == .guest { Task { await performLoginAsGuest() } }
             } label: {
-                HStack(spacing: useLargeCards ? 14 : 13) {
+                HStack(spacing: 13) {
                     ZStack {
-                        let iconSize: CGFloat = useLargeCards ? 44 : 42
-                        RoundedRectangle(cornerRadius: useLargeCards ? 12 : 11)
-                            .fill(cardIconBg).frame(width: iconSize, height: iconSize)
+                        let side: CGFloat = compact ? 44 : 46
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(fill(0.09, 0.10))
+                            .frame(width: side, height: side)
                         Image(systemName: icon)
-                            .font(.system(size: useLargeCards ? 20 : 19)).foregroundStyle(brandBlue)
+                            .font(.system(size: compact ? 20 : 21))
+                            .foregroundStyle(SignInPalette.ink)
                     }
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        HStack(spacing: 8) {
                             Text(title)
-                                .font(.system(size: useLargeCards ? 18 : 17, weight: .heavy))
-                                .foregroundStyle(cardTitleColor)
+                                .font(.system(size: compact ? 17 : 18, weight: .bold))
+                                .tracking(-0.3)
+                                .foregroundStyle(SignInPalette.ink)
                             if mode == .user {
                                 Text("MOST")
-                                    .font(.system(size: useLargeCards ? 10 : 9, weight: .heavy))
-                                    .foregroundStyle(brandBlue).tracking(1)
-                                    .padding(.horizontal, useLargeCards ? 6 : 5).padding(.vertical, 1)
-                                    .background(cardIconBg)
-                                    .clipShape(RoundedRectangle(cornerRadius: useLargeCards ? 5 : 4))
+                                    .font(.system(size: 10, weight: .heavy))
+                                    .tracking(0.6)
+                                    .foregroundStyle(SignInPalette.flagText)
+                                    .padding(.horizontal, 7)
+                                    .frame(height: 19)
+                                    .background(SignInPalette.flagSolid.opacity(isDark ? 0.22 : 0.13),
+                                                in: RoundedRectangle(cornerRadius: 6))
                             }
                         }
                         Text(description)
-                            .font(.system(size: useLargeCards ? 14 : 13)).foregroundStyle(cardDescColor)
+                            .font(.system(size: compact ? 13.5 : 14))
+                            .foregroundStyle(mutedText)
+                            // 设计稿两张卡等高（13 + 44 + 13 = 70），说明各占一行。
+                            // "Saved searches, alerts, watching history" 在 402pt
+                            // 屏上差几个点就够，宁可缩 3% 也不让它折行——折了之后
+                            // Tenant 比 Guest 高一截，两张卡就不齐了。
+                            // 这里字号是写死的 pt，不跟动态字体走，所以缩放不会
+                            // 和辅助功能打架。
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.88)
                     }
-                    Spacer()
+                    // 不塞 `Spacer()`：HStack 的 spacing 会在 Spacer 两侧各算一次，
+                    // 白白多吃掉 13pt，说明文字就从一行挤成了两行。设计稿是
+                    // `flex:1` 挂在文字块上、只有两个 gap——这一行等价。
+                    .frame(maxWidth: .infinity, alignment: .leading)
                     Image(systemName: "chevron.right")
-                        .font(.system(size: useLargeCards ? 22 : 20, weight: .light))
-                        .foregroundStyle(isExpanded ? brandBlue : chevronMuted)
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(isExpanded ? SignInPalette.accent : chevron)
                         .rotationEffect(isExpanded ? .degrees(90) : .zero)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(useLargeCards ? 16 : 13)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 13)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -552,18 +499,18 @@ struct LoginView: View {
                     if mode == .user {
                         HStack(spacing: 0) {
                             Image(systemName: "person.fill")
-                                .font(.caption).foregroundStyle(.secondary).frame(width: 24)
+                                .font(.caption).foregroundStyle(mutedText).frame(width: 24)
                             TextField("Username", text: $username)
                                 .textContentType(.username).textFieldStyle(.plain)
                                 .autocorrectionDisabled().textInputAutocapitalization(.never)
                         }
                         .padding(10)
-                        .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                        .background(fill(0.06, 0.08), in: RoundedRectangle(cornerRadius: 10))
                     }
 
                     HStack(spacing: 0) {
                         Image(systemName: "key.fill")
-                            .font(.caption).foregroundStyle(.secondary).frame(width: 24)
+                            .font(.caption).foregroundStyle(mutedText).frame(width: 24)
                         // 眼睛 toggle：根据 showPasswordPlain 在 TextField/SecureField
                         // 之间切换。两个组件共用同一 @State password，无需迁移。
                         if showPasswordPlain {
@@ -578,7 +525,7 @@ struct LoginView: View {
                             showPasswordPlain.toggle()
                         } label: {
                             Image(systemName: showPasswordPlain ? "eye.slash.fill" : "eye.fill")
-                                .font(.caption).foregroundStyle(.secondary)
+                                .font(.caption).foregroundStyle(mutedText)
                                 .frame(width: 24, height: 24)
                                 .contentShape(Rectangle())
                         }
@@ -586,7 +533,7 @@ struct LoginView: View {
                         .accessibilityLabel(showPasswordPlain ? "Hide password" : "Show password")
                     }
                     .padding(10)
-                    .background(.quaternary, in: RoundedRectangle(cornerRadius: 8))
+                    .background(fill(0.06, 0.08), in: RoundedRectangle(cornerRadius: 10))
 
                     // 内联错误提示 —— 替代之前打断式 .alert。仅在该角色卡片
                     // 展开时显示，跟密码输入框紧贴，用户改密码时一眼能看到。
@@ -607,18 +554,25 @@ struct LoginView: View {
                         Task { await performLogin(mode: mode) }
                     } label: {
                         HStack(spacing: 6) {
-                            if auth.isLoading { ProgressView() }
-                            if mode == .user {
-                                Text("Sign In / Register").fontWeight(.semibold)
-                            } else {
-                                Text("Login").fontWeight(.semibold)
+                            if auth.isLoading {
+                                ProgressView().tint(SignInPalette.onAccent)
                             }
+                            Text(mode == .user ? "Sign In / Register" : "Login")
+                                .font(.system(size: 15, weight: .semibold))
                         }
-                        .frame(maxWidth: .infinity).padding(.vertical, 10)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
                     }
-                    .buttonStyle(.borderedProminent)
+                    // 不用 `.borderedProminent` + `.tint(accent)`：深色模式的强调色是
+                    // 暖黄 `#F5D99B`，系统会往上面放白字（约 1.3:1，基本看不见）。
+                    // 自己填底、自己定字色。
+                    .buttonStyle(.plain)
+                    .foregroundStyle(SignInPalette.onAccent)
+                    .background(
+                        SignInPalette.accent.opacity(loginDisabled(for: mode) ? 0.35 : 1),
+                        in: RoundedRectangle(cornerRadius: 12)
+                    )
                     .disabled(loginDisabled(for: mode))
-                    .tint(.blue)
 
                     if mode == .user {
                         // 注册不再是单独一屏：名字没被注册过时，登录失败会问一句
@@ -626,11 +580,11 @@ struct LoginView: View {
                         VStack(spacing: 2) {
                             // 与网页端登录页同一句：「未注册的账户将自动完成注册。」
                             Text("Unregistered accounts are created automatically.")
-                                .font(.caption).foregroundStyle(.secondary)
                             Text("By continuing you agree to the Terms of Use and Privacy Policy.")
-                                .font(.caption).foregroundStyle(.secondary)
                                 .multilineTextAlignment(.center)
                         }
+                        .font(.caption)
+                        .foregroundStyle(mutedText)
                         .padding(.top, 4)
                     }
                 }
@@ -638,46 +592,82 @@ struct LoginView: View {
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .background(cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 18))
+        // 设计稿这两张卡是**没有描边、没有投影**的淡色底块——整屏的分层靠
+        // 「暖底 / 白卡 / 淡块」三级明度，不靠线。展开时才给一圈强调色，
+        // 因为那时候里面出现了输入焦点，需要说清楚"现在在这张卡里"。
+        .background(fill(0.05, 0.07), in: RoundedRectangle(cornerRadius: 16))
         .overlay {
-            RoundedRectangle(cornerRadius: 18)
-                .strokeBorder(isExpanded ? brandBlue : cardBorderColor,
-                              lineWidth: isExpanded ? 2 : 1)
+            if isExpanded {
+                RoundedRectangle(cornerRadius: 16)
+                    .strokeBorder(SignInPalette.accent, lineWidth: 2)
+            }
         }
-        .shadow(color: cardShadowColor.opacity(isExpanded ? 0.08 : 0.03),
-                radius: isExpanded ? 12 : 4, y: isExpanded ? 4 : 1)
-        .padding(.bottom, 12)
+    }
+
+    // MARK: - Biometric
+
+    /// 设计稿里那条实心主按钮。浅色是墨蓝底 + 暖白字，深色反过来是暖黄底 + 墨字。
+    private var biometricButton: some View {
+        let name = BiometricAuthService.biometryName
+        return Button {
+            Task { await performBiometricLogin() }
+        } label: {
+            HStack(spacing: 13) {
+                Image(systemName: name == "Face ID" ? "faceid" : "touchid")
+                    .font(.system(size: 22))
+                Text("Sign in with \(name)")
+                    .font(.system(size: 16, weight: .semibold))
+                    .tracking(-0.2)
+                Spacer(minLength: 8)
+                if isAuthenticatingBiometric {
+                    ProgressView().controlSize(.small).tint(SignInPalette.onAccent)
+                } else {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 17, weight: .medium))
+                        .opacity(0.55)
+                }
+            }
+            .foregroundStyle(SignInPalette.onAccent)
+            .padding(.horizontal, 14)
+            .frame(height: 56)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isAuthenticatingBiometric)
+        .background(SignInPalette.accent, in: RoundedRectangle(cornerRadius: 16))
     }
 
     // MARK: - Footer
 
     private var footerSection: some View {
-        VStack(spacing: 12) {
-            Divider().padding(.horizontal, 25)
-
+        VStack(spacing: 0) {
             // 只声明"与 Holland2Stay 无关"是不够的：现在监控七个平台，其余六个
             // 一个都没覆盖到。改成泛指，加平台时不必再回来改这句法律声明。
-            Text("FlatRadar is an **independent** third-party client.\nNot affiliated with, endorsed by, or sponsored by any of the platforms it monitors.\nAll listing data belongs to its respective owners.")
-                .font(.system(size: 12))
-                .foregroundStyle(footerTextColor)
-                .multilineTextAlignment(.center).lineSpacing(3)
+            Text("FlatRadar is an **independent** third-party client. Not affiliated with, endorsed by, or sponsored by any of the platforms it monitors. All listing data belongs to its respective owners.")
+                .font(.system(size: 11.5))
+                .foregroundStyle(mutedText)
+                .multilineTextAlignment(.center)
+                .lineSpacing(4)
+                .padding(.horizontal, 6)
+                .padding(.top, 16)
 
-            HStack(spacing: 4) {
+            HStack(spacing: 8) {
                 Button(LegalText.isChineseLocale ? "使用条款" : "Terms") { showTerms = true }
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(brandBlue)
-                Text("·").foregroundStyle(.secondary).font(.caption)
+                Text("·").foregroundStyle(chevron)
                 Button(LegalText.isChineseLocale ? "隐私政策" : "Privacy") { showPrivacy = true }
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(brandBlue)
             }
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(SignInPalette.accent)
+            .padding(.top, 10)
 
             Text("flatradar.app")
-                .font(.system(size: 12, design: .monospaced))
-                .foregroundStyle(domainColor).tracking(1)
+                .font(.system(size: 11.5, design: .monospaced))
+                .tracking(1.2)
+                .foregroundStyle(watermark)
+                .padding(.top, 6)
         }
-        .padding(.top, 24).padding(.bottom, 36)
+        .frame(maxWidth: .infinity)
         .sheet(isPresented: $showTerms) {
             LegalSheetView(title: LegalText.isChineseLocale ? "使用条款" : "Terms of Use",
                           kind: "terms")
@@ -686,44 +676,6 @@ struct LoginView: View {
             LegalSheetView(title: LegalText.isChineseLocale ? "隐私政策" : "Privacy Policy",
                           kind: "privacy")
         }
-    }
-
-    // MARK: - Biometric
-
-    private var biometricButton: some View {
-        let name = BiometricAuthService.biometryName
-        return Button {
-            Task { await performBiometricLogin() }
-        } label: {
-            HStack(spacing: 12) {
-                Image(systemName: name == "Face ID" ? "faceid" : "touchid")
-                    .font(.system(size: 22))
-                    .foregroundStyle(brandBlue)
-                Text("Sign in with \(name)")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(cardTitleColor)
-                Spacer()
-                if isAuthenticatingBiometric {
-                    ProgressView().controlSize(.small)
-                } else {
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(chevronMuted)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 16).padding(.vertical, 14)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .disabled(isAuthenticatingBiometric)
-        .background(cardBackground)
-        .clipShape(RoundedRectangle(cornerRadius: 18))
-        .overlay {
-            RoundedRectangle(cornerRadius: 18)
-                .strokeBorder(cardBorderColor, lineWidth: 1)
-        }
-        .shadow(color: cardShadowColor.opacity(0.03), radius: 4, y: 1)
     }
 
     private func performBiometricLogin() async {
@@ -869,24 +821,89 @@ struct LoginView: View {
     }
 }
 
-// MARK: - Mountain path shape
+// MARK: - 登录屏的调色板
 
-// `nonisolated`：`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` 会把这个类型也放到
-// 主 actor 上，而 `Shape.path(in:)` 是 nonisolated 的要求——Xcode 27 起这条
-// 不匹配从警告升级成错误（#ConformanceIsolation）。路径计算是纯函数，不碰任何
-// 状态，显式退出隔离即可。同 ChartData / MapClustering 那一批。
-private nonisolated struct MountainPath: Shape {
-    let points: [(CGFloat, CGFloat)]
+/// 只有登录屏用的一组色，**全部取自 App 图标**。
+///
+/// 为什么不进 `FlatRadarCore` 的 `Color+Tokens`
+/// ------------------------------------------
+/// 那份注释自己写了规矩：「屏幕专属的 chrome 保留在原文件里，避免 token 体系
+/// 膨胀」。这些值只有这一屏在用，而且它们的**定义**就是"图标里的那个颜色"，
+/// 不是什么可复用的业务语义。
+///
+/// 每个值的出处
+/// -----------
+/// - ``pitch`` 浅色 `#F3F0E8` 正是 `2-windows.svg` 里窗户的填充色。插画的窗户是
+///   拿背景色"抠"出来的——底色一旦偏一点，窗户就会显出一圈边。深色 `#111C29`
+///   取自设计稿；与图标 `icon.json` 的 dark fill（`#111C29` 附近）同一档。
+/// - ``accent`` 浅色 `#293B49` 是图标里那栋深色房子；深色 `#F5D99B` 是深色版
+///   图标里点亮的窗户——深色模式下墨蓝会直接沉进背景，只能反过来用亮色。
+/// - ``flagSolid`` `#AD3E39` 是图标里那栋红房子。
+private nonisolated enum SignInPalette {
+    static let pitch = Color(light: 0xF3F0E8, dark: 0x111C29)
+    static let ink = Color(light: 0x1B2B38, dark: 0xEDF1F5)
+    static let accent = Color(light: 0x293B49, dark: 0xF5D99B)
+    /// 品牌字。浅色下就是 ``accent``，深色下设计稿用的是**正文色**而不是暖黄——
+    /// 暖黄留给可点的东西（Face ID、Terms/Privacy），品牌字不可点。
+    static let wordmark = Color(light: 0x293B49, dark: 0xEDF1F5)
+    /// 压在 ``accent`` 上的字色。
+    static let onAccent = Color(light: 0xF3F0E8, dark: 0x1B2733)
+    /// 下半屏那张卡的底。
+    static let sheet = Color(light: 0xFFFFFF, dark: 0x1B2733)
+    /// 统计胶囊的底。浅色是实白 + 一层浅影，深色只能靠比底亮一档。
+    static let chip = Color(lightColor: .white, darkColor: .white.opacity(0.09))
+    /// 红房子色，用在 MOST 徽章底和 "new today" 的小菱形上。
+    static let flagSolid = Color(light: 0xAD3E39, dark: 0xF5D99B)
+    /// MOST 徽章的字。深色下红字压在半透红底上读不出来，提亮一档。
+    static let flagText = Color(light: 0xAD3E39, dark: 0xE8968F)
+    static let live = Color(light: 0x34C759, dark: 0x30D158)
 
-    func path(in rect: CGRect) -> Path {
-        Path { p in
-            guard let first = points.first else { return }
-            p.move(to: CGPoint(x: first.0 * rect.width, y: first.1 * rect.height))
-            for pt in points.dropFirst() {
-                p.addLine(to: CGPoint(x: pt.0 * rect.width, y: pt.1 * rect.height))
-            }
-            p.closeSubpath()
-        }
+    /// 插画一"幅"的宽高比（`skyline.svg` 的 viewBox 是 1980×705）。
+    /// 393pt 宽的 iPhone 铺满宽度正好是设计稿写的 140pt 高。
+    static let skylineAspect: CGFloat = 1980.0 / 705.0
+    /// 高度封顶。iPhone 上（143）根本够不着，它只管住 iPad / 横屏那种宽屏——
+    /// 等比放大到 297 会把半个屏幕吃掉。
+    static let skylineMaxHeight: CGFloat = 180
+}
+
+/// `nonisolated` **不是可选的**——少了它就是一次必崩。
+///
+/// 工程开着 `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`，没标注的类型和函数一律
+/// 隐式 `@MainActor`，包括下面传给 `UIColor(dynamicProvider:)` 的那个闭包。而
+/// UIKit / SwiftUI **会在非主线程上调它**去解析颜色（比如 HDR 解析走
+/// `ViewGraph.updateOutputsAsync`），隔离检查当场 `dispatch_assert_queue_fail`：
+///
+///     libswift_Concurrency  swift_task_checkIsolatedSwift
+///     FlatRadar             closure #1 in Color.init(light:dark:)
+///     UIKitCore             -[UIDynamicProviderColor _resolvedColorWithTraitCollection:]
+///     SwiftUICore           PlatformColorProvider.resolveHDR(in:)
+///
+/// 这是 2.1.0 那次线上无限崩溃的同一类问题（后台回调的 ObjC delegate 没写
+/// `nonisolated`）。`Color+Tokens.swift` 里那句「模型层和常量是这个默认值的例外」
+/// 说的就是这个：色板是纯常量，本来就该跟 actor 无关。
+private nonisolated extension Color {
+    /// 设计稿给的是浅 / 深两个 hex，这里直接照搬，不再绕 Asset Catalog——
+    /// 那 8 个语义色进 catalog 是因为**两端共用**，这些只有登录屏用。
+    init(light: UInt32, dark: UInt32) {
+        self.init(uiColor: UIColor { traits in
+            UIColor(hex: traits.userInterfaceStyle == .dark ? dark : light)
+        })
+    }
+
+    /// 两边不是纯色 hex（比如深色那半带透明度）时用这个。
+    init(lightColor: Color, darkColor: Color) {
+        self.init(uiColor: UIColor { traits in
+            UIColor(traits.userInterfaceStyle == .dark ? darkColor : lightColor)
+        })
+    }
+}
+
+private nonisolated extension UIColor {
+    convenience init(hex: UInt32) {
+        self.init(red: Double((hex >> 16) & 0xFF) / 255,
+                  green: Double((hex >> 8) & 0xFF) / 255,
+                  blue: Double(hex & 0xFF) / 255,
+                  alpha: 1)
     }
 }
 

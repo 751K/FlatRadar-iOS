@@ -61,9 +61,23 @@
 `AccentColor.colorset` **是空的**——没配任何值，走系统默认蓝。这不是疏漏后的将就，
 但也从没被当成决定记录过。Mac 上要不要给一个品牌强调色，是**待定项**（见第五节）。
 
-登录页另有一套页面专属色，不是 token，也不该变成 token：
-`brandBlue = #0A84FF`、hero 渐变、山形色、标题色，全在 `LoginView.swift` 里私有。
-原则是「跨文件复用才进 token，屏幕专属的 chrome 留在原文件」。
+登录页另有一套页面专属色，不是 token，也不该变成 token：见
+`LoginView.swift` 里私有的 `SignInPalette`。原则是「跨文件复用才进 token，
+屏幕专属的 chrome 留在原文件」。
+
+2026-09-10 这套色**整体换过一次**（对齐设计稿 `FlatRadar iOS - Sign in.dc.html`）：
+原来是自成一体的一套蓝（`brandBlue = #0A84FF` + 浅蓝 hero 渐变 + 手画的山脊），
+和 App 图标没有任何关系，登录页看着像另一个 App。现在每个值都从图标里取——
+暖底 `#F3F0E8` 就是图标里窗户的填充色，强调色 `#293B49` 是那栋深色房子，
+深色模式反过来用点亮的窗黄 `#F5D99B`。插画也不再是手画的，直接由
+`output/icon/make-signin-skyline.py` 从 `AppIcon.icon/Assets` 拼出来
+（`tests/test_signin_skyline.py` 钉住两者不脱钩）。
+
+⚠️ 这类 `Color(light:dark:)` 便利构造器**必须写 `nonisolated`**：工程开着
+`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`，传给
+`UIColor(dynamicProvider:)` / `NSColor(name:dynamicProvider:)` 的闭包会被隐式钉到
+主 actor，而系统会在非主线程上调它解析颜色，隔离检查当场 trap。iOS 上实测崩过
+（栈贴在 `LoginView.swift`），Mac 的 `Theme.swift` 同一天补上。
 
 ---
 
@@ -95,7 +109,7 @@
 | 角色 | iOS 取值 | 出处 |
 |---|---|---|
 | 页面大标题 | 28 heavy，`tracking(-0.8)` | Dashboard / Notifications |
-| 登录页主标题 | 28 black | LoginView |
+| 登录页主标题 | 27 bold，`tracking(-0.8)` | LoginView |
 | 卡片标题 | 13 heavy | Explore mini cards |
 | 房源名 | 15.5 semibold | ListingRow.titleLine |
 | **价格** | **17 bold monospaced + `monospacedDigit()`** | ListingRow ×3 形态 |
