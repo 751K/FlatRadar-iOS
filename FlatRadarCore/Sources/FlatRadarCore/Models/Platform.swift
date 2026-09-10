@@ -47,6 +47,24 @@ public nonisolated enum Platform {
         displayNames.keys.sorted { displayNames[$0]! < displayNames[$1]! }
     }
 
+    /// 登录屏上那排平台缩写的顺序。
+    ///
+    /// **不是** ``knownKeys``：那份按显示名的字母排，H2S 会掉到 MG / OC 后面去。
+    /// 登录屏是用户第一眼看到的东西，设计稿（Mac / iPad 两份都是）把体量大的放
+    /// 前面——先让人认出自己已经在用的那家。
+    ///
+    /// 放在包里而不是各端各写一份：Mac 的 `SignInPane` 和 iOS 的 `LoginView` 用的
+    /// 是同一个顺序，抄两份迟早有一份在加第八个平台时被忘掉。这个文件开头那段
+    /// 注释讲的就是这件事——收拢之前同一份映射在七个文件里各写了一遍，没有一份是全的。
+    ///
+    /// 只列已登记的；``knownKeys`` 里有而这里没有的，会被追加在末尾。
+    public static var featuredOrder: [String] {
+        let featured = ["holland2stay", "ourdomain", "ourcampus",
+                        "xior", "magis", "studentexperience", "plaza"]
+        let known = Set(knownKeys)
+        return featured.filter(known.contains) + knownKeys.filter { !featured.contains($0) }
+    }
+
     /// 平台全名。
     ///
     /// 认不出的 key **不套一个默认平台名**——把未知 source 显示成

@@ -130,17 +130,15 @@ struct SignInPane: View {
         .background(Theme.pitchBackground)
     }
 
-    /// 七个平台的缩写。取包里的 ``Platform/knownKeys``，不写死——
+    /// 七个平台的缩写。取包里的 ``Platform/featuredOrder``，不写死——
     /// 加了第八家的时候这里自己就多一个。
-    private static let chipOrder = ["holland2stay", "ourdomain", "ourcampus",
-                                    "xior", "magis", "studentexperience", "plaza"]
-
+    ///
+    /// 顺序**不用** `knownKeys`：那是按显示名字母排的，H2S 会排在 MG / OC 后面。
+    /// 设计稿把大的放前面，照做——用户第一眼要看到的是自己认得的那几家。
+    /// 这个顺序 iPad 登录屏也在用，所以它住在包里，不在这儿。
     private var platformChips: some View {
         HStack(spacing: 5) {
-            // 顺序**不用** `knownKeys`：那是按显示名字母排的，
-            // H2S 会排在 MG / OC 后面。设计稿把大的放前面，照做——
-            // 用户第一眼要看到的是自己认得的那几家。
-            ForEach(Self.chipOrder, id: \.self) { key in
+            ForEach(Platform.featuredOrder, id: \.self) { key in
                 Text(Platform.shortName(key))
                     .font(.system(size: 9, weight: .heavy, design: .monospaced))
                     .tracking(0.4)

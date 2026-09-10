@@ -29,8 +29,8 @@ ROOT = Path(__file__).resolve().parent.parent
 SCRIPT = ROOT / "output" / "icon" / "make-signin-skyline.py"
 IMAGESET = ROOT / "FlatRadar" / "Assets.xcassets" / "SignInSkyline.imageset"
 
-#: `LoginView.skylineSection` 按这个宽高比铺满宽度，改了 viewBox 就得改那边。
-EXPECTED_VIEWBOX = "127 90 1980 705"
+#: `LoginView.Skyline` 按这个 viewBox 算一幅的宽高比，改了这里就得改那边。
+EXPECTED_VIEWBOX = "127.5 82.0 659.0 730.0"
 
 
 def _generator():
@@ -72,8 +72,30 @@ def test_两版颜色不一样(gen):
 
 
 def test_viewbox_没变(gen):
-    """`LoginView` 那边按 1980:705 算插画高度，这里改了那边要跟着改。"""
+    """`LoginView.Skyline.aspect` 按 659:730 算一幅的宽度，这里改了那边要跟着改。"""
     assert f'viewBox="{EXPECTED_VIEWBOX}"' in gen.build("")
+
+
+def test_运河线跨满整幅且是方头(gen):
+    """这两条是**无缝平铺的前提**，都踩过。
+
+    素材是一"幅"，天际线由 `LoginView` 横着摆 N 幅拼出来：
+
+    - 运河线短于一幅（图标原始的 x 89.5 / 宽 733）→ 每个接缝一道断口。
+    - 运河线带圆角（图标原始的 `rx=15`）→ 每个接缝两个圆头对在一起，
+      渲染出来是一串"断成节的"运河。实测截图确认过。
+
+    看不出圆角没了：设计稿那条的圆头本来就落在 viewBox 外面被裁掉，
+    屏幕上从没出现过。
+    """
+    import re
+    for suffix in ("", "-dark"):
+        m = re.search(r'<rect id="canal-line"([^>]*)/>', gen.build(suffix))
+        assert m, f"{suffix or 'light'} 版找不到运河线"
+        attrs = m.group(1)
+        assert 'x="127.5"' in attrs and 'width="659.0"' in attrs, \
+            f"运河线没跨满整幅，接缝会露出断口：{attrs}"
+        assert "rx=" not in attrs, f"运河线带圆角，接缝会露出两个圆头：{attrs}"
 
 
 def test_没有重名的_id(gen):
