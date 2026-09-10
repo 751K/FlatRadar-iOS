@@ -109,8 +109,7 @@ struct InspectorPane: View {
     /// 也不能在界面上讲一句自信的假话。
     private func calendarDay(_ day: CalendarDay) -> some View {
         let dayRowLimit = expandedDay == day ? day.count : defaultDayRowLimit
-        return
-        VStack(alignment: .leading, spacing: 6) {
+        return VStack(alignment: .leading, spacing: 6) {
             Text("Selected day")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
