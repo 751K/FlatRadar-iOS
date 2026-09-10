@@ -1,6 +1,7 @@
 # macOS 客户端任务书
 
-写于 2026-09-09。这份文档只管 macOS 客户端这一件事；版本目标看 [NEXT.md](NEXT.md)。
+写于 2026-09-09。这份文档只管 macOS 客户端这一件事；版本目标看 [NEXT.md](NEXT.md)，
+视觉规范和页面清单看 [DESIGN.md](DESIGN.md)。
 
 2026-09-09 审阅修订：已对照当前 iOS 代码、本地 macOS SDK 和文末 Apple 文档。
 维护取舍：优先降低长期双端维护成本，先迁移为仓库内的本地 SwiftPM 包，再开发 Mac 视图。

@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import FlatRadarCore
 
 /// macOS 客户端入口。
@@ -98,12 +99,28 @@ struct FlatRadarMacApp: App {
             RootView()
                 .environment(auth)
         }
-        .defaultSize(width: 1180, height: 720)
+        // 设计稿画的就是 1440×900。三栏加起来的下限：侧栏 196 + 表格九列约 620
+        // + inspector 300 ≈ 1120，再窄就得先收 inspector。
+        .defaultSize(width: 1440, height: 900)
         .commands {
             // 命令读的是**当前聚焦那个窗口**的 model（focusedSceneValue），
             // 所以将来开多窗口时 ⌘R 刷新的是你正在看的那一个。
             CommandGroup(after: .toolbar) {
                 BrowseCommands()
+            }
+            // 登出。**Mac 端此前根本没有这个入口**——`AuthStore.logout()` 只在
+            // iOS 的 SettingsView 里被调用过，Mac 上登录了就再也回不到登录屏，
+            // 除非去删钥匙串。做了登录页却没有回去的路，等于半个功能。
+            //
+            // 放在应用菜单（`.appSettings` 之后）而不是某个界面里：Mac 上
+            // 「账号」这类命令的惯例位置就是应用菜单，而且这一屏是全窗口切换的，
+            // 没有一个自然的界面角落安放它。
+            CommandGroup(after: .appSettings) {
+                Divider()
+                SignOutCommand(auth: auth)
+            }
+            CommandMenu("Listing") {
+                ListingCommands()
             }
         }
     }
@@ -127,9 +144,9 @@ private struct RootView: View {
     var body: some View {
         Group {
             if auth.isAuthenticated {
-                BrowseWindow()
+                MainWindow()
             } else {
-                SignInView()
+                SignInPane()
             }
         }
         .task {
@@ -137,6 +154,73 @@ private struct RootView: View {
             didRestore = true
             await auth.restoreSession()
         }
+        // 登录屏用小窗口，进主界面再放回去。
+        //
+        // 为什么要管：`WindowGroup` 的 `defaultSize` 是**场景级**的，按主窗口
+        // 定的 1440×900——三栏表格需要那么宽。登录屏只有一栏说明加一个表单，
+        // 摊在 1440×900 里表单会飘在正中央、四周大片空白，像没做完。
+        //
+        // 记住进来之前的尺寸再缩，出去时原样还回去：这样用户自己调过的窗口
+        // 不会被登出一次就抹掉。冷启动时如果已经登录，这段一次都不跑。
+        .background(WindowSizer(compact: !auth.isAuthenticated))
+    }
+}
+
+/// 按登录态切窗口尺寸。见 ``RootView`` 里的调用点。
+private struct WindowSizer: NSViewRepresentable {
+
+    let compact: Bool
+
+    /// 登录屏的尺寸，取自设计稿那张图的比例。
+    static let signInSize = NSSize(width: 900, height: 620)
+
+    func makeNSView(context: Context) -> NSView { NSView(frame: .zero) }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        // 下一个 runloop 再动：`updateNSView` 跑的时候视图不一定已经进了窗口。
+        DispatchQueue.main.async {
+            guard let window = view.window else { return }
+            let current = window.contentLayoutRect.size
+            if compact {
+                guard current != Self.signInSize else { return }
+                context.coordinator.restoreTo = current      // 记住原来的
+                window.setContentSize(Self.signInSize)
+                window.center()
+            } else if let target = context.coordinator.restoreTo {
+                context.coordinator.restoreTo = nil
+                window.setContentSize(target)
+                window.center()
+            }
+        }
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    /// 记住登录前的窗口尺寸。放在 coordinator 里而不是 `@State`：
+    /// 这个 representable 会随登录态重建，`@State` 活不过那一次重建。
+    final class Coordinator { var restoreTo: NSSize? }
+}
+
+/// 应用菜单里的 Sign Out。
+///
+/// `auth` 是**显式传进来**的，不走 `@Environment`。
+///
+/// `.environment(auth)` 挂在 `WindowGroup` 里的 `RootView` 上，而 `commands { }`
+/// 是 **Scene 级**的作用域，读不到窗口内容那一层注入的环境值——写成
+/// `@Environment(AuthStore.self)` 会在菜单第一次求值时直接 trap
+/// （"No Observable object of type AuthStore found"）。而 `FlatRadarMacApp`
+/// 自己就攥着那个 `@State`，直接给过来就行。
+private struct SignOutCommand: View {
+
+    let auth: AuthStore
+
+    var body: some View {
+        Button("Sign Out") {
+            Task { await auth.logout() }
+        }
+        // 访客态也给它：`enterAsGuest()` 同样把 `isAuthenticated` 置真，
+        // 没有这一条的话「以访客进来」就成了单程票。
+        .disabled(!auth.isAuthenticated)
     }
 }
 
@@ -154,120 +238,51 @@ private struct BrowseCommands: View {
     }
 }
 
-private struct SignInView: View {
-    @Environment(AuthStore.self) private var auth
-
-    @State private var username = ""
-    @State private var password = ""
-    @State private var selfTest: KeychainSelfTest?
+/// 「Listing」菜单：上下浏览 + 对当前这条的动作。
+///
+/// 表格自己有焦点时 ↑↓ 本来就能翻（底下是 NSTableView），为什么还要菜单项：
+///
+/// 1. **可发现**。Mac 用户是从菜单里学会快捷键的，没有菜单项的快捷键等于不存在。
+/// 2. **焦点不在表格上时也能翻**。焦点在 inspector 里、或者刚点完工具栏按钮，
+///    这时候裸 ↑↓ 不归表格管，⌘↑/⌘↓ 仍然有效。
+///
+/// 完成判据里那条「能只用键盘筛选、跨页浏览并固定两套房源比较」，缺的就是
+/// 「固定」这一步没有键盘入口——⌘D 补上了。
+private struct ListingCommands: View {
+    @FocusedValue(\.browseModel) private var model
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
-                header
-                Divider()
-                signInForm
-                Divider()
-                keychainPanel
-            }
-            .padding(24)
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
+        Button("Next Listing") { model?.moveSelection(by: 1) }
+            .keyboardShortcut(.downArrow, modifiers: .command)
+        Button("Previous Listing") { model?.moveSelection(by: -1) }
+            .keyboardShortcut(.upArrow, modifiers: .command)
+
+        Divider()
+
+        Button(pinTitle) { if let id = model?.focused { model?.togglePin(id) } }
+            .keyboardShortcut("d")
+            .disabled(model?.focused == nil)
+        Button("Open on Platform") { openFocused() }
+            .keyboardShortcut("o")
+            .disabled(model?.focused == nil)
+        Button("Copy Link") { copyFocused() }
+            .keyboardShortcut("c", modifiers: [.command, .shift])
+            .disabled(model?.focused == nil)
     }
 
-    // MARK: 标题
-
-    private var header: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text("FlatRadar for Mac").font(.largeTitle.weight(.semibold))
-            Text(APIClient.defaultServerHost)
-                .font(.callout).foregroundStyle(.secondary)
-            Text(AppVersion.displayName)
-                .font(.caption).foregroundStyle(.tertiary)
-        }
+    private var pinTitle: String {
+        guard let model, let id = model.focused else { return "Pin for Comparison" }
+        return model.pinned.contains(id) ? "Unpin" : "Pin for Comparison"
     }
 
-    // MARK: 未登录
-
-    private var signInForm: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Sign In").font(.headline)
-            // 凭据只在内存里，既不写进源码也不进日志。
-            TextField("Username", text: $username)
-                .textContentType(.username)
-            SecureField("Password", text: $password)
-                .textContentType(.password)
-                .onSubmit { signIn() }
-            HStack {
-                Button("Sign In", action: signIn)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(auth.isLoading || username.isEmpty || password.isEmpty)
-                if auth.isLoading { ProgressView().controlSize(.small) }
-            }
-            errorBox
-        }
-        .textFieldStyle(.roundedBorder)
-        .frame(maxWidth: 360, alignment: .leading)
+    private func openFocused() {
+        guard let l = model?.listing(model?.focused), let url = URL(string: l.url) else { return }
+        NSWorkspace.shared.open(url)
     }
 
-    @ViewBuilder
-    private var errorBox: some View {
-        if let msg = auth.errorMessage {
-            // 完成判据：「拒绝网络或凭据错误时，窗口显示可理解的错误」。
-            // 用后端给的具体原因，不是「登录失败」四个字。
-            VStack(alignment: .leading, spacing: 2) {
-                Text(auth.lastError?.errorDescription ?? "Sign-in failed")
-                    .font(.callout.weight(.medium))
-                Text(msg).font(.caption)
-            }
-            .foregroundStyle(.red)
-        }
-    }
-
-    // MARK: 钥匙串
-
-    private var keychainPanel: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("Keychain").font(.headline)
-
-            // 会话到底进没进钥匙串。登录成功 ≠ 钥匙串成功。
-            LabeledContent("Session stored in keychain") {
-                statusText(auth.sessionSavedToKeychain)
-            }
-            // 完成判据：「确认没有触发 UserDefaults token 回退」
-            LabeledContent("UserDefaults fallback token") {
-                statusText(!KeychainDiagnostics.hasUserDefaultsFallbackToken,
-                           ok: "none", bad: "present")
-            }
-
-            Button("Run keychain self-test") { selfTest = KeychainDiagnostics.run() }
-
-            if let t = selfTest {
-                VStack(alignment: .leading, spacing: 3) {
-                    ForEach(Array(t.steps.enumerated()), id: \.offset) { _, step in
-                        Text(step).font(.callout.monospaced())
-                    }
-                    Text(t.allPassed ? "增 / 查 / 删 三步都通过" : "有步骤失败，见上")
-                        .font(.caption)
-                        .foregroundStyle(t.allPassed ? .green : .red)
-                }
-                .padding(10)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.quaternary.opacity(0.4), in: RoundedRectangle(cornerRadius: 8))
-            }
-        }
-    }
-
-    private func statusText(_ ok: Bool, ok okText: String = "yes",
-                            bad: String = "no") -> some View {
-        Text(ok ? okText : bad)
-            .foregroundStyle(ok ? .green : .red)
-    }
-
-    private func signIn() {
-        Task {
-            await auth.loginAsUser(name: username, password: password)
-            password = ""                       // 不在内存里多留一秒
-        }
+    private func copyFocused() {
+        guard let l = model?.listing(model?.focused) else { return }
+        NSPasteboard.general.clearContents()
+        NSPasteboard.general.setString(l.url, forType: .string)
     }
 }
