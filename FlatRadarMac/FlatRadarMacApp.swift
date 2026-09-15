@@ -4,16 +4,20 @@ import FlatRadarCore
 
 /// macOS 客户端入口。
 ///
-/// 应用级状态只有 ``AuthStore``（服务器 / 账户 / 认证），窗口级的一切在
-/// ``BrowseModel`` 里——docs/MACOS.md 风险 6 的划分。带查询状态的
-/// `ListingsStore` 不做全局单例，否则将来两个窗口会互相覆盖排序和筛选。
+/// 应用级状态是 ``AuthStore``（服务器 / 账户 / 认证）和 ``PushStore``（这台 Mac
+/// 的 APNs 注册），窗口级的一切在 ``BrowseModel`` 里——docs/MACOS.md 风险 6 的划分。
+/// 带查询状态的 `ListingsStore` 不做全局单例，否则将来两个窗口会互相覆盖排序和筛选。
 ///
-/// 刻意**不做**的：推送（不申请权限、不注册 token、不调 `/devices/register`）、
-/// 多窗口、地图 / 日历。都在文档里排在后面。
+/// 推送是**应用级**的：一台 Mac 一个 device token，不随窗口数变。
 @main
 struct FlatRadarMacApp: App {
 
     @State private var auth = AuthStore()
+    @State private var push = PushStore()
+
+    /// APNs token 只能从 app delegate 拿到。实例由 SwiftUI 构造并持有，
+    /// 通过 ``RootView`` 交给 ``PushStore/setup(bridge:)``。
+    @NSApplicationDelegateAdaptor(MacPushDelegate.self) private var pushDelegate
 
     /// 无头钥匙串自检的启动参数。
     ///
@@ -96,8 +100,9 @@ struct FlatRadarMacApp: App {
 
     var body: some Scene {
         WindowGroup("FlatRadar") {
-            RootView()
+            RootView(pushBridge: pushDelegate)
                 .environment(auth)
+                .environment(push)
         }
         // 设计稿画的就是 1440×900。三栏加起来的下限：侧栏 196 + 表格九列约 620
         // + inspector 300 ≈ 1120，再窄就得先收 inspector。
@@ -117,7 +122,7 @@ struct FlatRadarMacApp: App {
             // 没有一个自然的界面角落安放它。
             CommandGroup(after: .appSettings) {
                 Divider()
-                SignOutCommand(auth: auth)
+                SignOutCommand(auth: auth, push: push)
             }
             CommandMenu("Listing") {
                 ListingCommands()
@@ -139,7 +144,60 @@ private final class SessionReportState {
 /// 按登录态分流：登录了看表格，没登录看登录页。
 private struct RootView: View {
     @Environment(AuthStore.self) private var auth
+    @Environment(PushStore.self) private var push
+    @Environment(\.openURL) private var openURL
     @State private var didRestore = false
+
+    /// 「通知没打开」弹窗。
+    @State private var showNotificationsOff = false
+    /// 这次启动里弹过没有。**一次启动最多弹一次**：用户点了 Not Now 就是知道了，
+    /// 之后切回前台还弹就成了骚扰。
+    @State private var didOfferNotificationSettings = false
+    /// 用户勾了「不再提醒」。**跨启动**，存 UserDefaults。
+    ///
+    /// 有人是故意把通知关掉的，每次打开都被问一遍就是骚扰。按 Mac 的惯例做成
+    /// 弹窗里的勾选框（`dialogSuppressionToggle`，系统弹窗那个「不再显示此信息」），
+    /// 不做成第三个按钮：勾上之后点哪个按钮离开都算数，包括「打开系统设置」。
+    ///
+    /// 按这台 Mac 存，不按账号——通知权限本来就是这台 Mac 的，不是账号的。
+    @AppStorage("notificationsOffAlertSuppressed") private var notificationsAlertSuppressed = false
+
+    let pushBridge: MacPushDelegate
+
+    /// 这一刻该不该有推送注册。
+    ///
+    /// 访客没有 bearer，`/devices/register` 调不通；登出后也不该再注册。
+    private var wantsPush: Bool { auth.isAuthenticated && !auth.isGuest }
+
+    /// 跑在 XCTest 的宿主进程里。
+    ///
+    /// `FlatRadarMacTests` 的 `TEST_HOST` 就是这个 app，跑单测会真的启动它、
+    /// 真的从钥匙串恢复会话——这台开发机是登录着的，不拦的话**每跑一次单测**
+    /// 就会弹一次通知权限框、往后端注册一台设备。
+    private static let isUnderXCTest =
+        ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+
+    /// 系统设置里「通知 → FlatRadar」那一页。
+    ///
+    /// `?id=` 带的是 bundle ID，macOS 13 起会直接选中这个 app；认不出的话落在
+    /// 通知总列表，也不算错。
+    private static let notificationSettingsURL = URL(
+        string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension?id="
+            + (Bundle.main.bundleIdentifier ?? "com.j.kong.FlatRadar"))!
+
+    /// 系统已经不会再弹权限框了，就由我们来说。
+    ///
+    /// 为什么只认 `.denied`：`.notDetermined` 时系统自己会弹（macOS 上是右上角
+    /// 一条横幅），我们再弹一个就是两个框叠在一起。只有「问过、被拒、系统不会再问」
+    /// 这一种情况，用户才完全不知道推送没开——`PushStore` 以前连这个状态都报不对，
+    /// 见它 `requestPermissionAndRegister` 里 catch 分支的注释。
+    private func offerNotificationSettingsIfBlocked() {
+        guard push.permissionStatus == .denied,
+              !didOfferNotificationSettings,
+              !notificationsAlertSuppressed else { return }
+        didOfferNotificationSettings = true
+        showNotificationsOff = true
+    }
 
     var body: some View {
         Group {
@@ -154,6 +212,37 @@ private struct RootView: View {
             didRestore = true
             await auth.restoreSession()
         }
+        // 登录态一变就重新判断一次：冷启动恢复会话、登录、注册、从访客转正
+        // 四条路都会把 `wantsPush` 翻成 true，这里一个地方全接住。iOS 那边是
+        // 六个调用点各调一次，漏一个就是一条路没有推送。
+        //
+        // 用 `.task(id:)` 不用 `.onChange`：后者对**初始值**不触发，冷启动时
+        // 如果恢复得够快、第一次求值就已经是 true，就一次都不跑。
+        .task(id: wantsPush) {
+            // setup 是幂等的。放在这里而不是上面那个 task：两个 `.task` 谁先跑
+            // 没有保证，放一起就不用赌顺序。
+            push.setup(bridge: pushBridge)
+            guard wantsPush, !Self.isUnderXCTest else { return }
+            await push.requestPermissionAndRegister()
+            offerNotificationSettingsIfBlocked()
+        }
+        // 从系统设置切回来：之前被拦、现在可能已经打开了，重新注册一次。
+        //
+        // 只在**这次启动弹过窗**之后才做——那说明用户确实可能去改过。不加这道门，
+        // 冷启动那一下的 didBecomeActive 也会触发，和上面的 task 并发注册两次。
+        .onReceive(NotificationCenter.default.publisher(
+            for: NSApplication.didBecomeActiveNotification)) { _ in
+            guard didOfferNotificationSettings, wantsPush,
+                  push.permissionStatus == .denied else { return }
+            Task { await push.requestPermissionAndRegister() }
+        }
+        .alert("Notifications Are Off", isPresented: $showNotificationsOff) {
+            Button("Open System Settings") { openURL(Self.notificationSettingsURL) }
+            Button("Not Now", role: .cancel) {}
+        } message: {
+            Text("FlatRadar can't alert you about new listings or status changes. Turn on notifications for FlatRadar in System Settings → Notifications.")
+        }
+        .dialogSuppressionToggle("Don't remind me again", isSuppressed: $notificationsAlertSuppressed)
         // 登录屏用小窗口，进主界面再放回去。
         //
         // 为什么要管：`WindowGroup` 的 `defaultSize` 是**场景级**的，按主窗口
@@ -203,7 +292,7 @@ private struct WindowSizer: NSViewRepresentable {
 
 /// 应用菜单里的 Sign Out。
 ///
-/// `auth` 是**显式传进来**的，不走 `@Environment`。
+/// `auth` / `push` 是**显式传进来**的，不走 `@Environment`。
 ///
 /// `.environment(auth)` 挂在 `WindowGroup` 里的 `RootView` 上，而 `commands { }`
 /// 是 **Scene 级**的作用域，读不到窗口内容那一层注入的环境值——写成
@@ -213,10 +302,17 @@ private struct WindowSizer: NSViewRepresentable {
 private struct SignOutCommand: View {
 
     let auth: AuthStore
+    let push: PushStore
 
     var body: some View {
         Button("Sign Out") {
-            Task { await auth.logout() }
+            // **先解绑设备，再登出。** `DELETE /devices/<id>` 要带 bearer，
+            // 顺序反过来 token 已经被撤销，解绑请求 401，这台 Mac 就会继续
+            // 收到上一个账号的推送。和 iOS SettingsView 的顺序一致。
+            Task {
+                await push.logout()
+                await auth.logout()
+            }
         }
         // 访客态也给它：`enterAsGuest()` 同样把 `isAuthenticated` 置真，
         // 没有这一条的话「以访客进来」就成了单程票。

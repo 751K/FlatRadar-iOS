@@ -141,6 +141,19 @@ public final class PushStore {
         } catch {
             lastError = error.localizedDescription
             print("[PushStore] requestAuthorization error: \(error)")
+            // **拒过之后再请求，macOS 不是返回 false，而是直接抛错。**
+            //
+            // iOS 上用户拒绝后，`requestAuthorization` 返回 `granted=false`，
+            // 流程往下走到 `refreshPermissionStatus()`，状态自然变成 `.denied`。
+            // macOS 上同样的情况抛 `UNError.notificationsNotAllowed`（Code=1，
+            // "Notifications are not allowed for this application"），原先这里
+            // 直接 return，`permissionStatus` 就停在 `.notDetermined`——宿主看到的
+            // 是「还没问过」，而实际是「问过了、被拒了、系统不会再弹」。
+            //
+            // 2026-09-16 在 Mac 上实测踩到：权限横幅被拖走即视为拒绝，之后每次
+            // 启动都是这个错，界面上毫无表示。
+            await refreshPermissionStatus()
+            if Self.isNotAllowed(error) { permissionStatus = .denied }
             return
         }
         await refreshPermissionStatus()
@@ -157,6 +170,11 @@ public final class PushStore {
     private func refreshPermissionStatus() async {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
         permissionStatus = Self.map(settings.authorizationStatus)
+    }
+
+    /// 这个错误是不是「系统不允许这个 app 发通知」——也就是用户拒过、系统不会再弹框。
+    static func isNotAllowed(_ error: any Error) -> Bool {
+        (error as? UNError)?.code == .notificationsNotAllowed
     }
 
     private static func map(_ s: UNAuthorizationStatus) -> PermissionStatus {

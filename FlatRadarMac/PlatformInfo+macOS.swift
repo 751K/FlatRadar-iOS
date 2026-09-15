@@ -15,8 +15,10 @@ extension PlatformInfo {
     /// （"arm64"），不是机型；真机型要读 IOKit 的 `model` 属性。在核实之前不拿架构
     /// 冒充机型，宁可上报一个明确的占位值。
     ///
-    /// `platformId` 同理待定：后端 `device_tokens.platform` 的取值约束本次没核实
-    /// （docs/MACOS.md 风险 3）。Phase 0 / 1 的 Mac 端不注册设备，这个值不会发出去。
+    /// `platformId` 是 `"macos"`，**会发给后端**：`/devices/register` 的 `platform`
+    /// 字段读的就是它。后端 v1.41.0（`290a61e`）起接受这个值，按
+    /// `APNS_PLATFORMS = {"ios", "macos"}` 走 APNs；未知值直接 400。
+    /// `FlatRadarMacTests/PushRegistrationTests` 钉住了它。
     @MainActor
     static var macOS: PlatformInfo {
         let v = ProcessInfo.processInfo.operatingSystemVersion

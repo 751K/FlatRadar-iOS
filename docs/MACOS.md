@@ -394,9 +394,30 @@ Core 对 `PushDelegate.shared` 的反向引用换成了 `PushPlatformBridge` 协
 的平台使用相同 Bundle ID；普通提醒推送的 `apns-topic` 使用应用 Bundle ID，不能根据「原生 Mac」
 推断 topic 必然不同。按实际选择核对 topic、签名权限、APNs 环境和设备 token 的归属。
 
-当前客户端 `APIClient.registerDevice()` 硬编码 `platform: "ios"`，需要与平台适配一并修改。
-原盘点称后端 `device_tokens.platform` 只接受 `ios` / `android`；本次未审阅后端，实施前核对
-校验、数据库约束、发送通道和 topic 选择，再决定兼容迁移。保留 iOS 注册和投递行为。
+**2026-09-16 已落地**，结论记在这里：
+
+- **Bundle ID 共用**：Mac 和 iOS 都是 `com.j.kong.FlatRadar`，`apns-topic` 通用，同一把 `.p8`。
+  后端据此**分不出** Mac 和 iOS，所以必须显式上报 `platform`。
+- **客户端早就不硬编码了**：`registerDevice()` 读 `PlatformEnvironment.info.platformId`，
+  iOS 注入 `"ios"`、Mac 注入 `"macos"`。上面这句「硬编码」是迁移前的状态。
+- **后端 v1.41.0（`290a61e`）**：原先四处按平台分流、写法不一致——三处是 `!= "android"`
+  的黑名单，`POST /devices/test` 是 `in ("ios",)` 的白名单，Mac 设备的测试推送会被**静默
+  丢掉**（返回 `sent: 0`，不报错）。收成 `APNS_PLATFORMS = {"ios", "macos"}` 一个白名单，
+  注册时对未知 `platform` 返回 400。数据库 `platform` 列本来就没有 CHECK 约束，不用迁移。
+- **env**：debug 包报 `sandbox`。签名里的是 `com.apple.developer.aps-environment`
+  （macOS 带前缀，iOS 是裸的 `aps-environment`），Debug 构建签成 `development`。
+  `PushRegistrationTests` 从宿主进程的签名里读这个值，和代码报的 env 对账——
+  也就是下面验收要求的「依据最终签名配置验证，不只凭 `DEBUG` 推断」。
+- **拒绝权限在 Mac 上长得不一样**：权限请求是右上角一条横幅，**拖走即视为拒绝**；此后
+  `requestAuthorization` 不弹框、也不返回 `false`，而是抛 `UNError.notificationsNotAllowed`
+  （Code=1）。`PushStore` 原先只按 iOS 的返回值处理，Mac 上状态永远停在 `.notDetermined`。
+  现在 catch 分支把它归为 `.denied`；Mac 登录后检测到 `.denied` 会弹一次窗，带「打开系统设置」
+  （`x-apple.systempreferences:com.apple.Notifications-Settings.extension?id=…`），
+  从系统设置切回来自动重新注册。每次启动最多弹一次；弹窗带 Mac 惯例的「Don't remind me again」
+  勾选框（`dialogSuppressionToggle`），勾上后跨启动不再弹，按这台 Mac 存。
+  实测：链接落在 `anchor: id=com.j.kong.FlatRadar`，直接定位到 FlatRadar 那一页。
+- **真机实测**（Debug 包）：`requestAuthorization granted=true` → `didRegister (32 bytes)`
+  → `backend registered device_id=184 env=sandbox`。
 
 推送不保证是唯一后端改动：全局排序、分页等也可能需要扩展。跨端行为先在后端 `docs/API.md`
 约定，并同步作为接口事实来源的 `docs/openapi.json`，再各端实现。

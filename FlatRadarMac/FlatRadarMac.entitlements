@@ -9,6 +9,16 @@
 	<key>com.apple.security.network.client</key>
 	<true/>
 
+	<!-- APNs。键名带 com.apple.developer. 前缀——iOS 那边是裸的 aps-environment，
+	     照抄过来 macOS 不认，registerForRemoteNotifications 会直接失败。
+
+	     写 development：Xcode 直接 Run 用开发描述文件签，拿到的是 sandbox token。
+	     归档导出（TestFlight / App Store）时 Xcode 会把它改写成 production，
+	     和 PushStore.currentEnv 的 #if DEBUG 两边对得上。本地用 Release 配置
+	     直接 Run 是唯一对不上的组合（代码报 production、签名是 development）。 -->
+	<key>com.apple.developer.aps-environment</key>
+	<string>development</string>
+
 	<!-- Keychain Sharing。
 	     不是为了"共享"，是为了拿到 application-identifier：macOS 的
 	     data protection 钥匙串（见 KeychainManager.dataProtection）要求签名带它，

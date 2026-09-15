@@ -77,6 +77,14 @@ struct MainWindow: View {
             _ = await (listings, stats)
         }
         .focusedSceneValue(\.browseModel, model)
+        // 点了推送通知 → 切到 Alerts 屏，新来的那条就在最上面。
+        //
+        // 只切屏、不定位到具体哪一条：payload 里给的是 `listing_id` 不是通知 id，
+        // 同一套房可能有好几条通知。App 没在运行时点通知，系统会先把它拉起来，
+        // 这时窗口还没出现、这里还没订阅，那一次点击就只是打开 App。
+        .onReceive(NotificationCenter.default.publisher(for: .flatRadarOpenAlerts)) { _ in
+            model.section = .alerts
+        }
         // 日历数据**按需**拉，不跟着启动一起发。
         //
         // 它是四屏里最少打开的一屏，而 `/calendar` 实测回 691 条、211 KB——
