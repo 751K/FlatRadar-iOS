@@ -357,7 +357,7 @@ iOS 端的九处界面里，有三处在 Mac 上不该以「页面」的形式�
 | 4 | **Alerts（通知）** | 表格 or 列表 + SSE | ⬜ Phase 3 | `NotificationsStore`、`SSEClient` | 接系统通知中心；已读态的 Mac 表达 |
 | 5 | **Map** | 内容区，共享 inspector | ⬜ Phase 3 | `MapStore`、POI 过滤、可达圈计算 | 悬停预览、右键菜单、Sandbox 定位权限 |
 | 6 | **Calendar** | 内容区，共享 inspector | ⬜ Phase 3 | `CalendarStore` | **全部自绘**——`UICalendarView` 在 macOS 不存在 |
-| 7 | **设置** | `Settings {}` 独立场景（⌘,） | ⬜ Phase 3 | `MeFilterStore`、`AuthStore` | 分 tab：General / Account / Filters / Advanced |
+| 7 | **设置** | `Settings {}` 独立场景（⌘,） | ✅ 已做 | `MeFilterStore`、`AuthStore`、`PushStore` | 分 tab：General / Account / Notifications / Filters |
 | 8 | **登录** | 独立窗口 | 🟡 探针形态 | `AuthStore` | 设计化；游客入口 |
 | 9 | **菜单栏常驻** | `MenuBarExtra` | ⬜ Phase 4 | `DashboardStore.summary` | 匹配数 + 上次扫描时间 |
 

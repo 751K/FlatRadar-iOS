@@ -19,6 +19,12 @@
 	<key>com.apple.developer.aps-environment</key>
 	<string>development</string>
 
+	<!-- 设置 → Account → Export My Data 要把 JSON 存到用户选的位置。
+	     沙盒默认连存盘面板都拿不到结果，只能写用户**亲手选的**那个路径，
+	     所以是 user-selected，不是任意文件读写。 -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+
 	<!-- Keychain Sharing。
 	     不是为了"共享"，是为了拿到 application-identifier：macOS 的
 	     data protection 钥匙串（见 KeychainManager.dataProtection）要求签名带它，

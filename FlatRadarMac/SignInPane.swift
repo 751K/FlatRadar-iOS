@@ -267,12 +267,15 @@ struct SignInPane: View {
         .padding(.top, 10)
     }
 
-    /// 新账号的密码门槛取**设计稿的 12 位**，不是后端的 4 位。
+    /// 新账号的密码门槛 = 后端 `_register` 的 **4 位**（`auth.py:372`）。
     ///
-    /// 后端 `_register` 只要求「密码至少需要 4 个字符」——那是兼容老数据的底线，
-    /// 不是给新账号定的标准。客户端严一档没有坏处：这是**创建**流程，不会把
-    /// 已有的短密码用户挡在门外（登录不检查长度）。
-    private static let minNewPasswordLength = 12
+    /// 这里曾经按设计稿写成 12 位。客户端比服务端严，挡掉的都是后端本来接受的
+    /// 密码，而用户看不出是谁在拒他——同一个账号在网页端能建、在 Mac 上建不了。
+    /// 门槛归后端一处定，客户端只做即时反馈。
+    ///
+    /// 设置页里**访客转正**用的也是这一条（同样是开户）；「修改密码」走
+    /// `/auth/password` 自己的下限，也是 4（见 `AccountSettings.ChangePasswordSheet`）。
+    static let minNewPasswordLength = 4
 
     private var canCreate: Bool {
         !username.isEmpty
@@ -280,9 +283,13 @@ struct SignInPane: View {
             && password == confirmPassword
     }
 
-    /// 密码强度条。四格，按长度点亮——**不做熵估算**：这条给的是"够不够长"
-    /// 这一个信号，而长度正是唯一由我们把关的门槛。装成能看穿密码强弱的样子，
-    /// 反而会让人以为一个短的怪字符串"很强"。
+    /// 密码长度条。四格，每 4 个字符点亮一格——**不做熵估算**：这条给的是
+    /// "有多长"这一个信号。装成能看穿密码强弱的样子，反而会让人以为一个短的
+    /// 怪字符串"很强"。
+    ///
+    /// 门槛从 12 降到 4 之后这里也跟着改了口径：原先满足门槛就写 "Strong"，
+    /// 那会对着一个**四位**密码说它很强——比不说还糟。现在只报长度，够不够
+    /// 门槛用颜色区分。
     private var strengthMeter: some View {
         let filled = min(4, password.count / 4)
         return VStack(alignment: .leading, spacing: 5) {
@@ -294,7 +301,7 @@ struct SignInPane: View {
                 }
             }
             Text(password.count >= Self.minNewPasswordLength
-                 ? "Strong · \(password.count) characters"
+                 ? "\(password.count) characters"
                  : "\(Self.minNewPasswordLength) characters or more")
                 .font(.footnote)
                 .foregroundStyle(password.count >= Self.minNewPasswordLength
@@ -422,7 +429,9 @@ enum LegalSheet: String, Identifiable {
 }
 
 /// 条款正文。走 `GET /api/v1/legal`（``APIClient/getLegal(lang:)``）。
-private struct LegalView: View {
+///
+/// 登录屏和设置页共用。
+struct LegalView: View {
 
     let kind: LegalSheet
 

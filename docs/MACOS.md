@@ -314,7 +314,11 @@ iPad 的 `NavigationSplitView` 改造是独立事项，不顺手做。
 - [ ] 地图（复用 POI 过滤和可达圈计算逻辑；交互、定位权限说明及 Sandbox 位置权限按 Mac 配置）
 - [ ] 日历（`NativeMonthCalendar` 用的是 `UICalendarView`，**macOS 上不存在**，要另找或自绘）
 - [ ] 通知列表 + SSE 实时流
-- [ ] 设置页（服务器地址、筛选器编辑、登出）
+- [x] 设置页：`Settings {}` 场景（⌘,），四个 tab —— General（外观 / 反馈 / 条款 / 版本）、
+      Account（改密码 / 导出 / 登出 / 删号 / 访客转正）、Notifications（权限状态 / 推送开关 /
+      提醒开关 / admin 诊断）、Filters（`/me/filter` 编辑器）。
+      **服务器地址没做**：iOS 那边早就不在界面上给了（`server_url` 只剩 `@AppStorage`，
+      没有输入框），Mac 不新开这个口子。
 
 **完成判据**：各页面可独立加载、重试，房源可在列表与地图间按 ID 定位；SSE 断线 / 睡眠唤醒后
 能重连并补齐数据；游客不连接个人通知流。登出和切换服务器时，旧数据及未完成请求不进入新会话。

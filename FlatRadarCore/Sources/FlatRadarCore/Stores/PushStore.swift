@@ -167,7 +167,11 @@ public final class PushStore {
         bridge?.registerForRemoteNotifications()
     }
 
-    private func refreshPermissionStatus() async {
+    /// 重新读一次系统里的通知权限。
+    ///
+    /// 用户随时可能去系统设置里改——宿主在「从系统设置切回来」、打开设置页这类时刻
+    /// 调一次，界面上显示的状态才不会是几分钟前的。
+    public func refreshPermissionStatus() async {
         let settings = await UNUserNotificationCenter.current().notificationSettings()
         permissionStatus = Self.map(settings.authorizationStatus)
     }
