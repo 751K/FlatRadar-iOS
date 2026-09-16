@@ -1,4 +1,5 @@
 import XCTest
+import UserNotifications
 @testable import FlatRadarCore
 
 /// 「用户关掉的通知，app 不许自己打开回来」。
@@ -62,13 +63,19 @@ final class PushOptOutTests: XCTestCase {
         XCTAssertTrue(afterRelaunch.deliveryDisabledByUser)
     }
 
-    /// 这条要走 `requestPermissionAndRegister()`，那里面会碰
-    /// `UNUserNotificationCenter.current()`——它需要一个真正的 app bundle。
-    /// 放在 `FlatRadarTests`（宿主是 FlatRadar.app）里才跑得了；搁在 Core 的
-    /// 裸 `swift test` 进程里会抛 `bundleProxyForCurrentProcess is nil`。
+    /// 这条要走 `requestPermissionAndRegister()`，也就是要过**系统权限框**那一关。
+    ///
+    /// ⚠️ 这里必须注入 ``StubNotifications``，不能用默认的
+    /// ``SystemNotificationCenter``。原因见 ``NotificationAuthorizing`` 的注释：
+    /// 全新模拟器上权限是 `.notDetermined`，真的 `requestAuthorization` 会弹一个
+    /// 系统框然后等人点，CI 上没人点，这条测试就**挂住不返回**——不是失败，是
+    /// 把整个 job 拖到 30 分钟超时被杀（2026-09-16 的两次 run 就是这么没的）。
+    ///
+    /// 本地和真机上看不出来：那边权限早就问过了，这个调用立刻返回。
     @MainActor
     func test_重新打开会清掉这个选择() async {
-        let store = PushStore(defaults: defaults)
+        let notifications = StubNotifications(granted: true, status: .authorized)
+        let store = PushStore(defaults: defaults, notifications: notifications)
         await store.setEnabled(false)
         await store.setEnabled(true)
 
@@ -76,6 +83,9 @@ final class PushOptOutTests: XCTestCase {
         XCTAssertFalse(defaults.bool(forKey: PushStore.deliveryDisabledKey))
         XCTAssertFalse(PushStore(defaults: defaults).deliveryDisabledByUser,
                        "重新打开同样要跨启动生效")
+        let asked = await notifications.requests
+        XCTAssertEqual(asked, 1,
+                       "重新打开不只是翻个标志位，还要真的去申请权限并重新注册")
     }
 
     /// 键名是 iOS 和 Mac 共用的一份，改名就是把老用户的选择丢掉（读不到旧键，
@@ -90,16 +100,22 @@ final class PushOptOutTests: XCTestCase {
     ///
     /// 这里不碰系统权限框——`deliveryDisabledByUser` 那道门在方法最前面，被挡住
     /// 时整个方法是个 no-op，`permissionStatus` 连问都不会去问，停在初始值。
+    ///
+    /// 「没弹框」原来是从 `permissionStatus` 没变**推断**出来的。换成替身之后
+    /// 可以直接数：问了几次。推断那版在"门失效但状态恰好也没变"时不会红。
     @MainActor
     func test_关掉之后自动注册路径直接返回() async {
-        let store = PushStore(defaults: defaults)
+        let notifications = StubNotifications(granted: true, status: .authorized)
+        let store = PushStore(defaults: defaults, notifications: notifications)
         await store.setEnabled(false)
         store.permissionStatus = .notDetermined
 
         await store.requestPermissionAndRegister()
 
         XCTAssertEqual(store.permissionStatus, .notDetermined,
-                       "被挡住就不该去读系统权限状态，更不该弹框")
+                       "被挡住就不该去读系统权限状态")
+        let asked = await notifications.requests
+        XCTAssertEqual(asked, 0, "被挡住就一次权限框都不该弹")
         XCTAssertNil(store.registeredDeviceId)
     }
 
@@ -135,4 +151,31 @@ final class PushOptOutTests: XCTestCase {
         XCTAssertTrue(store.deliveryDisabledByUser)
         XCTAssertTrue(defaults.bool(forKey: PushStore.deliveryDisabledKey))
     }
+}
+
+/// 不弹框的权限门。
+///
+/// 写成 `actor` 是为了那个计数器：``NotificationAuthorizing`` 要求 `Sendable`，
+/// 而替身要记「被问了几次」——一个可变的 `var` 配 `Sendable` 只有加锁或用 actor
+/// 两条路，actor 更短，而且协议的两个要求本来就是 `async`，隔离对得上。
+private actor StubNotifications: NotificationAuthorizing {
+
+    private let granted: Bool
+    private let status: UNAuthorizationStatus
+
+    /// 被问过几次权限。**这就是这个替身存在的另一半价值**：
+    /// 真的 `UNUserNotificationCenter` 问没问过，测试无从知道。
+    private(set) var requests = 0
+
+    init(granted: Bool, status: UNAuthorizationStatus) {
+        self.granted = granted
+        self.status = status
+    }
+
+    func requestAuthorization(options: UNAuthorizationOptions) async throws -> Bool {
+        requests += 1
+        return granted
+    }
+
+    func authorizationStatus() async -> UNAuthorizationStatus { status }
 }

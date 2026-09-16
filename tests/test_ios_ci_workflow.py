@@ -146,6 +146,19 @@ class TestWorkflow:
         t = self._text()
         assert "-only-testing:FlatRadarTests" in t
 
+    def test_runs_the_package_tests_too(self):
+        """``-only-testing:FlatRadarTests`` 只覆盖 app target。包里那 200 多条
+        （图表、分享链接、可达圈、POI、地名去重）是另一个 test target，不跑
+        ``swift test`` 就一条都不会执行。
+
+        这条不是"多跑一点更好"：`PlaceSummary` 提进包时 app target 里的同名
+        测试留在了原地，两份并存、一天内就对不上了。删掉重复那份的前提是这里
+        真的在跑包里的那份。
+        """
+        t = self._text()
+        assert "swift test" in t, "包里的用例在 CI 上一条都没跑"
+        assert "FlatRadarCore" in t
+
     def test_does_not_hardcode_a_device_name(self):
         """写死型号的话，runner 镜像一换就报 no destinations。"""
         t = self._text()

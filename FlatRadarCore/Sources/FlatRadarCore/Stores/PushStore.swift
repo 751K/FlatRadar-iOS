@@ -26,8 +26,10 @@ public final class PushStore {
     /// `defaults` 的默认值让宿主照旧 `PushStore()`，包测试又能注入替身
     /// （同 ``ReviewPromptStore``）。公开的是这一个 init，不另留空 init——
     /// 那会让 `defaults` 和 ``deliveryDisabledByUser`` 没机会赋值。
-    public init(defaults: UserDefaults = .standard) {
+    public init(defaults: UserDefaults = .standard,
+                notifications: any NotificationAuthorizing = SystemNotificationCenter()) {
         self.defaults = defaults
+        self.notifications = notifications
         self.deliveryDisabledByUser = defaults.bool(forKey: Self.deliveryDisabledKey)
     }
 
@@ -66,6 +68,11 @@ public final class PushStore {
     public nonisolated static let deliveryDisabledKey = "pushDeliveryDisabledByUser"
 
     private let defaults: UserDefaults
+
+    /// 通知权限那道系统门。默认是真的 `UNUserNotificationCenter`，
+    /// 测试注入替身——理由写在 ``NotificationAuthorizing`` 上（一句话版：
+    /// 干净环境下那个系统框没人点，`await` 永不返回）。
+    private let notifications: any NotificationAuthorizing
     private let client = APIClient.shared
     private var hasInstalledDelegate = false
 
@@ -173,9 +180,8 @@ public final class PushStore {
             print("[PushStore] 用户已关闭推送，跳过注册")
             return
         }
-        let center = UNUserNotificationCenter.current()
         do {
-            let granted = try await center.requestAuthorization(
+            let granted = try await notifications.requestAuthorization(
                 options: [.alert, .badge, .sound])
             print("[PushStore] requestAuthorization granted=\(granted)")
         } catch {
@@ -212,8 +218,7 @@ public final class PushStore {
     /// 用户随时可能去系统设置里改——宿主在「从系统设置切回来」、打开设置页这类时刻
     /// 调一次，界面上显示的状态才不会是几分钟前的。
     public func refreshPermissionStatus() async {
-        let settings = await UNUserNotificationCenter.current().notificationSettings()
-        permissionStatus = Self.map(settings.authorizationStatus)
+        permissionStatus = Self.map(await notifications.authorizationStatus())
     }
 
     /// 这个错误是不是「系统不允许这个 app 发通知」——也就是用户拒过、系统不会再弹框。

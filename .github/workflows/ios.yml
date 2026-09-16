@@ -67,6 +67,19 @@ jobs:
           .ci-venv/bin/pip install --quiet --disable-pip-version-check -r requirements-dev.txt
           .ci-venv/bin/pytest tests -q
 
+      # 包里的用例。**它们此前一条都没在 CI 上跑过**——`-only-testing:FlatRadarTests`
+      # 只覆盖 app target，而 `FlatRadarCore` 那 200 多条（图表排序上色、分享链接、
+      # 可达圈半径、POI 阈值、地名去重…）是另一个 test target，走 `swift test`。
+      #
+      # 后果在 2026-09-17 现了形：`PlaceSummary` 提进包时，app target 里那份同名
+      # 测试**留在了原地**，两份 8 条一模一样的断言并存。包里那份跟着修了行为，
+      # app 那份还钉着旧的，一天之内就对不上了。删掉重复的那份就必须有这一步，
+      # 否则等于把覆盖也一起删了。
+      #
+      # 放在模拟器那步之前：它十几秒就跑完，坏了要秒级知道。
+      - name: Run package tests (FlatRadarCore)
+        run: swift test --package-path FlatRadarCore
+
       # 不写死 "iPhone 16" 之类的名字：GitHub 换镜像时那个型号可能就没了，
       # 而报错是 "no destinations"，看上去像项目坏了。挑选逻辑在
       # scripts/pick_simulator.py，那边有单元测试。
