@@ -116,10 +116,28 @@ struct StatsStrip: View {
     }
 }
 
-/// 极简折线：一条线 + 线下的淡填充 + 一个端点。
+/// 极简折线：一条线 + 线下的向下淡出 + 一个端点。
 ///
 /// 没有坐标轴、没有网格、没有图例——t2「去线留白」把这条也写进规则了
 /// （「曲线只画一条线加一个当前点，不画坐标轴和网格，符合去线的规则」）。
+///
+/// 和 iOS 那条曲线**逐项对齐**
+/// -------------------------
+/// 两端画的是同一件事（每日新增），不该长得像两个图表。对照 `DashboardView`
+/// 里的 `Sparkline` / `SparklineView`：
+///
+/// | | 值 | 出处 |
+/// |---|---|---|
+/// | 颜色 | ``Theme/chart`` | iOS `SparklineView.tint` 的默认值 `.blue` |
+/// | 线宽 | 2.5，圆头圆角 | 同 iOS |
+/// | 线下填充 | 同色 0.28 → 0.02 向下淡出 | 同 iOS |
+/// | 上下余量 | 4 | 同 iOS |
+/// | 纵向归一 | min–max，不从 0 起 | 同 iOS |
+/// | 插值 | 单调三次 Hermite | 同 iOS（这一条是把 Mac 的做法搬过去的，见下） |
+///
+/// **还剩一处不一样**：端点那个实心圆，iOS 没有。留着是因为 Mac 这条线 248pt 宽、
+/// 横在统计带正中，需要一个"这一头是今天"的落点；iOS 那条 130pt 夹在卡片里，
+/// 大数字就贴在旁边。要去掉的话删下面那个 `Circle` 即可。
 ///
 /// 不用 Swift Charts：那要带一整个框架进来，而这里画的是一条折线。
 struct Sparkline: View {
@@ -128,35 +146,73 @@ struct Sparkline: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let pts = points(in: proxy.size)
             ZStack {
-                if pts.count >= 2 {
-                    area(pts, height: proxy.size.height)
-                        .fill(Color.primary.opacity(0.05))
-                    line(pts)
-                        .stroke(Theme.ink,
-                                style: StrokeStyle(lineWidth: 1.8,
+                if values.count >= 2 {
+                    SparklineShape(values: values, closed: true)
+                        .fill(LinearGradient(
+                            colors: [Theme.chart.opacity(0.28), Theme.chart.opacity(0.02)],
+                            startPoint: .top, endPoint: .bottom))
+                    SparklineShape(values: values)
+                        .stroke(Theme.chart,
+                                style: StrokeStyle(lineWidth: 2.5,
                                                    lineCap: .round,
                                                    lineJoin: .round))
-                    // 端点：告诉眼睛「这一头是今天」。
-                    Circle()
-                        .fill(Theme.ink)
-                        .frame(width: 6.4, height: 6.4)
-                        .position(pts[pts.count - 1])
+                    // 端点：告诉眼睛「这一头是今天」。iOS 没有这一笔。
+                    if let last = SparklineShape.points(values, in: proxy.size).last {
+                        Circle()
+                            .fill(Theme.chart)
+                            .frame(width: 6.4, height: 6.4)
+                            .position(last)
+                    }
                 }
             }
         }
         // 数值已经在旁边写出来了，读屏不必再念一遍趋势。
         .accessibilityHidden(true)
     }
+}
 
-    private func points(in size: CGSize) -> [CGPoint] {
+/// 曲线本身。
+///
+/// 拆成 `Shape` 而不是在 `View` 里各画一遍：填充和描边必须是**同一条**曲线，
+/// 分开算迟早分叉，填充的上沿就会和线错开一条缝。iOS 那边用的是同一招
+/// （`Sparkline(data:closed:)`）。
+///
+/// `nonisolated`：`SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor` 会把这个类型也放到
+/// 主 actor 上，而 `Shape.path(in:)` 要求 nonisolated——Xcode 27 起这条不匹配
+/// 从警告升级成错误（#ConformanceIsolation）。路径计算是纯函数，不碰任何状态。
+nonisolated struct SparklineShape: Shape {
+
+    let values: [Double]
+
+    /// `true` 时把曲线闭合到框底，用来画线下的填充。
+    var closed = false
+
+    /// 上下各留的余量，免得线宽把峰谷削平。和 iOS 一样是 4。
+    static let inset: CGFloat = 4
+
+    func path(in rect: CGRect) -> Path {
+        let pts = Self.points(values, in: rect.size)
+        guard pts.count >= 2 else { return Path() }
+        var p = Path()
+        p.move(to: pts[0])
+        Self.appendCurve(to: &p, pts)
+        if closed {
+            p.addLine(to: CGPoint(x: pts[pts.count - 1].x, y: rect.maxY))
+            p.addLine(to: CGPoint(x: pts[0].x, y: rect.maxY))
+            p.closeSubpath()
+        }
+        return p
+    }
+
+    /// 纵向按 **min–max** 归一，不是从 0 算起：迷你趋势线没有坐标轴，只表达
+    /// **形状**，量级由旁边那个大数字负责。和 iOS 同一套算法。
+    static func points(_ values: [Double], in size: CGSize) -> [CGPoint] {
         guard values.count >= 2 else { return [] }
         let lo = values.min() ?? 0
         let hi = values.max() ?? 1
         let span = hi - lo
         let stepX = size.width / CGFloat(values.count - 1)
-        let inset: CGFloat = 2.5
         let usable = max(size.height - inset * 2, 1)
         return values.enumerated().map { i, v in
             // 全平（每天都一样）时不要除以零，画成一条居中的直线。
@@ -164,23 +220,6 @@ struct Sparkline: View {
             return CGPoint(x: CGFloat(i) * stepX,
                            y: inset + usable * (1 - CGFloat(ratio)))
         }
-    }
-
-    private func line(_ pts: [CGPoint]) -> Path {
-        var p = Path()
-        p.move(to: pts[0])
-        appendCurve(to: &p, pts)
-        return p
-    }
-
-    private func area(_ pts: [CGPoint], height: CGFloat) -> Path {
-        var p = Path()
-        p.move(to: CGPoint(x: pts[0].x, y: height))
-        p.addLine(to: pts[0])
-        appendCurve(to: &p, pts)
-        p.addLine(to: CGPoint(x: pts[pts.count - 1].x, y: height))
-        p.closeSubpath()
-        return p
     }
 
     /// 把折线画成平滑曲线，用**单调三次 Hermite**（Fritsch–Carlson）。
@@ -193,8 +232,12 @@ struct Sparkline: View {
     /// 甩到基线以下会直接穿帮。
     ///
     /// 单调三次插值的性质就是：数据没有的峰谷，曲线也不会造出来。
-    /// 代价是转折处比 Catmull-Rom 稍微"硬"一点点，在 248×52 这个尺寸上看不出来。
-    private func appendCurve(to path: inout Path, _ pts: [CGPoint]) {
+    /// 代价是转折处比 Catmull-Rom 稍微"硬"一点点，在这个尺寸上看不出来。
+    ///
+    /// iOS 原来用的是夹住控制点的 Catmull-Rom（夹的是**画布边界**，挡得住甩出框，
+    /// 挡不住框内那些凭空多出来的鼓包）。对齐画法时把这套搬了过去，两端现在同一份。
+    /// `FlatRadarMacTests` 和 `FlatRadarTests` 里各有一条测试钉住"不许造峰谷"。
+    static func appendCurve(to path: inout Path, _ pts: [CGPoint]) {
         guard pts.count > 2 else {
             for pt in pts.dropFirst() { path.addLine(to: pt) }
             return
@@ -220,8 +263,17 @@ struct Sparkline: View {
                 m[i + 1] = 0
                 continue
             }
-            let a = m[i] / d[i]
-            let b = m[i + 1] / d[i]
+            var a = m[i] / d[i]
+            var b = m[i + 1] / d[i]
+            // 切线和这一段的割线**反向** = 这个点是局部极值（左右两段一升一降），
+            // 切线必须压平。不压的话曲线会冲过这个端点，画出一个比当天实际值
+            // 更极端的峰或谷——正是这套插值本来要防的那件事。
+            //
+            // 这一步漏过一次：只处理了 d == 0，没处理反号。`[1, 5, 5, 1, 9]` 在
+            // 索引 3（那个 1）上就会冲出去，控制点落到 49.5 而该段只到 46。
+            // 两端的 SparklineCurveTests 钉的就是它。
+            if a < 0 { m[i] = 0; a = 0 }
+            if b < 0 { m[i + 1] = 0; b = 0 }
             let s = a * a + b * b
             if s > 9 {
                 let t = 3 / sqrt(s)

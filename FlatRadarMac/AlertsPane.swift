@@ -387,7 +387,7 @@ private struct AlertRowView: View {
 // MARK: - 24 小时柱状图
 
 /// 12 根柱子，旧 → 新。没有坐标轴、没有网格——和 ``Sparkline`` 同一条规则
-/// （t2「去线留白」）。
+/// （t2「去线留白」），颜色也和它同一个 token（``Theme/chart``）。
 struct BucketChart: View {
 
     let values: [Int]
@@ -396,11 +396,20 @@ struct BucketChart: View {
         let peak = max(values.max() ?? 0, 1)
         HStack(alignment: .bottom, spacing: 3) {
             ForEach(Array(values.enumerated()), id: \.offset) { index, value in
-                // 最后一根是"当前这两个小时"，用墨色点出来；其余用淡的。
+                // 最后一根是"当前这两个小时"，用实心的图表色点出来；其余用同色的淡版。
+                //
+                // 淡的那档用同一个蓝而不是中性灰：一张图里两种色相，眼睛会去猜灰和蓝
+                // 各自代表什么，而这里它们只差"是不是当前"这一件事。
+                //
+                // 0.55 是**照 iOS 的柱子来的**（`DashboardView` 里 by-price / by-area
+                // 那几组都是 `.blue.opacity(0.55)`）。原来这里是 0.22——那个数是配
+                // 中性灰定的，灰在 0.22 上还看得见，同样透明度的蓝压在白底上会淡到
+                // 像没画（实测过，一根 2pt 的柱子基本融进块底）。
+                //
                 // 全零的桶也画 2pt 的底，否则安静的时段会变成一段空白，
                 // 读起来像"没有数据"而不是"没有通知"。
                 Capsule()
-                    .fill(index == values.count - 1 ? Theme.ink : Color.primary.opacity(0.22))
+                    .fill(index == values.count - 1 ? Theme.chart : Theme.chart.opacity(0.55))
                     .frame(height: max(2, 46 * CGFloat(value) / CGFloat(peak)))
             }
         }

@@ -1664,7 +1664,12 @@ struct ScaleButtonStyle: ButtonStyle {
 /// 迷你趋势线。
 ///
 /// 原来是直线段相连——七个点、130pt 宽，每个折角都很扎眼，读起来像锯齿而不像
-/// 趋势。改成 Catmull-Rom 插值出的三次贝塞尔：点还是那些点，只是拐弯变圆。
+/// 趋势。改成插值出来的三次贝塞尔：点还是那些点，只是拐弯变圆。
+///
+/// 插值用**单调三次 Hermite**，见 ``appendCurve(to:_:)``。这一版之前用的是
+/// Catmull-Rom + 把控制点夹回画布——那个夹子挡得住曲线甩出框，挡不住框**内**
+/// 凭空多出来的鼓包。和 Mac 对齐画法时换成了 Mac 的那套（`StatsStrip.swift`
+/// 里的 `SparklineShape`），两端现在是同一份算法。
 ///
 /// `closed` 用来复用同一条曲线画填充：曲线本身必须两处完全一致，各画一遍迟早
 /// 分叉，填充和描边就会错开一条缝。
@@ -1672,7 +1677,8 @@ struct ScaleButtonStyle: ButtonStyle {
 // 主 actor 上，而 `Shape.path(in:)` 是 nonisolated 的要求——Xcode 27 起这条
 // 不匹配从警告升级成错误（#ConformanceIsolation）。路径计算是纯函数，不碰任何
 // 状态，显式退出隔离即可。同 ChartData / MapClustering 那一批。
-private nonisolated struct Sparkline: Shape {
+// 不是 `private`：`FlatRadarTests/SparklineCurveTests` 要拿到它验插值。
+nonisolated struct Sparkline: Shape {
     let data: [Int]
     var closed: Bool = false
 
@@ -1699,28 +1705,81 @@ private nonisolated struct Sparkline: Shape {
             }
 
             p.move(to: pts[0])
-            for i in 0..<(pts.count - 1) {
-                // Catmull-Rom → 三次贝塞尔。端点各自复用自己，避免越界。
-                let p0 = pts[max(i - 1, 0)]
-                let p1 = pts[i]
-                let p2 = pts[i + 1]
-                let p3 = pts[min(i + 2, pts.count - 1)]
-                // 控制点的 y 夹回画布内：Catmull-Rom 在相邻值落差大时会冲出
-                // 上下沿，迷你图上表现为曲线被裁掉一截。
-                let c1 = CGPoint(x: p1.x + (p2.x - p0.x) / 6,
-                                 y: min(max(p1.y + (p2.y - p0.y) / 6, inset),
-                                        rect.height - inset))
-                let c2 = CGPoint(x: p2.x - (p3.x - p1.x) / 6,
-                                 y: min(max(p2.y - (p3.y - p1.y) / 6, inset),
-                                        rect.height - inset))
-                p.addCurve(to: p2, control1: c1, control2: c2)
-            }
+            Self.appendCurve(to: &p, pts)
 
             if closed {
                 p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
                 p.addLine(to: CGPoint(x: 0, y: rect.maxY))
                 p.closeSubpath()
             }
+        }
+    }
+
+    /// 把折线画成平滑曲线，用**单调三次 Hermite**（Fritsch–Carlson）。
+    ///
+    /// 为什么不用普通的 Catmull-Rom
+    /// --------------------------
+    /// 那种样条会**过冲**：两个低点之间夹一个高点时，曲线会在低点外侧甩出去，
+    /// 画出一个比当天实际值还低的谷。这条线画的是「每天新增几套」，过冲等于
+    /// **画出了一个从来没发生过的数字**——而且下面还铺了填充，甩到基线以下会直接穿帮。
+    ///
+    /// 上一版是 Catmull-Rom 把控制点夹回画布。夹子只管**画布边界**：曲线不会被
+    /// 裁掉一截了，但两个相等的值之间照样鼓一个包，那个包在框内，夹不到。
+    ///
+    /// 单调三次插值的性质就是：数据没有的峰谷，曲线也不会造出来。代价是转折处
+    /// 比 Catmull-Rom 稍微"硬"一点点，在这个尺寸上看不出来。
+    ///
+    /// 和 Mac 的 `SparklineShape.appendCurve` 是同一份算法，两边各有一条测试钉住。
+    static func appendCurve(to path: inout Path, _ pts: [CGPoint]) {
+        guard pts.count > 2 else {
+            for pt in pts.dropFirst() { path.addLine(to: pt) }
+            return
+        }
+
+        let n = pts.count
+        // 相邻两点的斜率。x 是等距的，所以 h 是常数。
+        let h = pts[1].x - pts[0].x
+        var d = [CGFloat](repeating: 0, count: n - 1)
+        for i in 0..<(n - 1) { d[i] = (pts[i + 1].y - pts[i].y) / h }
+
+        // 端点取单侧斜率，中间取两侧平均。
+        var m = [CGFloat](repeating: 0, count: n)
+        m[0] = d[0]
+        m[n - 1] = d[n - 2]
+        for i in 1..<(n - 1) { m[i] = (d[i - 1] + d[i]) / 2 }
+
+        // Fritsch–Carlson：把切线收进不会过冲的范围里。
+        for i in 0..<(n - 1) {
+            if d[i] == 0 {
+                // 这一段是平的，两端切线也必须是平的，否则会鼓出一个包。
+                m[i] = 0
+                m[i + 1] = 0
+                continue
+            }
+            var a = m[i] / d[i]
+            var b = m[i + 1] / d[i]
+            // 切线和这一段的割线**反向** = 这个点是局部极值（左右两段一升一降），
+            // 切线必须压平。不压的话曲线会冲过这个端点，画出一个比当天实际值
+            // 更极端的峰或谷——正是这套插值本来要防的那件事。
+            //
+            // 这一步漏过一次：只处理了 d == 0，没处理反号。`[1, 5, 5, 1, 9]` 在
+            // 索引 3（那个 1）上就会冲出去，控制点落到 49.5 而该段只到 46。
+            // 两端的 SparklineCurveTests 钉的就是它。
+            if a < 0 { m[i] = 0; a = 0 }
+            if b < 0 { m[i + 1] = 0; b = 0 }
+            let s = a * a + b * b
+            if s > 9 {
+                let t = 3 / sqrt(s)
+                m[i] = t * a * d[i]
+                m[i + 1] = t * b * d[i]
+            }
+        }
+
+        // Hermite 切线换算成三次贝塞尔的控制点：距端点 h/3，斜率就是切线。
+        for i in 0..<(n - 1) {
+            let c1 = CGPoint(x: pts[i].x + h / 3, y: pts[i].y + m[i] * h / 3)
+            let c2 = CGPoint(x: pts[i + 1].x - h / 3, y: pts[i + 1].y - m[i + 1] * h / 3)
+            path.addCurve(to: pts[i + 1], control1: c1, control2: c2)
         }
     }
 }
