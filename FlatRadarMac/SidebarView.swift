@@ -1,7 +1,7 @@
 import SwiftUI
 import FlatRadarCore
 
-/// 主窗口左栏：主导航 + 保存的筛选器 + 固定比较项，底部一条实时状态。
+/// 主窗口左栏：主导航 + 固定比较项，底部是设置入口和一条实时状态。
 ///
 /// 这是 Mac 版取代 iOS tab bar 的位置，见 ``SidebarSection`` 顶部注释。
 ///
@@ -12,19 +12,69 @@ struct SidebarView: View {
     @Bindable var model: BrowseModel
     let summary: SummaryModel
 
+    @State private var settingsHovered = false
+
     var body: some View {
         List(selection: $model.section) {
             ForEach(SidebarSection.allCases) { section in
                 navRow(section).tag(section)
             }
-            savedFilters
             pinned
         }
         .listStyle(.sidebar)
         // 选中态用中性填充，不是实心强调色 —— 窗口的 tint 是 ink（近黑），
         // 直接拿它填一整行会变成黑底白字，比内容还抢眼。
         .tint(Theme.selectionFill)
-        .safeAreaInset(edge: .bottom, spacing: 0) { liveFooter }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            VStack(spacing: 0) {
+                settingsRow
+                liveFooter
+            }
+        }
+    }
+
+    // MARK: - 设置入口
+
+    /// 设置的**第二个**入口。
+    ///
+    /// 第一个是应用菜单里的「Settings…」（⌘,），那是 Mac 上设置的规范位置，不动它。
+    /// 这一条是给不翻菜单的人的：侧栏本来只放「看数据」的几屏，但设置是唯一一个
+    /// 用户会主动去找、却在这一栏里找不到的东西。
+    ///
+    /// **不做成第五个导航项。** 那四项点了换内容区，这一条点了开一扇新窗口。
+    /// 摆进同一个 `List` 会跟着带上选中态——一行亮着、内容区却没变，而且在点回
+    /// Listings 之前它会一直亮着。所以它在列表外面，长得像一个动作，不像一个页面。
+    ///
+    /// 用 `SettingsLink` 而不是 `@Environment(\.openSettings)`：前者由 SwiftUI 直接
+    /// 连到 `Settings` 场景，设置窗口已经开着时会把它**拿到前面**，而不是什么都不发生。
+    private var settingsRow: some View {
+        SettingsLink {
+            HStack(spacing: 9) {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 12))
+                    .frame(width: 14)
+                Text("Settings")
+                    .font(.body)
+                Spacer(minLength: 4)
+                // 顺手把快捷键写出来。菜单里本来就有，但会走侧栏的人正是不翻菜单的那批。
+                Text("⌘,")
+                    .font(.caption)
+                    .foregroundStyle(.tertiary)
+            }
+            // 6 + 10 = 16pt，和 List 给侧栏行的缩进对齐。这个数是**量出来的**：
+            // 窗口截图里导航行的图标左沿在 17.0pt（12pt 字形在 14pt 框里，框在 16），
+            // 原来写 8 + 10 的时候这一行的齿轮落在 19pt，比上面四行右 2pt——
+            // 单看不出来，和它们竖着排在一起就看出来了。
+            .padding(.horizontal, 6)
+            .frame(height: 28)
+            .contentShape(Rectangle())
+            .background(RoundedRectangle(cornerRadius: 6)
+                .fill(settingsHovered ? Theme.selectionFill : .clear))
+            .padding(.horizontal, 10)
+        }
+        .buttonStyle(.plain)
+        // 列表里的行有系统给的悬停反馈，这一行在列表外面，得自己画。
+        .onHover { settingsHovered = $0 }
     }
 
     // MARK: - 主导航
@@ -60,24 +110,20 @@ struct SidebarView: View {
         }
     }
 
-    // MARK: - 保存的筛选器
-
-    /// 后端 `/me/filter` 是 **GET / PUT 单数**——每个账号只有一个筛选器，
-    /// 而且那是**通知**筛选器，不是浏览筛选器。设计稿上那四条需要先定：
-    /// 加后端多筛选器，还是只存在 Mac 本地（那样和 iOS 不同步）。
-    ///
-    /// 定下来之前显示真实的空状态，**不摆四条假数据**——假数据会让人以为功能
-    /// 已经在了，然后在别处发现它不工作。
-    private var savedFilters: some View {
-        Section {
-            Text("No saved filters")
-                .font(.callout)
-                .foregroundStyle(.tertiary)
-                .frame(height: 26)
-        } header: {
-            sectionHeader("Saved Filters")
-        }
-    }
+    // MARK: - 为什么没有「Saved Filters」
+    //
+    // 设计稿 t3 的侧栏里有一段「保存的筛选」，摆着四条命名的浏览筛选。**不做。**
+    //
+    // 它和这个产品的模型不符：**筛选条件是跟账号走的，只有一条**——后端
+    // `/me/filter` 就是 GET / PUT 单数，那一条决定推送什么，在设置页的 Filters
+    // tab 里编辑。"同时存着好几套命名筛选、在侧栏里来回切"是另一种产品的做法。
+    //
+    // 这一段曾经以空状态的形式留在这里（"No saved filters"）。撤掉的直接理由是：
+    // App 里根本没有「保存当前筛选」这个动作，用户做任何操作都不可能让它非空。
+    // 一个永远填不满的容器比没有更糟——它在承诺一个不存在的功能。
+    //
+    // 下次再照着设计稿往回加之前，先回答：那条筛选存在哪、跟不跟账号走、
+    // 和 `/me/filter` 那一条是什么关系。
 
     // MARK: - 固定比较项
 
