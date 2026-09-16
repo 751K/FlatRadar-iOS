@@ -23,9 +23,13 @@ import UserNotifications
 @Observable
 public final class PushStore {
 
-    /// 隐式 init 随 `public` 一起变成 internal，宿主 app 构造不了。
-    /// 这些 store 的属性全有默认值，空实现与迁移前的隐式构造等价。
-    public init() {}
+    /// `defaults` 的默认值让宿主照旧 `PushStore()`，包测试又能注入替身
+    /// （同 ``ReviewPromptStore``）。公开的是这一个 init，不另留空 init——
+    /// 那会让 `defaults` 和 ``deliveryDisabledByUser`` 没机会赋值。
+    public init(defaults: UserDefaults = .standard) {
+        self.defaults = defaults
+        self.deliveryDisabledByUser = defaults.bool(forKey: Self.deliveryDisabledKey)
+    }
 
     public enum PermissionStatus: Sendable {
         case notDetermined, denied, authorized, provisional, ephemeral
@@ -36,6 +40,32 @@ public final class PushStore {
     public var lastError: String?
     public var registeredDeviceId: Int?
 
+    /// 用户在设置里主动把推送关掉了。**按设备存，不按账号。**
+    ///
+    /// 为什么不能只看 ``registeredDeviceId``
+    /// ------------------------------------
+    /// ``setEnabled(false)`` 只删后端绑定，之后 `registeredDeviceId` 是 nil——
+    /// 而这和「这台设备从没注册过」长得一模一样。冷启动时宿主对任何已登录的
+    /// 非访客用户都会调 ``requestPermissionAndRegister()``，于是又注册回去，
+    /// 开关读回来是开的：用户关掉的通知被 app 自己悄悄打开了。少的就是
+    /// 「用户**选择**关掉」这条信息，只能单独存。
+    ///
+    /// 为什么存 UserDefaults 不存后端：通知权限本来就是**这台设备**的，不是
+    /// 账号的。在 iPhone 上关掉不该顺手把 iPad 的也关掉；同理换个账号登进来，
+    /// 这台设备的选择依然算数，所以 ``logout()`` 不清它。
+    ///
+    /// iOS 和 Mac 走同一份 Core，键名自然是同一个，不用各自抄一遍字符串。
+    public private(set) var deliveryDisabledByUser: Bool
+
+    /// ``deliveryDisabledByUser`` 的 UserDefaults 键名。
+    ///
+    /// `nonisolated`：类是 `@MainActor`，静态常量默认跟着隔离，于是读一个
+    /// 字符串常量都得跳到主线程。它是不可变的 `String`，本来就是 Sendable，
+    /// 没有需要保护的状态——宿主在别的 actor 上（或测试里）直接读键名才不会
+    /// 被隔离挡住。
+    public nonisolated static let deliveryDisabledKey = "pushDeliveryDisabledByUser"
+
+    private let defaults: UserDefaults
     private let client = APIClient.shared
     private var hasInstalledDelegate = false
 
@@ -133,6 +163,16 @@ public final class PushStore {
             #endif
             return
         }
+        // 用户自己关掉的推送，任何自动路径都不许替他打开。
+        //
+        // 拦在这里而不是逐个调用点：这个方法有六处调用（App 启动、登录、
+        // 注册转正、Mac 的 `.task(id:)`…），漏掉任何一处，那条路就会把用户
+        // 关掉的通知重新注册回来——原先的 bug 正是冷启动那一处。
+        // 用户重新打开走 ``setEnabled(true)``，它会先把这个意愿清掉。
+        guard !deliveryDisabledByUser else {
+            print("[PushStore] 用户已关闭推送，跳过注册")
+            return
+        }
         let center = UNUserNotificationCenter.current()
         do {
             let granted = try await center.requestAuthorization(
@@ -205,6 +245,16 @@ public final class PushStore {
         print("[PushStore] APNs token hex \(hex.prefix(12))… (\(hex.count) chars)")
         lastToken = hex
 
+        // 第二道同样的门。``requestPermissionAndRegister`` 那道拦不住这里：
+        // token 是**异步**回来的，而且 ``setup()`` 里的 `flushPendingToken()`
+        // 会无条件重放缓存 token。所以「关掉开关的同时上一次注册的 token 正在
+        // 路上」会绕过前一道门，直接把设备注册回后端——界面上开关是关的，推送
+        // 却照收。
+        guard !deliveryDisabledByUser else {
+            print("[PushStore] 用户已关闭推送，丢弃这次 token 上报")
+            return
+        }
+
         // APNs token 是异步到达的。如果它在 requestPermissionAndRegister 后到
         // 但用户已经登出（auth token 已清），此时调 /devices/register 会要么
         // 401 要么把 token 错误地绑到没有 bearer 的请求上。守一道门：没 token
@@ -245,10 +295,15 @@ public final class PushStore {
 
     // MARK: - User-facing toggle
 
-    /// 设置里 "Enable Notifications" 开关用：开 → 申请权限 + 注册；关 → 仅删
-    /// 后端设备绑定。区别于 ``logout``：不清 lastToken / lastError，
-    /// 用户重新打开时可立即用现存 APNs token 再注册。
+    /// 设置里 "Enable Notifications" 开关用：开 → 申请权限 + 注册；关 → 记下
+    /// 用户的选择 + 删后端设备绑定。区别于 ``logout``：不清 lastToken /
+    /// lastError，用户重新打开时可立即用现存 APNs token 再注册。
+    ///
+    /// **先写 ``deliveryDisabledByUser`` 再做网络动作**，两个方向都要：
+    /// 关的时候先落盘，`deleteDevice` 慢或失败也不会让这次关闭丢掉；开的时候
+    /// 先清掉，否则 ``requestPermissionAndRegister`` 会被上面那道门自己挡回去。
     public func setEnabled(_ enabled: Bool) async {
+        setDeliveryDisabled(!enabled)
         if enabled {
             await requestPermissionAndRegister()
         } else {
@@ -257,5 +312,15 @@ public final class PushStore {
             }
             registeredDeviceId = nil
         }
+    }
+
+    /// ``deliveryDisabledByUser`` 的唯一写入口：内存与 UserDefaults 一起改。
+    ///
+    /// 不写成属性的 `didSet`：`@Observable` 宏会把存储属性改写成带
+    /// `withMutation` 的计算属性，属性观察器在这套改写下不可靠，落盘可能整个
+    /// 丢掉——而丢掉正好就是这次要修的 bug。
+    private func setDeliveryDisabled(_ disabled: Bool) {
+        deliveryDisabledByUser = disabled
+        defaults.set(disabled, forKey: Self.deliveryDisabledKey)
     }
 }

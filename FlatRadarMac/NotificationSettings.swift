@@ -8,18 +8,9 @@ enum NotificationPreferences {
     /// 用户在「Notifications Are Off」弹窗里勾了「Don't remind me again」。
     static let alertSuppressedKey = "notificationsOffAlertSuppressed"
 
-    /// 用户在设置里**主动**关掉了「推送到这台 Mac」。
-    ///
-    /// 为什么要单独存
-    /// ------------
-    /// 主窗口每次登录态变化都会自动申请权限、注册设备。只调
-    /// `PushStore.setEnabled(false)`（删掉后端的设备绑定）的话，下次启动又被自动
-    /// 注册回来——开关看着关了，推送照样来。
-    ///
-    /// iOS 有同样的问题：`FlatRadarApp` 启动时对已登录用户无条件调
-    /// `requestPermissionAndRegister()`，设置里那个 Enable Notifications 开关关掉之后，
-    /// 下次冷启动就被悄悄打开了。Mac 这边从一开始就按「用户的选择」存下来。
-    static let deliveryDisabledKey = "pushDeliveryDisabledByUser"
+    // 「用户关掉了推送」这条意愿曾经在这里用 `@AppStorage` 存过一份。现在归
+    // ``PushStore/deliveryDisabledByUser`` 管（Core 里落盘、两端同一个键），
+    // 这里不再留副本——同一件事存两处，迟早有一处忘了改。
 
     /// 系统设置里「通知 → FlatRadar」那一页。
     ///
@@ -41,7 +32,6 @@ struct NotificationSettings: View {
     @Environment(\.openURL) private var openURL
 
     @AppStorage(NotificationPreferences.alertSuppressedKey) private var alertSuppressed = false
-    @AppStorage(NotificationPreferences.deliveryDisabledKey) private var deliveryDisabled = false
 
     @State private var isSendingTest = false
     @State private var testResult: String?
@@ -135,7 +125,7 @@ struct NotificationSettings: View {
                 Button("Re-register Device") {
                     Task { await push.requestPermissionAndRegister() }
                 }
-                .disabled(push.permissionStatus == .denied || deliveryDisabled)
+                .disabled(push.permissionStatus == .denied || push.deliveryDisabledByUser)
             }
         }
     }
@@ -151,7 +141,7 @@ struct NotificationSettings: View {
         case .denied:        return "Off in System Settings"
         case .notDetermined: return "Not requested yet"
         default:
-            if deliveryDisabled { return "Turned off for this Mac" }
+            if push.deliveryDisabledByUser { return "Turned off for this Mac" }
             return push.registeredDeviceId != nil ? "On" : "Allowed — not registered yet"
         }
     }
@@ -160,13 +150,16 @@ struct NotificationSettings: View {
         switch push.permissionStatus {
         case .denied: return "bell.slash.fill"
         case .notDetermined: return "bell"
-        default: return deliveryDisabled || push.registeredDeviceId == nil ? "bell" : "bell.badge.fill"
+        default:
+            return push.deliveryDisabledByUser || push.registeredDeviceId == nil
+                ? "bell" : "bell.badge.fill"
         }
     }
 
     private var statusColor: Color {
         if push.permissionStatus == .denied { return .red }
-        return isAllowed && !deliveryDisabled && push.registeredDeviceId != nil ? .green : .secondary
+        return isAllowed && !push.deliveryDisabledByUser && push.registeredDeviceId != nil
+            ? .green : .secondary
     }
 
     private var pushEnvironment: String {
@@ -185,18 +178,16 @@ struct NotificationSettings: View {
     /// 要等 APNs 回 token、后端回 id，这几秒里开关会弹回「关」。
     private var deliveryBinding: Binding<Bool> {
         Binding(
-            get: { !deliveryDisabled && push.permissionStatus != .denied },
-            set: { enable in
-                deliveryDisabled = !enable
-                Task { await push.setEnabled(enable) }
-            })
+            get: { !push.deliveryDisabledByUser && push.permissionStatus != .denied },
+            // 落盘由 `setEnabled` 自己做（它先写意愿再动网络），这里不用再存一次。
+            set: { enable in Task { await push.setEnabled(enable) } })
     }
 
     /// 读系统权限；如果刚在系统设置里打开了、而这台 Mac 还没注册，就补注册一次。
     private func syncWithSystem() async {
         guard auth.isAuthenticated, !auth.isGuest else { return }
         await push.refreshPermissionStatus()
-        if isAllowed, !deliveryDisabled, push.registeredDeviceId == nil {
+        if isAllowed, !push.deliveryDisabledByUser, push.registeredDeviceId == nil {
             await push.requestPermissionAndRegister()
         }
     }

@@ -42,9 +42,21 @@ struct SettingsView: View {
     }
 
     /// 同上：通知开关的内联 binding。
+    ///
+    /// 读的是**用户的选择**（``PushStore/deliveryDisabledByUser``），不是
+    /// `registeredDeviceId != nil` 那个注册结果。两个原因：
+    ///
+    /// 1. 注册是异步的。按结果读，用户打开开关后 APNs token 往返的那一两秒里
+    ///    开关会自己弹回「关」，像是没点上。
+    /// 2. 注册结果存不住。冷启动时后端绑定还没建，按结果读就是「关」，而用户
+    ///    上次明明留在「开」。
+    ///
+    /// 系统层面被拒是例外：那种情况推送确实收不到，显示「开」就是骗人，所以
+    /// 一并读 `permissionStatus`——下面那行 `.disabled` 会把它置灰，旁边的
+    /// 说明文字告诉用户去 iOS 设置里开。
     private var notificationsBinding: Binding<Bool> {
         Binding(
-            get: { push.registeredDeviceId != nil },
+            get: { !push.deliveryDisabledByUser && push.permissionStatus != .denied },
             set: { enable in Task { await push.setEnabled(enable) } })
     }
 
@@ -156,7 +168,11 @@ struct SettingsView: View {
                 }
                 if auth.isAdmin {
                     Button {
-                        Task { await push.requestPermissionAndRegister() }
+                        // 走 setEnabled(true) 而不是直接 requestPermissionAndRegister()：
+                        // 「关掉推送」是按设备存的，这台设备上如果先前有 user 关过，
+                        // 之后换 admin 登进来（admin 看不到那个开关，清不掉这个意愿），
+                        // 直接调注册会被 PushStore 里那道门静默挡下，按钮成了死的。
+                        Task { await push.setEnabled(true) }
                     } label: {
                         Text("Re-register Device")
                     }

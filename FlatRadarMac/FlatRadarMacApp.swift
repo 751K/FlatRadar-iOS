@@ -180,14 +180,14 @@ private struct RootView: View {
 
     let pushBridge: MacPushDelegate
 
-    /// 这一刻该不该有推送注册。
+    /// 这一刻该不该有推送注册。访客没有 bearer，`/devices/register` 调不通；
+    /// 登出后也不该再注册。
     ///
-    /// 访客没有 bearer，`/devices/register` 调不通；登出后也不该再注册；用户在设置里
-    /// 关了「推送到这台 Mac」也不注册——不看这一条的话，关掉之后下次启动又被自动
-    /// 注册回来（iOS 现在就是这样，见 ``NotificationPreferences/deliveryDisabledKey``）。
-    private var wantsPush: Bool { auth.isAuthenticated && !auth.isGuest && !deliveryDisabled }
+    /// 「用户自己关掉了推送」这一条**不在这里判**：那道门在
+    /// ``PushStore/requestPermissionAndRegister()`` 里面。注册有六个调用点，
+    /// 条件写在调用点上迟早漏一个——原先 iOS 的 bug 正是冷启动那一处漏了。
+    private var wantsPush: Bool { auth.isAuthenticated && !auth.isGuest }
 
-    @AppStorage(NotificationPreferences.deliveryDisabledKey) private var deliveryDisabled = false
     @AppStorage(AppearancePreference.storageKey) private var appearance = AppearancePreference.system.rawValue
 
     /// 跑在 XCTest 的宿主进程里。
@@ -205,7 +205,9 @@ private struct RootView: View {
     /// 这一种情况，用户才完全不知道推送没开——`PushStore` 以前连这个状态都报不对，
     /// 见它 `requestPermissionAndRegister` 里 catch 分支的注释。
     private func offerNotificationSettingsIfBlocked() {
+        // 用户自己关掉推送的，不提醒——他没开权限正是他要的结果。
         guard push.permissionStatus == .denied,
+              !push.deliveryDisabledByUser,
               !didOfferNotificationSettings,
               !notificationsAlertSuppressed else { return }
         didOfferNotificationSettings = true

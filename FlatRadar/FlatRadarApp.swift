@@ -75,7 +75,10 @@ struct FlatRadarApp: App {
                     pushStore.setup(bridge: pushDelegate)
                     // 3. 恢复 token 会话
                     await authStore.restoreSession()
-                    // 4. 若已登录（非 guest），自动尝试注册 APNs
+                    // 4. 若已登录（非 guest），自动尝试注册 APNs。
+                    //    用户在设置里关过推送就不该再注册——那道门在
+                    //    `PushStore.requestPermissionAndRegister` 里面，不在
+                    //    这里：注册有六个调用点，条件写在调用点上迟早漏一个。
                     if authStore.isAuthenticated, !authStore.isGuest {
                         await pushStore.requestPermissionAndRegister()
                     }
