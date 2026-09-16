@@ -38,5 +38,21 @@
 	<array>
 		<string>$(AppIdentifierPrefix)com.j.kong.FlatRadar</string>
 	</array>
+
+	<!-- Universal Link。
+	     ``https://flatradar.app/l/<id>`` 这类分享链接，装了 FlatRadar 的人点了
+	     由系统直接交给 app，没装的人在浏览器里看公开落地页。两边都成立，是自定义
+	     scheme（对没装的人是死链）和平台网址（对装了的人不唤起 app）都做不到的。
+
+	     另一半在服务器上：``/.well-known/apple-app-site-association`` 必须
+	     HTTPS、application/json、不重定向、不要鉴权（后端 app/routes/site_meta.py）。
+	     **两边少一边就静默失效**——系统不报错，链接只是"在浏览器里打开了"。
+
+	     只写 ``applinks:``，不写 ``webcredentials:``：后者是共享密码自动填充，
+	     这个 app 用不到，多申请一项就多一项要向审核解释的权限。 -->
+	<key>com.apple.developer.associated-domains</key>
+	<array>
+		<string>applinks:flatradar.app</string>
+	</array>
 </dict>
 </plist>

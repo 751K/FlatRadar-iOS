@@ -41,20 +41,21 @@ struct ListingDetailView: View {
         .navigationTitle(navigationTitle)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            // 房源加载好后才显示分享按钮——加载中 / 失败时分享一个空 deep link
-            // 没意义。SwiftUI ShareLink 直接调起系统标准 Share Sheet（AirDrop /
-            // 信息 / 邮件 / 复制 / 拷贝链接 ...），item 用 h2smonitor:// deep link
-            // —— 收件人装了 FlatRadar 点一下就跳到本房源详情；没装的话
-            // message 文本里也带了房源摘要 + 官方平台 URL 作为兜底。
+            // 房源加载好后才显示分享按钮——加载中 / 失败时分享一个空链接没意义。
+            // SwiftUI ShareLink 直接调起系统标准 Share Sheet（AirDrop / 信息 /
+            // 邮件 / 复制 / 拷贝链接 ...），item 是一条 **Universal Link**：
+            // 收件人装了 FlatRadar 点一下跳进本房源详情，没装的话在浏览器里
+            // 看到公开落地页。见 `shareLink(for:)`。
             if let listing {
                 ToolbarItem(placement: .topBarTrailing) {
                     ShareLink(
-                        item: deepLink(for: listing),
+                        item: shareLink(for: listing),
                         subject: Text(listing.name),
                         message: Text(shareMessage(for: listing)),
-                        // 自定义 scheme（h2smonitor://...）系统不会自动抓 OpenGraph
-                        // 预览，分享面板默认显示一个灰色占位格子。提供 SharePreview
-                        // 让分享面板顶部正确显示房源名 + App 图标。
+                        // 仍然显式给 SharePreview，不指望系统去抓 OpenGraph：
+                        // 抓网页要发一次请求，分享面板会先显示一个灰色占位格子再
+                        // 替换，而我们本地就有房源名和价格，没必要让用户等那一下。
+                        // （落地页的 og: 标签照样有，那是给 iMessage / Slack 用的。）
                         preview: SharePreview(
                             sharePreviewTitle(for: listing),
                             image: Self.sharePreviewIcon
@@ -100,28 +101,34 @@ struct ListingDetailView: View {
     }
 
     /// `h2smonitor://listing/<id>` —— 跟 FlatRadarApp.handleURL 解析的 scheme/host 一致。
-    private func deepLink(for listing: Listing) -> URL {
-        URL(string: "h2smonitor://listing/\(listing.id)") ?? URL(string: "h2smonitor://")!
+    /// 下面几段的正文都在包里（``ListingShare``），Mac 的分享共用同一份——
+    /// 同一套房从 iPhone 发和从 Mac 发，收件人看到的不该是两种格式。
+
+    /// 分享出去的那条链接：`https://<服务器>/l/<id>`，一条 **Universal Link**。
+    ///
+    /// 原先分享的是 `h2smonitor://listing/<id>`。那条链接**对没装 app 的收件人
+    /// 是死的**——自定义 scheme 在浏览器里打不开，正文里虽然还有平台网址兜底，
+    /// 但主链接点了没反应这件事本身就在劝退。
+    ///
+    /// Universal Link 两边都成立：装了的人系统直接送进 app，没装的人看到一个
+    /// 公开的房源落地页。另一半在服务器上
+    /// （`/.well-known/apple-app-site-association` + `/l/<id>`）。
+    ///
+    /// 拼不出来（id 为空）时退回旧的 deep link——总比没有链接强。
+    private func shareLink(for listing: Listing) -> URL {
+        ListingShare.universalLink(id: listing.id) ?? ListingShare.deepLink(id: listing.id)
     }
 
     /// 分享文本：地址 · 价格 · 城市 + 官网链接。
     /// 用 \n 分行，让 iMessage / 邮件 / Notes 等通讯类接收方显示更清晰。
     private func shareMessage(for listing: Listing) -> String {
-        var head: [String] = [listing.sourceShortText, listing.name]
-        if let price = listing.priceText, !price.isEmpty { head.append(price) }
-        if !listing.city.isEmpty { head.append(listing.city) }
-        var lines = [head.joined(separator: " · ")]
-        if !listing.url.isEmpty { lines.append(listing.url) }
-        return lines.joined(separator: "\n")
+        ListingShare.message(for: listing)
     }
 
     /// Share Sheet 顶部预览的标题——地址 + 价格（如有），比 deep link 字符串
     /// 友好得多。
     private func sharePreviewTitle(for listing: Listing) -> String {
-        if let price = listing.priceText, !price.isEmpty {
-            return "\(listing.name) · \(price)"
-        }
-        return listing.name
+        ListingShare.previewTitle(for: listing)
     }
 
     /// Share Sheet 预览图标 —— 优先用 App 自身图标，让收件人/拷贝面板里有品牌

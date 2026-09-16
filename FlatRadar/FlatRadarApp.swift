@@ -102,9 +102,19 @@ struct FlatRadarApp: App {
                     guard let id = note.userInfo?["listing_id"] as? String else { return }
                     coordinator.openListing(id: id)
                 }
-                // Deep link 入口 2：h2smonitor://listing/<id>（邮件/iMessage 点）
+                // Deep link 入口 2：h2smonitor://listing/<id>（推送 payload、旧链接）
                 .onOpenURL { url in
                     handleURL(url)
+                }
+                // Deep link 入口 3：**分享出去的那条链接**
+                // `https://<服务器>/l/<id>`，一条 Universal Link。
+                //
+                // 和入口 2 是两条独立的路，不能只接一条：自定义 scheme 走
+                // `onOpenURL`，https 走 `NSUserActivity`。分享发的是这一条，
+                // 推送里带的还是那一条，两种都在流通。
+                .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+                    guard let url = activity.webpageURL else { return }
+                    handleUniversalLink(url)
                 }
                 // SSE 实时通知：登录 + 前台时连，登出 / 后台时断
                 .onChange(of: scenePhase) { _, newPhase in
@@ -176,6 +186,19 @@ struct FlatRadarApp: App {
         } else {
             notificationsStore.disconnectStream()
         }
+    }
+
+    /// 别人分享过来的 ``https://<服务器>/l/<id>``。
+    ///
+    /// 认不出形状就**交还给系统**（在浏览器里打开）。`applinks` 认领的是路径
+    /// 前缀，这个域名下用户点过的链接都会送进来；默默吞掉的话，在 Safari 里点
+    /// 一个站内链接会变成"点了没反应"。
+    private func handleUniversalLink(_ url: URL) {
+        guard let id = ListingShare.listingID(fromUniversalLink: url) else {
+            UIApplication.shared.open(url)
+            return
+        }
+        coordinator.openListing(id: id)
     }
 
     /// 解析 ``h2smonitor://listing/<id>``。

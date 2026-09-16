@@ -17,6 +17,13 @@
 	    CFBundleURLTypes 留在这里，是因为它是数组套字典，INFOPLIST_KEY_* 表达不了。
 	    它注册 h2smonitor:// URL Scheme，使 h2smonitor://listing/<id> 这类链接
 	    （邮件 / iMessage / 网页里点）能唤起 FlatRadar，由 SwiftUI 的 .onOpenURL 接到。
+
+	    2026-09-16：这个文件现在**两个 target 共用**（iOS 和 macOS 的
+	    INFOPLIST_FILE 都指向它）。原先只有 iOS 用，于是 Mac app 根本没注册这个
+	    scheme——分享出去的 h2smonitor:// 链接在 Mac 上连自己都打不开，推送
+	    payload 里的 deep_link 同样落不了地。
+	    一份文件两端共用，比各写一份少一个会漂移的地方；这里只有 scheme 这一个键，
+	    没有任何平台专有内容。
 	-->
 	<key>CFBundleURLTypes</key>
 	<array>
