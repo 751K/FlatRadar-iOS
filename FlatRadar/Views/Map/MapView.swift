@@ -205,11 +205,13 @@ struct MapView: View {
         let dashed: Bool
     }
 
-    /// 绕路系数：直线距离 × 系数 ≈ 实际路程。
-    private static let detourFactor: Double = 1.3
-
+    /// 半径算法和绕路系数都在包里（``Reachability``），Mac 的地图共用同一份。
+    ///
+    /// 提出去的是**算法和系数**，不是分钟数：iOS 画 10/10，Mac 画 5/10，各自的
+    /// 界面尺度不同。会漂移的是 `detourFactor` 这种隐含假设——改一边忘另一边，
+    /// 两端的同一个圈就画出不同的大小。
     private static func reachRadius(kmh: Double, minutes: Int) -> CLLocationDistance {
-        kmh * 1000 / 60 / detourFactor * Double(minutes)
+        Reachability.radius(kmh: kmh, minutes: minutes)
     }
 
     /// 配色刻意避开图钉的状态色。
@@ -276,8 +278,9 @@ struct MapView: View {
     private static func offsetNorth(
         _ c: CLLocationCoordinate2D, meters: CLLocationDistance
     ) -> CLLocationCoordinate2D {
-        CLLocationCoordinate2D(latitude: c.latitude + meters / 111_320,
-                               longitude: c.longitude)
+        CLLocationCoordinate2D(
+            latitude: Reachability.offsetNorth(latitude: c.latitude, meters: meters),
+            longitude: c.longitude)
     }
 
     // MARK: - POI
@@ -295,28 +298,17 @@ struct MapView: View {
     /// 刻意不含的：`.restaurant` / `.cafe` / `.nightlife` / `.store`。它们正是当初
     /// 那条注释抱怨的那批，密度高且跟"住不住得下去"没关系；`.store` 尤其宽，
     /// 一放开就把整条商业街铺满。
-    private static let poiCategories: [MKPointOfInterestCategory] = [
-        .foodMarket,       // 超市 / 生鲜
-        .publicTransport,  // 车站 / 站点
-        .school,
-    ]
-
-    /// 放大到什么程度才显示 POI（latitudeDelta，单位度）。
+    /// 类目和阈值都在包里（``MapPOI``），Mac 的地图共用同一份。
     ///
-    /// 概览视角下（默认 0.55° ≈ 60km）满屏都是聚类气泡，这时候叠 POI 就是把当初
-    /// 那个问题原样请回来。0.05° ≈ 5.5km，大约一个城区——到这个尺度用户已经在看
-    /// "具体这一带怎么样"，POI 才开始有意义，而房源也散成了单个图钉。
-    private static let poiMaxSpan: Double = 0.05
-
-    /// 按当前缩放决定显示哪些 POI。
+    /// 提出去的理由和 ``Reachability`` 一样："哪几类 POI 和租不租得下去有关"是个
+    /// 产品判断，不是两端各自的界面口味——一端加了 `.hospital`、另一端没加，
+    /// 就成了同一张图在两个设备上说不同的话。
     ///
     /// 比较的是**量化后**的 span，跟 clustering 用同一组 log2 桶——`currentRegion`
     /// 本来就只在跨桶时才更新（见 `bucketsDiffer`），所以这个开关只会在桶边界翻转，
     /// 不会随手指拖动每帧抖动。
     private var visiblePointsOfInterest: PointOfInterestCategories {
-        MapClustering.quantizeSpan(currentRegion.span.latitudeDelta) <= Self.poiMaxSpan
-            ? .including(Self.poiCategories)
-            : .excludingAll
+        MapPOI.categories(atSpan: MapClustering.quantizeSpan(currentRegion.span.latitudeDelta))
     }
 
     private static func bucketsDiffer(
