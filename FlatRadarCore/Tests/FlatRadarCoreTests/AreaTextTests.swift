@@ -31,4 +31,17 @@ final class AreaTextTests: XCTestCase {
         XCTAssertNil(AreaText.normalized(""))
         XCTAssertNil(AreaText.normalized("   "))
     }
+
+    /// 面积要能取出**数值**来筛「≥ N m²」。
+    ///
+    /// `m²` 的上标 `²` 在 `Character.isNumber` 下是 true，一旦被当成数字留进来，
+    /// `Double("50²")` 返回 nil —— 筛选不会报错，只会静默失效（读不出面积的
+    /// 一律留着，于是每条都通过）。
+    func test_面积能取出数值() {
+        XCTAssertEqual(AreaText.value("50 m²"), 50)
+        XCTAssertEqual(AreaText.value("22,56 m²"), 22.56)
+        XCTAssertEqual(AreaText.value("33.78 m²"), 33.78)
+        XCTAssertNil(AreaText.value("n.v.t."))
+        XCTAssertNil(AreaText.value(nil))
+    }
 }

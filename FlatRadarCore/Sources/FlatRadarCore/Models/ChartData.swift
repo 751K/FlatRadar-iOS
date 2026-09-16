@@ -89,6 +89,22 @@ extension Array where Element == ChartEntry {
                 if lr != rr { return lr < rr }
                 return lhs.label < rhs.label
             }
+        case "status_dist":
+            // **必须合并**，不能只在显示时改名。
+            //
+            // 后端发的是平台原话：`Occupied` 和 `Not available` 是两条，而
+            // `ListingStatus.from` 把它们都归到 `.occupied`。只在画的时候把名字
+            // 换短（`ChartPresentation.shortLabel`），图上就会出现**两条都叫
+            // Occupied 的柱子**——Swift Charts 按分类值定位，两条落在同一格上
+            // 互相盖住，大的那条直接看不见了。
+            // 实测：`Occupied=281` 被 `Not available=30` 盖掉，卡上显示 30。
+            //
+            // 顺序按业务优先级（可订 > 抽签 > 已预订 > 已占 > 其它），不按数量：
+            // 这一列的读法是"从最值得看的到最不值得看的"。
+            return mergedByBucket(orderedKeys: ["Available to book", "Available in lottery",
+                                                "Reserved", "Occupied", "Other"]) {
+                Self.statusBucketLabel($0)
+            }
         case "type_dist":
             return mergedByBucket { Self.typeBucketLabel($0) }
         case "energy_dist":
@@ -150,6 +166,22 @@ extension Array where Element == ChartEntry {
         // 兜底：剥括号取主标签
         return trimmed.components(separatedBy: "(").first?
             .trimmingCharacters(in: .whitespaces) ?? trimmed
+    }
+
+    /// 状态归一到 `ListingStatus` 的五档，取每一档的**标准写法**当桶名。
+    ///
+    /// 用标准写法而不是短名（`Book` / `Occupied`），是为了让这一层只做合并、
+    /// 不管显示——短名是 `ChartPresentation.shortLabel` 的事，而那一层还要
+    /// 处理日期和小时。两件事混在一起的话，`status_dist` 会变成唯一一个
+    /// "合并时就已经改好名"的特例。
+    nonisolated static func statusBucketLabel(_ label: String) -> String {
+        switch ListingStatus.from(label) {
+        case .book:     return "Available to book"
+        case .lottery:  return "Available in lottery"
+        case .reserved: return "Reserved"
+        case .occupied: return "Occupied"
+        case .other:    return "Other"
+        }
     }
 
     nonisolated static func sourceBucketLabel(_ label: String) -> String {

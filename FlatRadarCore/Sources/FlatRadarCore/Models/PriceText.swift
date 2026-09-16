@@ -59,8 +59,13 @@ public nonisolated enum PriceText {
 
     public static func parse(_ raw: String?) -> Double? {
         guard let raw else { return nil }
-        // 只留数字和两种分隔符，货币符号 / 空格 / "per month" 一律扔掉。
-        let s = raw.filter { $0.isNumber || $0 == "." || $0 == "," }
+        // 只留 **ASCII** 数字和两种分隔符，货币符号 / 空格 / "per month" 一律扔掉。
+        //
+        // 必须是 ASCII：`Character.isNumber` 对上标 `²` 也返回 true，于是面积
+        // `"50 m²"` 会被留成 `"50²"`，`Double(_:)` 解析失败返回 nil。后果不是
+        // 报错而是**整个筛选静默失效**——"读不出面积就留着"这条兜底会让每一条
+        // 房源都通过「≥ 30 m²」。`FlatRadarMacTests/ListingQueryTests` 钉住了它。
+        let s = raw.filter { $0.isASCIIDigit || $0 == "." || $0 == "," }
         guard !s.isEmpty else { return nil }
 
         // 先判定**哪一个字符**是小数点（可能一个都不是）。
@@ -83,7 +88,7 @@ public nonisolated enum PriceText {
         var out = ""
         var i = s.startIndex
         while i < s.endIndex {
-            if s[i].isNumber {
+            if s[i].isASCIIDigit {
                 out.append(s[i])
             } else if i == decimalIndex {
                 out.append(".")
@@ -92,4 +97,9 @@ public nonisolated enum PriceText {
         }
         return Double(out)
     }
+}
+
+private nonisolated extension Character {
+    /// `isNumber` 认上标（`²`）、罗马数字和各种非阿拉伯数字，解析数值时都不该要。
+    var isASCIIDigit: Bool { isASCII && isNumber }
 }

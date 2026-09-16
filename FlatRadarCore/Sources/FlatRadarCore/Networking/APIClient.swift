@@ -86,7 +86,12 @@ public final class APIClient {
     func configure(baseURL url: URL) { baseURL = url }
     func setToken(_ t: String?) { token = t }
 
-    func currentBaseURL() -> URL { baseURL }
+    /// 当前服务器的根地址。
+    ///
+    /// 公开出去是给 ``ListingShare/universalLink(id:)`` 用的：分享链接要指向
+    /// **这个 app 正在用的那台服务器**，而不是写死 `flatradar.app`。自建实例的
+    /// 用户分享出去的链接得能打开他自己那台机器上的房源。
+    public func currentBaseURL() -> URL { baseURL }
 
     // MARK: - Core request helper
 

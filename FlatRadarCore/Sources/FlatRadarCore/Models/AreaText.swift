@@ -25,6 +25,15 @@ public nonisolated enum AreaText {
         return dotted.lowercased().contains("m") ? dotted : "\(dotted)m²"
     }
 
+    /// 面积的**数值**，用来做「≥ N m²」这种筛选。
+    ///
+    /// 直接借 ``PriceText/parse(_:)``：那个函数解决的是"一串数字可能用欧陆写法也
+    /// 可能用英美写法"，和货币无关——面积是同一个问题。两处各写一份分隔符判定
+    /// 迟早会分叉，而分叉的表现是"筛选结果差一百倍"。
+    public static func value(_ raw: String?) -> Double? {
+        PriceText.parse(raw)
+    }
+
     /// 把逗号当小数点的平台（OurDomain 给 `"22,56"`）统一成点。
     ///
     /// 只改**小数点**，不碰分位符：逗号后面正好三位数字时当分位符原样留着

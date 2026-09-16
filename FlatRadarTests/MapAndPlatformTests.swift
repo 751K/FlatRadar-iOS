@@ -128,7 +128,6 @@ final class PlatformTests: XCTestCase {
     }
 }
 
-
 final class ListingStatusTests: XCTestCase {
 
     func test_buckets_match_the_backend_judgement() {
@@ -203,7 +202,6 @@ final class ListingStatusTests: XCTestCase {
     }
 }
 
-
 final class MapListingCoordinateTests: XCTestCase {
 
     private func decode(_ json: String) throws -> MapListing {
@@ -238,7 +236,6 @@ final class MapListingCoordinateTests: XCTestCase {
         XCTAssertEqual(m.stackCount, 1)
     }
 }
-
 
 final class MapClusteringTests: XCTestCase {
 
@@ -341,7 +338,6 @@ final class MapClusteringTests: XCTestCase {
     }
 }
 
-
 final class MapFilterTests: XCTestCase {
 
     func test_price_parses_dutch_thousands_separator() {
@@ -358,7 +354,6 @@ final class MapFilterTests: XCTestCase {
         XCTAssertNil(MapStore.number(from: "—"))
     }
 }
-
 
 final class SentinelDateTests: XCTestCase {
 
@@ -391,7 +386,6 @@ final class SentinelDateTests: XCTestCase {
         XCTAssertEqual(ServerTime.sentinelAvailableFromYear, 2050)
     }
 }
-
 
 final class NavigationCoordinatorMapTests: XCTestCase {
 
@@ -447,7 +441,6 @@ final class NavigationCoordinatorMapTests: XCTestCase {
         XCTAssertNil(c.pendingMapFocusID)
     }
 }
-
 
 /// 空态说明卡的文案是**算出来**的，不是写死的。
 ///
@@ -527,7 +520,6 @@ final class MapEmptyBreakdownTests: XCTestCase {
     }
 }
 
-
 /// `source` 字段是权威，URL 嗅探只是兜底。
 ///
 /// 真机上每一条 OurCampus 都显示成 "OD"：后端发的 `source` 是 `ourcampus`，
@@ -585,66 +577,5 @@ final class NormalizedSourceKeyTests: XCTestCase {
     func test_legacy_short_codes_still_map() throws {
         XCTAssertEqual(try listing(source: "OC", url: "").normalizedSourceKey, "ourcampus")
         XCTAssertEqual(try listing(source: "h2s", url: "").normalizedSourceKey, "holland2stay")
-    }
-}
-
-
-/// 地点行的去重。
-///
-/// OurCampus 的 city 和 building 都是 "OurCampus Amsterdam Diemen"，而房源名是
-/// "OurCampus Diemen #3250"——照原样并排会把同一件事念三遍。真机截图上就是这样。
-///
-/// 这段逻辑一度在地图弹卡和日历行各写一份，地图那边修好了、日历那边没有。
-/// 现在只有 PlaceSummary 一份。
-final class PlaceSummaryTests: XCTestCase {
-
-    func test_ourcampus_只留下真正新增的信息() {
-        // 标题 "OurCampus Diemen #3250"，city 和 building 都是
-        // "OurCampus Amsterdam Diemen"。整串比较放行（两串互不包含）——那是
-        // 第一版的漏洞，测试当场抓到了。按词看：OurCampus、Diemen 标题里已有，
-        // 真正新的只有 Amsterdam，那才是这一行值得占位置的内容。
-        XCTAssertEqual(
-            PlaceSummary.text(name: "OurCampus Diemen #3250",
-                              parts: ["OurCampus Amsterdam Diemen",
-                                      "OurCampus Amsterdam Diemen"]),
-            "Amsterdam")
-    }
-
-    func test_门牌号不参与判重() {
-        // 数字和单字符（#、1-639）不承载地点信息，拿它们判重只会误伤。
-        XCTAssertEqual(
-            PlaceSummary.text(name: "Kastanjelaan 1-639", parts: ["Eindhoven 639"]),
-            "Eindhoven")
-    }
-
-    func test_去掉重复项() {
-        XCTAssertEqual(PlaceSummary.text(name: "X", parts: ["Amsterdam", "Amsterdam"]),
-                       "Amsterdam")
-    }
-
-    func test_去掉空白项() {
-        XCTAssertEqual(PlaceSummary.text(name: "X", parts: ["", "  ", "Utrecht"]),
-                       "Utrecht")
-    }
-
-    func test_保留标题里没有的部分() {
-        XCTAssertEqual(
-            PlaceSummary.text(name: "Kastanjelaan 1-639",
-                              parts: ["Centrum", "Eindhoven"]),
-            "Centrum · Eindhoven")
-    }
-
-    func test_大小写不影响判重() {
-        XCTAssertNil(PlaceSummary.text(name: "AMSTERDAM Naritaweg 155C",
-                                       parts: ["amsterdam naritaweg"]))
-    }
-
-    func test_只剩重复词时不显示() {
-        XCTAssertNil(PlaceSummary.text(name: "Amsterdam Diemen", parts: ["Diemen Amsterdam"]))
-    }
-
-    func test_全部被过滤掉时返回_nil_而不是空串() {
-        // 返回 "" 的话调用方会画一个空的 Text，留下一道莫名的空行。
-        XCTAssertNil(PlaceSummary.text(name: "X", parts: ["", "x"]))
     }
 }

@@ -55,6 +55,16 @@ public enum ServerTime {
         return f
     }()
 
+    /// `2026-09-17` → 那一天在 **Europe/Amsterdam** 的 00:00。
+    ///
+    /// 图表要把 `daily_new` 画成连续的时间轴才好抽稀刻度（分类轴一根柱子标一个，
+    /// 31 个日期会糊成一条带）。开出来是为了让调用方**别自己再造一个
+    /// `DateFormatter`**——后端的日期是按阿姆斯特丹时区分的桶，用本地时区解析会
+    /// 在月初差一天。
+    public nonisolated static func day(from raw: String) -> Date? {
+        dateParser.date(from: raw)
+    }
+
     nonisolated private static let displayFormatterTZ: DateFormatter = {
         let f = DateFormatter()
         f.calendar = Calendar(identifier: .gregorian)
