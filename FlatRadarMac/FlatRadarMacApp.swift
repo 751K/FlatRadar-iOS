@@ -18,6 +18,19 @@ struct FlatRadarMacApp: App {
     /// 放进任何一个窗口里，另一个都拿不到。
     @State private var filterStore = MeFilterStore()
 
+    /// 跨窗口共享的通知流、统计和匹配数。见 ``AppFeed``——Phase 4 开多窗口之前
+    /// 这些东西都挂在 `MainWindow` 的 `@State` 上，两个窗口会各连一条 SSE。
+    @State private var feed = AppFeed()
+
+    /// 菜单栏常驻。场景的存在与否要在 `body` 里判断，所以这个开关读在 App 这一层。
+    @AppStorage(MenuBarResidency.storageKey) private var menuBarResident = MenuBarResidency.defaultOn
+
+    /// 主窗口场景的 id。菜单栏那个「Open FlatRadar」用它重开窗口。
+    static let mainWindowID = "main"
+
+    /// 房源详情窗口场景的 id。
+    static let listingWindowID = "listing"
+
     /// APNs token 只能从 app delegate 拿到。实例由 SwiftUI 构造并持有，
     /// 通过 ``RootView`` 交给 ``PushStore/setup(bridge:)``。
     @NSApplicationDelegateAdaptor(MacPushDelegate.self) private var pushDelegate
@@ -102,10 +115,11 @@ struct FlatRadarMacApp: App {
     }
 
     var body: some Scene {
-        WindowGroup("FlatRadar") {
+        WindowGroup("FlatRadar", id: Self.mainWindowID) {
             RootView(pushBridge: pushDelegate)
                 .environment(auth)
                 .environment(push)
+                .environment(feed)
         }
         // 设计稿画的就是 1440×900。三栏加起来的下限：侧栏 196 + 表格九列约 620
         // + inspector 300 ≈ 1120，再窄就得先收 inspector。
@@ -128,13 +142,34 @@ struct FlatRadarMacApp: App {
             // 场景之后，后者实测排在 **Settings… 上面**（About → Sign Out → Settings…），
             // 登出跑到了设置前头。
             CommandGroup(before: .systemServices) {
-                SignOutCommand(auth: auth, push: push)
+                SignOutCommand(auth: auth, push: push, feed: feed)
+                Divider()
+            }
+            // 侧栏那四屏的键盘入口。`CommandGroup(before: .toolbar)` 会落进
+            // 系统自动生成的 View 菜单里，和 `Show Toolbar` / `Enter Full Screen`
+            // 排在一起——Mac 上「切换视图」这类命令的惯例位置就是 View。
+            CommandGroup(before: .toolbar) {
+                SectionCommands()
                 Divider()
             }
             CommandMenu("Listing") {
                 ListingCommands()
             }
         }
+
+        // 房源详情窗口。**按 id 去重**：同一条房源再开一次是激活已有那个窗口，
+        // 这正好落实风险 6 里「优先激活已显示该房源的窗口」。
+        //
+        // `Listing.ID` 是 `String`，满足 `Codable & Hashable`，所以窗口能被系统
+        // 的状态恢复带过重启。
+        WindowGroup(id: Self.listingWindowID, for: Listing.ID.self) { $id in
+            ListingWindow(id: id)
+                .environment(auth)
+        }
+        .defaultSize(width: 420, height: 620)
+        // 详情窗口里没有侧栏、没有 inspector、没有四屏可切——上面那些命令
+        // 一个都不适用。不移掉的话 ⌘1 在这种窗口里是个灰着的死项。
+        .commandsRemoved()
 
         // ⌘,。`Settings` 是独立场景，`WindowGroup` 里注入的环境值到不了这里，
         // 要再注入一遍。
@@ -144,6 +179,19 @@ struct FlatRadarMacApp: App {
                 .environment(push)
                 .environment(filterStore)
         }
+
+        // 菜单栏常驻。**默认关**，由设置页那个开关打开（见 ``MenuBarResidency``）。
+        //
+        // 开关直接决定这个场景在不在 `body` 里：SwiftUI 会据此加上 / 摘掉菜单栏
+        // 那一格，不需要自己管 `NSStatusItem`。同一个开关还喂给 ``AppFeed``，
+        // 因为风险 6 说常驻之后「没有内容窗口也可维持连接」——图标在不在，
+        // 和流断不断，是同一个决定。
+        MenuBarExtra(isInserted: $menuBarResident) {
+            MenuBarStatusView(feed: feed, auth: auth)
+        } label: {
+            MenuBarStatusLabel(feed: feed)
+        }
+        .menuBarExtraStyle(.window)
     }
 }
 
@@ -161,8 +209,16 @@ private final class SessionReportState {
 private struct RootView: View {
     @Environment(AuthStore.self) private var auth
     @Environment(PushStore.self) private var push
+    @Environment(AppFeed.self) private var feed
     @Environment(\.openURL) private var openURL
-    @State private var didRestore = false
+    @Environment(\.openWindow) private var openWindow
+
+    /// 还没登录就点进来的那条 deep link。
+    ///
+    /// 风险 6：「URL 与通知路由在未登录时暂存，认证后再执行」。冷启动点链接时
+    /// 系统先把 app 拉起来，那一刻 `restoreSession()` 还没跑完——直接丢掉的话，
+    /// 用户看到的是"点了链接，App 开了，但停在列表首页"。
+    @State private var pendingDeepLink: URL?
 
     /// 「通知没打开」弹窗。
     @State private var showNotificationsOff = false
@@ -190,6 +246,10 @@ private struct RootView: View {
 
     @AppStorage(AppearancePreference.storageKey) private var appearance = AppearancePreference.system.rawValue
 
+    /// 菜单栏常驻。这里读它只为一件事：把值同步给 ``AppFeed``，让它知道
+    /// 「最后一个窗口关掉之后流要不要留着」。图标本身由 App 那一层的场景管。
+    @AppStorage(MenuBarResidency.storageKey) private var menuBarResident = MenuBarResidency.defaultOn
+
     /// 跑在 XCTest 的宿主进程里。
     ///
     /// `FlatRadarMacTests` 的 `TEST_HOST` 就是这个 app，跑单测会真的启动它、
@@ -197,6 +257,58 @@ private struct RootView: View {
     /// 就会弹一次通知权限框、往后端注册一台设备。
     private static let isUnderXCTest =
         ProcessInfo.processInfo.environment["XCTestConfigurationFilePath"] != nil
+
+    /// 别人分享过来的 `https://<服务器>/l/<id>`。
+    ///
+    /// 认不出形状就**交还给浏览器**。系统把这个域名下用户点过的链接都送进来
+    /// （`applinks` 认领的是路径前缀），在浏览器里点 `/stats` 之类的站内链接时
+    /// 默默吞掉的话，用户看到的是"点了没反应"。
+    private func handleUniversalLink(_ url: URL) {
+        guard let id = ListingShare.listingID(fromUniversalLink: url) else {
+            openURL(url)
+            return
+        }
+        guard auth.isAuthenticated else {
+            pendingDeepLink = url
+            return
+        }
+        NSApp.activate(ignoringOtherApps: true)
+        openWindow(id: FlatRadarMacApp.listingWindowID, value: id)
+    }
+
+    /// 解析 `h2smonitor://listing/<id>` 和 `h2smonitor://map/<id>`。
+    ///
+    /// 和 iOS 的 `handleURL` 认同一套 host，但**落点不一样**，因为两端的形态不同：
+    /// iPhone 上是 push 一个详情页，Mac 上是开一个独立详情窗口
+    /// （``ListingWindow``）——而那个窗口按 id 去重，所以「同一条链接点两次」
+    /// 是激活已有窗口，正是风险 6 里「优先激活已显示该房源的窗口」那一条。
+    ///
+    /// **没登录时不丢掉**：风险 6 说「URL 与通知路由在未登录时暂存，认证后再执行」。
+    /// 这里存进 `pendingDeepLink`，登录态一变就重放。
+    private func handleDeepLink(_ url: URL) {
+        guard url.scheme == "h2smonitor" else { return }
+        guard auth.isAuthenticated else {
+            pendingDeepLink = url
+            return
+        }
+        let id = url.lastPathComponent
+        guard !id.isEmpty else { return }
+        switch url.host {
+        case "listing":
+            NSApp.activate(ignoringOtherApps: true)
+            openWindow(id: FlatRadarMacApp.listingWindowID, value: id)
+        case "map":
+            // 地图那一路要有个浏览窗口才有地方落。没有就先开一个，
+            // `openWindow(id:)` 对已开着的主窗口是"激活"，不会堆第二个。
+            NSApp.activate(ignoringOtherApps: true)
+            openWindow(id: FlatRadarMacApp.mainWindowID)
+            NotificationCenter.default.post(name: .flatRadarLocateOnMap,
+                                            object: nil,
+                                            userInfo: ["listing_id": id])
+        default:
+            break
+        }
+    }
 
     /// 系统已经不会再弹权限框了，就由我们来说。
     ///
@@ -222,10 +334,43 @@ private struct RootView: View {
                 SignInPane()
             }
         }
-        .task {
-            guard !didRestore else { return }
-            didRestore = true
-            await auth.restoreSession()
+        // 风险 6 第一条「登录恢复只执行一次」。
+        //
+        // 这个 flag 原先是**这个视图的** `@State`，而 `RootView` 是每个窗口一份——
+        // ⌘N 开第二个窗口就会再恢复一次会话。移进 ``AppFeed`` 之后无论开几个窗口
+        // 都只跑一遍，见 ``AppFeed/restoreSessionOnce(_:)``。
+        .task { await feed.restoreOnce { await auth.restoreSession() } }
+        // 登录态一变就重新判断一次 SSE 该不该活着（登录进来要连，登出要断）。
+        .task(id: auth.isAuthenticated) {
+            feed.syncStream(auth: auth)
+            // 登录之前暂存的那条链接，现在能执行了。
+            if auth.isAuthenticated, let url = pendingDeepLink {
+                pendingDeepLink = nil
+                // 两种链接都可能被暂存，按 scheme 分派回各自那条路。
+                if url.scheme == "h2smonitor" {
+                    handleDeepLink(url)
+                } else {
+                    handleUniversalLink(url)
+                }
+            }
+        }
+        // 菜单栏常驻也是这个判断的输入之一：没窗口但常驻着的时候流要留着。
+        .task(id: menuBarResident) { feed.menuBarResident = menuBarResident }
+        // `h2smonitor://listing/<id>` —— 分享出去的链接、推送 payload 里的
+        // `deep_link`，别人点了要能唤起这个 app。
+        //
+        // 以前 Mac 上**整条路都不通**：scheme 只注册在 iOS target 的 Info.plist 里
+        // （现在两端共用那一份了），所以系统根本不知道该把这种链接交给谁。
+        .onOpenURL { handleDeepLink($0) }
+        // Universal Link：`https://<服务器>/l/<id>`。
+        //
+        // **和 `.onOpenURL` 是两条路**，不能只接一条：自定义 scheme 走
+        // `onOpenURL`，而 https 的 Universal Link 走 `NSUserActivity`
+        // （`NSUserActivityTypeBrowsingWeb`）。两端都要接，因为两种链接都在流通——
+        // 分享出去的是 Universal Link，推送 payload 里的还是 `h2smonitor://`。
+        .onContinueUserActivity(NSUserActivityTypeBrowsingWeb) { activity in
+            guard let url = activity.webpageURL else { return }
+            handleUniversalLink(url)
         }
         // 外观要在主窗口一出现就套上，不能等用户打开设置窗口才生效。
         .task(id: appearance) { AppearancePreference(rawValue: appearance)?.apply() }
@@ -320,16 +465,48 @@ private struct SignOutCommand: View {
 
     let auth: AuthStore
     let push: PushStore
+    let feed: AppFeed
 
     var body: some View {
         Button("Sign Out") {
             // 先解绑设备再登出，顺序的理由见 ``SessionActions``——设置页的
             // Sign Out 走的是同一个函数。
-            Task { await SessionActions.signOut(auth: auth, push: push) }
+            Task {
+                await SessionActions.signOut(auth: auth, push: push)
+                // 风险 6：「任何窗口登出……都统一断流、**清空所有窗口的账户数据**」。
+                // 通知数据现在是共享的一份，所以在这里清一次就覆盖了所有窗口——
+                // 这正是把它提到应用级换来的好处：原先一窗一份时，这条判据要求
+                // 遍历所有窗口去清，而"只清当前可见窗口不算完成"。
+                feed.signedOut()
+            }
         }
         // 访客态也给它：`enterAsGuest()` 同样把 `isAuthenticated` 置真，
         // 没有这一条的话「以访客进来」就成了单程票。
         .disabled(!auth.isAuthenticated)
+    }
+}
+
+/// View 菜单里的四屏切换（⌘1 / ⌘2 / ⌘3 / ⌘4）。
+///
+/// 为什么 doc 里只写了 ⌘1/2/3，这里做了四个
+/// -------------------------------------
+/// Phase 4 那一条写的是「补充 ⌘1/2/3 切列表 / 地图 / 日历」，写的时候 Alerts
+/// 还在 Phase 3 没做。现在侧栏是**四**个条目，只给前三个快捷键的话，第四个
+/// 就成了唯一一个没有键盘入口的屏——那比四个都没有更难解释。
+///
+/// **作用于当前窗口**，不是全局：读的是 `@FocusedValue`，所以 ⌘2 切的是你正在
+/// 看的那个窗口。两个窗口可以一个停在列表、一个停在地图，这也是
+/// `BrowseModel.section` 一开始就放在窗口级的理由。
+private struct SectionCommands: View {
+    @FocusedValue(\.browseModel) private var model
+
+    var body: some View {
+        ForEach(Array(SidebarSection.allCases.enumerated()), id: \.element) { index, section in
+            Button(section.label) { model?.section = section }
+                // `KeyEquivalent` 要一个 `Character`。四屏对应 "1"…"4"。
+                .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")))
+                .disabled(model == nil)
+        }
     }
 }
 
@@ -359,12 +536,35 @@ private struct BrowseCommands: View {
 /// 「固定」这一步没有键盘入口——⌘D 补上了。
 private struct ListingCommands: View {
     @FocusedValue(\.browseModel) private var model
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
         Button("Next Listing") { model?.moveSelection(by: 1) }
             .keyboardShortcut(.downArrow, modifiers: .command)
         Button("Previous Listing") { model?.moveSelection(by: -1) }
             .keyboardShortcut(.upArrow, modifiers: .command)
+
+        Divider()
+
+        // Phase 4 的完成判据里有「悬停操作均有**键盘或菜单等价入口**」。
+        // 表格行悬停出来的那三个按钮、右键菜单里的「Open in New Window」，
+        // 等价入口就是这一条——双击和拖出去都不是键盘能做的事。
+        Button("Open in New Window") {
+            guard let id = model?.focused else { return }
+            openWindow(id: FlatRadarMacApp.listingWindowID, value: id)
+        }
+        .keyboardShortcut("o", modifiers: [.command, .shift])
+        .disabled(model?.focused == nil)
+
+        // 「在地图上定位」在右键菜单里有，这里是它的**菜单 / 键盘等价入口**。
+        // 完成判据那条「悬停操作均有键盘或菜单等价入口」管的是悬停，但右键菜单
+        // 同样是鼠标专属的——一个只能用右键触发的功能在 Mac 上也是半个功能。
+        Button("Show on Map") {
+            guard let model, let l = model.listing(model.focused) else { return }
+            model.locateOnMap(l)
+        }
+        .keyboardShortcut("l")
+        .disabled(model?.focused == nil)
 
         Divider()
 
@@ -377,6 +577,11 @@ private struct ListingCommands: View {
         Button("Copy Link") { copyFocused() }
             .keyboardShortcut("c", modifiers: [.command, .shift])
             .disabled(model?.focused == nil)
+        // 分享的菜单入口。右键菜单和右栏都有按钮，这里是键盘 / 菜单那一份——
+        // 和 Phase 4 那条「鼠标专属的功能在 Mac 上是半个功能」同一个道理。
+        //
+        // 分享不了时它自己会画成一条灰的，不会整条消失（见 ``ListingShareMenuItem``）。
+        ListingShareMenuItem(listing: model?.listing(model?.focused))
     }
 
     private var pinTitle: String {

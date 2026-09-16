@@ -98,8 +98,11 @@ struct EnergyLabel: View {
         let value = (text?.isEmpty == false) ? text! : "—"
         let color = EnergyStyle.color(text)
         Text(value)
-            // 11pt / 600：A 档上色之后还要靠字重把它从旁边 11pt 常规的
-            // City / Type 里挑出来，光靠颜色在这个字号上不够。
+            // 和旁边的 City / Type 同为次级数据（`.callout` = 12pt），靠**字重**
+            // 而不是字号把它挑出来：A 档上色之后光靠颜色在这个字号上不够。
+            //
+            // 注释原先两处都写的 11pt，是照设计稿的 px 抄的，和代码对不上——
+            // 实测 `.callout` 是 12pt，City / Type 也是 12pt。
             .font(.callout.weight(.semibold))
             .foregroundStyle(color ?? .secondary)
     }
@@ -131,7 +134,7 @@ struct LabeledRow: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 10) {
             Text(label)
-                .font(.callout)
+                .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .frame(width: 78, alignment: .leading)
             Text(value ?? "—")

@@ -165,7 +165,7 @@ struct SidebarView: View {
                     // 房源下架后**不自动换成另一套**——那会让人以为自己还在比较
                     // 原来那两套。
                     Text(listing?.name ?? "No longer available")
-                        .font(.callout)
+                        .font(.body)
                         .foregroundStyle(listing == nil ? AnyShapeStyle(Color.orange)
                                                         : AnyShapeStyle(Color.primary))
                         .lineLimit(1)

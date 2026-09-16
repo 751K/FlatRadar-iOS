@@ -39,6 +39,7 @@ final class BrowseModel {
                 focusedAlert = nil
                 focusedAlertRow = nil
             }
+            if section != .stats { statsChart = nil }
         }
     }
 
@@ -72,6 +73,16 @@ final class BrowseModel {
     /// 20963 层 SIGSEGV。
     var calendarDay: CalendarDay?
 
+    /// Stats 屏选中的那张图，右栏据此列完整明细。
+    ///
+    /// 和 ``mapBuilding`` / ``calendarDay`` / ``focusedAlertRow`` 同一个角色：
+    /// 右栏是四屏共用的，「现在该显示什么」由各屏往这里写。
+    ///
+    /// ⚠️ 清理同样写在 ``section`` 的 `didSet` 里，**不能**写在自己的 `didSet`
+    /// 里——那是无限递归（`didSet` 每次赋值都触发，不管值变没变），
+    /// `mapBuilding` 第一版就那么写的，实测栈爆到 20963 层 SIGSEGV。
+    var statsChart: StatsSelection?
+
     /// 通知屏当前选中那条的 id。
     ///
     /// 和 ``mapBuilding`` / ``calendarDay`` 同一个角色；清理同样写在 ``section``
@@ -100,25 +111,49 @@ final class BrowseModel {
 
     func requestSearchFocus() { searchFocusRequests += 1 }
 
+    /// 「在地图上定位这一条」的待办。``MapPane`` 接住它飞过去，然后清掉。
+    ///
+    /// 为什么要经过 model 传：地图的相机是 `MapPane` 自己的 `@State`，列表那边的
+    /// 右键菜单够不着；而把相机提到 `BrowseModel` 里又会让每次平移缩放都触发
+    /// 整个窗口重算（那正是上次让右栏数字乱动的成因）。所以传的是**意图**，
+    /// 不是相机——一个 id，由地图自己决定怎么飞。
+    ///
+    /// 带一个自增序号：连着对同一套房点两次「Show on Map」也要生效。只存 id 的话
+    /// 第二次赋的是同一个值，`onChange` 不触发。
+    private(set) var mapFocusRequest: (id: Listing.ID, seq: Int)?
+
+    /// 右键菜单的「Show on Map」。先切屏再写请求——反过来写的话，`section` 的
+    /// `didSet` 会在切到 `.map` 之前先把 `mapBuilding` 清掉，而地图正要用它。
+    func locateOnMap(_ listing: Listing) { locateOnMap(id: listing.id) }
+
+    /// 只有 id 的那条路：`h2smonitor://map/<id>` 点进来时，手上没有 `Listing`
+    /// （那条房源还不一定在这个窗口加载过）。地图那边本来也只用 id 去找楼。
+    func locateOnMap(id: Listing.ID) {
+        section = .map
+        mapFocusRequest = (id, (mapFocusRequest?.seq ?? 0) + 1)
+    }
+
+    /// 地图处理完之后自己清掉，免得再切回地图屏时又飞一次。
+    func clearMapFocusRequest() { mapFocusRequest = nil }
+
     /// 表格上方的即时筛选框（⌘F 聚焦）。**本地**过滤已加载的全量结果，
     /// 不是服务端的 `q`——全量已经在手上，本地过滤是即时的，没有网络往返。
     var searchText = ""
 
-    /// 「All filters」那块展开没有。
-    ///
-    /// 面板本身还没做（见 `FilterPanel`）。位置先占住，因为它决定表格从哪一行
-    /// 开始——等真面板铺进来时不用再动一次布局。
+    /// 「All filters」那块展开没有。见 ``FilterPanel``。
     var showFilterPanel = false
 
-    /// 现在只有搜索框一个筛选条件。等 `FilterPanel` 做完，平台 / 城市 / 价格区间
-    /// 这些都要并进来——**它们全部本地算**，因为 822 条已经全在内存里
-    /// （见 ``listings`` 的 pageSize 注释）。
+    /// 面板里勾的那些条件。搜索框是独立的一条，不在这里面——它有自己的输入框和
+    /// ⌘F，语义也不同（搜的是地址/城市/楼盘的文本，不是维度）。
+    var query = ListingQuery()
+
     var hasActiveFilters: Bool {
-        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || !query.isEmpty
     }
 
     func clearFilters() {
         searchText = ""
+        query = ListingQuery()
     }
 
     /// 筛选条上那一排**带值的 token**。
@@ -126,21 +161,56 @@ final class BrowseModel {
     /// 设计稿 t3 的做法：每个生效的条件是一个写着当前值的小块，而不是一排永远
     /// 长一样的下拉框——扫一眼就知道现在筛的是什么，不用逐个点开确认。
     ///
-    /// 现在只有搜索一个条件。平台 / 城市 / 价格区间那些等 `FilterPanel` 做完再并进来，
-    /// **它们全部本地算**（822 条已经在内存里），不用等后端。
+    /// 一个**维度**一个 token，不是一个选项一个：勾了五个城市就出一个
+    /// `Amsterdam +4`，点 ✕ 是把整个维度清掉。一条一个的话筛得稍微细一点，
+    /// 这一排就会横着排到屏幕外，而它存在的意义正是"一眼扫完现在筛的是什么"。
     var activeFilterTokens: [FilterToken] {
+        var out: [FilterToken] = []
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !q.isEmpty else { return [] }
-        return [FilterToken(id: "search", label: "“\(q)”") { [weak self] in
-            self?.searchText = ""
-        }]
+        if !q.isEmpty {
+            out.append(FilterToken(id: "search", label: "“\(q)”") { [weak self] in
+                self?.searchText = ""
+            })
+        }
+        func setToken<T: Hashable>(_ id: String,
+                                   _ keyPath: WritableKeyPath<ListingQuery, Set<T>>,
+                                   _ label: (T) -> String) {
+            let values = query[keyPath: keyPath]
+            guard let first = values.map(label).sorted().first else { return }
+            let text = values.count == 1 ? first : "\(first) +\(values.count - 1)"
+            out.append(FilterToken(id: id, label: text) { [weak self] in
+                self?.query[keyPath: keyPath] = []
+            })
+        }
+        setToken("city", \.cities) { $0 }
+        setToken("source", \.sources) { Platform.shortName($0) }
+        setToken("type", \.types) { $0 }
+        setToken("energy", \.energy) { $0 }
+        setToken("status", \.statuses) { Theme.shortStatusLabel($0) ?? $0.label }
+        if let v = query.maxRent {
+            out.append(FilterToken(id: "rent", label: "≤ €\(Int(v))") { [weak self] in
+                self?.query.maxRent = nil
+            })
+        }
+        if let v = query.minArea {
+            let n = v == v.rounded() ? String(Int(v)) : String(v)
+            out.append(FilterToken(id: "area", label: "≥ \(n) m²") { [weak self] in
+                self?.query.minArea = nil
+            })
+        }
+        if query.datedOnly {
+            out.append(FilterToken(id: "dated", label: "Has a move-in date") { [weak self] in
+                self?.query.datedOnly = false
+            })
+        }
+        return out
     }
 
     // MARK: - 派生
 
     /// 表格实际显示的行。
     var rows: [Listing] {
-        let all = listings.listings
+        let all = query.isEmpty ? listings.listings : listings.listings.filter(query.matches)
         let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !q.isEmpty else { return all }
         return all.filter {

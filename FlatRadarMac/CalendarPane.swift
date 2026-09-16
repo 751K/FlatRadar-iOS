@@ -313,29 +313,10 @@ struct CalendarPane: View {
         }
         .padding(6)
         .frame(maxWidth: .infinity, alignment: .topLeading)
-        .background(cellBackground(day, selected: selected))
+        .modifier(CalendarCellSurface(selected: selected, hasContent: day.count > 0))
         .contentShape(Rectangle())
         // 邻月补的那几天压暗，但**不禁用**——它们有内容时照样点得开。
         .opacity(day.isInMonth ? 1 : 0.38)
-    }
-
-    /// 格子底色。
-    ///
-    /// 选中态**必须描边**，光靠填充不行：`Theme.selectionFill`（0xE7E7EA）和
-    /// 「这天有内容」的 primary 4.5% 明度几乎一样——实测选中 7 号之后，它和
-    /// 旁边同样有内容的 14 / 16 / 21 看不出区别。表格那边是靠液态玻璃把选中行
-    /// 抬起来的，格子这么小放不下那套，改用一圈墨色描边，形状本身参与传达。
-    private func cellBackground(_ day: CalendarDay, selected: Bool) -> some View {
-        RoundedRectangle(cornerRadius: 7)
-            .fill(selected ? Theme.selectionFill
-                  : Color.primary.opacity(day.count > 0 ? 0.045 : 0.018))
-            .overlay {
-                if selected {
-                    RoundedRectangle(cornerRadius: 7)
-                        .strokeBorder(Theme.ink.opacity(0.55), lineWidth: 1.5)
-                }
-            }
-            .padding(1.5)
     }
 
     private func dayNumber(_ day: CalendarDay) -> some View {
@@ -421,4 +402,33 @@ struct CalendarPane: View {
         f.dateFormat = "EEEE d MMMM"
         return f
     }()
+}
+
+/// 日历格子的底：选中走**液态玻璃**，其余按"这天有没有内容"给一层极淡的底。
+///
+/// 选中态直接复用 ``RowSurface``，和列表屏 / Alerts / 右栏那些小行是同一份配方。
+///
+/// 之前不是这样：这里自己 `fill` 了一层 `Theme.selectionFill` 再描一圈墨色边框，
+/// 注释里给的理由是"格子这么小放不下液态玻璃那套"。那个理由**站不住**——格子实测
+/// 130×113pt，比列表行还大得多。描边是在补救填充不够看：`#E7E7EA` 和「这天有内容」
+/// 的 primary 4.5% 明度几乎一样，选中 7 号之后它和旁边同样有内容的 14 / 16 / 21
+/// 看不出区别。玻璃本身就把格子抬起来了，那圈边随之作废——也就不用再为它破例
+/// t2「去线留白」那条规则。
+private struct CalendarCellSurface: ViewModifier {
+
+    let selected: Bool
+    let hasContent: Bool
+
+    func body(content: Content) -> some View {
+        Group {
+            if selected {
+                content.modifier(RowSurface(isSelected: true, isHovered: false))
+            } else {
+                content.background(RoundedRectangle(cornerRadius: 7)
+                    .fill(Color.primary.opacity(hasContent ? 0.045 : 0.018)))
+            }
+        }
+        // 格子之间留一条 1.5pt 的缝，相邻两个格子的底不会连成一片。
+        .padding(1.5)
+    }
 }

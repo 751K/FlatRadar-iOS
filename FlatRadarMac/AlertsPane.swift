@@ -18,10 +18,16 @@ import FlatRadarCore
 /// 筛选条件，只是**一份**而不是四条——右栏照样能把「你为什么收到这条」摊开成
 /// 城市 / 能效 / 价格上限那几个 chip，见 ``InspectorPane``。
 ///
-/// 一并没做的还有两处，都是没有后端：
-/// - `quiet hours 23:00 – 07:00`：整个后端搜不到任何免打扰时段的字段；
-/// - `macOS notification + sound`：Mac 端还没接系统通知中心（包里的
-///   `PushStore` 是 APNs/iOS 那条线）。说"已经用系统通知提醒你了"是假话。
+/// 设计稿里没做的只剩一处：`quiet hours 23:00 – 07:00`——整个后端搜不到任何
+/// 免打扰时段的字段。
+///
+/// ⚠️ 这里原先还写着"`macOS notification + sound`：Mac 端还没接系统通知中心"。
+/// **那是假的**，而且写下来之后一直没人回来改：``MacPushDelegate`` 实现了
+/// `UNUserNotificationCenterDelegate`，`registerForRemoteNotifications()` 走
+/// `NSApplication`，entitlements 里有 `com.apple.developer.aps-environment`，
+/// 前台给的是 `[.banner, .sound, .list]`，点通知还会切到这一屏。
+/// 设置页 Notifications tab 那个「Deliver notifications to this Mac」开关管的
+/// 就是它。下面那条状态栏文案当时也照着这句假话写，一并改掉了。
 ///
 /// 其余照做：统计带的大数 + 24 小时 2 小时分桶柱状图 + Today / Last 7 days、
 /// 类型筛选 chip 带计数、`Unread only`、`Mark all read`、按天分组的流、
@@ -30,6 +36,9 @@ struct AlertsPane: View {
 
     @Bindable var model: BrowseModel
     let store: NotificationsStore
+
+    /// 底栏那句"会不会推到系统通知"。见下面 `deliveryStatusText`。
+    @Environment(PushStore.self) private var push
 
     /// 类型筛选。`nil` = 全部。
     @State private var kindFilter: NotificationItem.Kind?
@@ -147,7 +156,7 @@ struct AlertsPane: View {
         let n = count(kind)
         return Button { kindFilter = kind } label: {
             HStack(spacing: 5) {
-                Text(label).font(.callout.weight(selected ? .semibold : .regular))
+                Text(label).font(.body.weight(selected ? .semibold : .regular))
                 Text("\(n)")
                     .font(.caption.weight(.medium))
                     .monospacedDigit()
@@ -305,14 +314,39 @@ struct AlertsPane: View {
                 .foregroundStyle(.tertiary)
             Spacer(minLength: 0)
             // 设计稿这里写的是「Notifications on · quiet hours 23:00 – 07:00」。
-            // 后端没有免打扰时段，Mac 端也还没接系统通知中心——两句都不能说。
-            Text("In-app only — no system notifications on Mac yet")
+            // 免打扰时段后端没有，那半句不能说；系统通知**是有的**，所以照实说。
+            //
+            // 原来这一行写的是「In-app only — no system notifications on Mac yet」——
+            // 一句**给用户看的假话**，比旁边那句假注释更糟：它会让人以为要盯着
+            // 这一屏才收得到。
+            //
+            // 状态跟着 `PushStore` 走，不写死：用户可能在设置里关掉了投递，
+            // 也可能压根没给权限，那时候说"会通知你"同样是假的。
+            Text(deliveryStatusText)
                 .font(.footnote)
                 .foregroundStyle(.tertiary)
         }
         .padding(.horizontal, 18)
         .padding(.vertical, 7)
     }
+    /// 底栏右边那句话。三种状态，照实说：
+    ///
+    /// - 权限被拒 → 系统不会再弹，只能在这一屏看
+    /// - 用户自己在设置里关了投递 → 同上，但原因不同，说法也要不同
+    /// - 正常 → 说会推到通知中心
+    ///
+    /// 不写死任何一种：这一行的全部价值就是"我用不用盯着这一屏"，说错了
+    /// 比不说更糟。
+    private var deliveryStatusText: String {
+        if push.permissionStatus == .denied {
+            return "In-app only — notifications are blocked in System Settings"
+        }
+        if push.deliveryDisabledByUser {
+            return "In-app only — delivery to this Mac is turned off"
+        }
+        return "Also delivered to Notification Center"
+    }
+
 }
 
 // MARK: - 一行
@@ -351,7 +385,7 @@ private struct AlertRowView: View {
             if let source = row.source { PlatformBadge(source: source) }
             transition
             Text(row.price ?? "—")
-                .font(.callout.weight(.medium))
+                .font(.body.weight(.medium))
                 .monospacedDigit()
                 .frame(width: 62, alignment: .trailing)
         }

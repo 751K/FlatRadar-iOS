@@ -103,6 +103,7 @@ private struct GeneralSettings: View {
 
     @Environment(AuthStore.self) private var auth
     @AppStorage(AppearancePreference.storageKey) private var appearance = AppearancePreference.system.rawValue
+    @AppStorage(MenuBarResidency.storageKey) private var menuBarResident = MenuBarResidency.defaultOn
 
     @State private var legal: LegalSheet?
     @State private var showFeedback = false
@@ -118,6 +119,21 @@ private struct GeneralSettings: View {
                     }
                 }
                 .pickerStyle(.segmented)
+            }
+
+            // 菜单栏常驻。**默认关**，理由见 ``MenuBarResidency``。
+            //
+            // footer 那句话不是客套：打开它等于让 app 在**没有任何窗口**的时候
+            // 也维持一条 SSE（docs/MACOS.md 风险 6），那是一个该让用户知情的
+            // 后台行为，不能只写「在菜单栏显示图标」。
+            Section {
+                Toggle("Show FlatRadar in the menu bar", isOn: $menuBarResident)
+            } header: {
+                Text("Menu Bar")
+            } footer: {
+                Text("Shows the number of matching listings and the last scan time. "
+                   + "FlatRadar keeps receiving live updates while it is on, "
+                   + "even with every window closed.")
             }
 
             // 反馈接口要带 bearer（`POST /feedback` 是 authenticated），访客发不出去。

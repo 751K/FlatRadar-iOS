@@ -16,20 +16,40 @@ struct MainWindow: View {
 
     @Environment(AuthStore.self) private var auth
 
+    /// 跨窗口共享的那一层：通知数据 + SSE、统计、匹配数。见 ``AppFeed``。
+    @Environment(AppFeed.self) private var feed
+
     @State private var model = BrowseModel()
-    @State private var summary = SummaryModel()
     /// 地图的数据层。**窗口级**，和 `BrowseModel.listings` 同理——
     /// 两个窗口各筛各的，共享一个实例会互相覆盖。
     @State private var mapStore = MapStore()
     /// 日历的数据层。**窗口级**，和 ``mapStore`` 同理。
     @State private var calendarStore = CalendarStore()
-    /// 通知的数据层。**窗口级**，和另外两个同理。
-    @State private var alerts = NotificationsStore()
+    /// 统计屏的数据层。**窗口级**：天数是每个窗口自己选的，
+    /// 一个窗口看 7 天、另一个看 90 天是合理的用法。
+    @State private var statsStore = StatsModel()
     @State private var showInspector = true
 
+    /// 窗口内容区的宽度。地图那两块浮层要靠它判断自己有没有顶到窗口右边缘
+    /// （见 `MapPane` 里 `atWindowTrailingEdge` 的注释）。
+    ///
+    /// 用 `.background` 里的空视图量，不影响布局；而且它只在**真的改窗口大小**时
+    /// 才变——开合侧栏 / inspector 不会动它，所以不会把这个窗口的 body 卷进那两条
+    /// 动画里（那正是上一次让右栏数字乱动的原因）。
+    @State private var windowWidth: CGFloat = 0
+
     var body: some View {
+        // **不要**给它加 `columnVisibility:` 绑定。
+        //
+        // 试过：为了让地图知道侧栏收没收，这里绑过一个 `@State`。后果是每次开合侧栏
+        // 都会重算整个 `MainWindow.body`，而这次重算发生在侧栏那条动画的 transaction
+        // 里——于是右栏那些**右对齐**的数值（Price / Area / Floor…）跟着做了一段
+        // 位移动画。录屏逐帧量过：`€1766` 在收起瞬间左跳 30pt，再花半秒缓回原位。
+        //
+        // 地图要的那个信息改由 `MapPane` 自己从几何量出来（它本来就在测自己的
+        // frame 做相机补偿），不用把窗口级状态搅进来。
         NavigationSplitView {
-            SidebarView(model: model, summary: summary)
+            SidebarView(model: model, summary: feed.summary)
                 .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 280)
         } detail: {
             content
@@ -49,6 +69,11 @@ struct MainWindow: View {
                 // 去掉这层之后，三栏各自的底从窗口顶一路贯通到底，横栏不再是一个
                 // 独立的面，只剩浮在上面的控件——这也是 macOS 26 的做法。
                 .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        }
+        .background {
+            Color.clear.onGeometryChange(for: CGFloat.self) { $0.size.width } action: {
+                windowWidth = $0
+            }
         }
         .navigationTitle("FlatRadar")
         // 标题**留给窗口、不画在界面上**。
@@ -72,10 +97,23 @@ struct MainWindow: View {
         .tint(Theme.ink)
         .task {
             // 两个请求互不依赖，并发发出去。统计带慢一点不该挡住表格。
+            //
+            // 房源是**这个窗口的**（各排各的序、各筛各的），共享那一份是应用级的
+            // （统计、通知、匹配数）。`loadOnce()` 幂等，第二个窗口出现时不会
+            // 重复发请求。
             async let listings: Void = model.load()
-            async let stats: Void = summary.load()
-            _ = await (listings, stats)
+            async let shared: Void = feed.loadOnce()
+            _ = await (listings, shared)
         }
+        // 内容窗口的开合要报给 ``AppFeed``：它据此决定 SSE 该不该活着。
+        //
+        // 风险 6 的原文是「已登录且**至少有一个内容窗口打开**时维持 SSE……
+        // 最后一个窗口关闭且尚未启用菜单栏常驻时断流」。所以这是计数不是布尔——
+        // 两个窗口关掉一个，流不能断。
+        //
+        // 挂在 `MainWindow` 上而不是 `RootView` 上：登录屏不算内容窗口。
+        .onAppear { feed.windowAppeared(auth: auth) }
+        .onDisappear { feed.windowDisappeared(auth: auth) }
         .focusedSceneValue(\.browseModel, model)
         // 点了推送通知 → 切到 Alerts 屏，新来的那条就在最上面。
         //
@@ -84,6 +122,12 @@ struct MainWindow: View {
         // 这时窗口还没出现、这里还没订阅，那一次点击就只是打开 App。
         .onReceive(NotificationCenter.default.publisher(for: .flatRadarOpenAlerts)) { _ in
             model.section = .alerts
+        }
+        // `h2smonitor://map/<id>` —— 切到地图屏并定位过去，和右键菜单的
+        // 「Show on Map」走同一条路。
+        .onReceive(NotificationCenter.default.publisher(for: .flatRadarLocateOnMap)) { note in
+            guard let id = note.userInfo?["listing_id"] as? String else { return }
+            model.locateOnMap(id: id)
         }
         // 日历数据**按需**拉，不跟着启动一起发。
         //
@@ -94,12 +138,12 @@ struct MainWindow: View {
             guard section == .calendar, calendarStore.listings.isEmpty else { return }
             Task { await calendarStore.fetch() }
         }
-        // 通知**跟着启动就拉**，不像日历那样按需——侧栏的未读徽章要用它，
-        // 而徽章在四屏里都看得见。SSE 也一起接上：这一屏的价值就在实时。
-        .task {
-            await alerts.fetch()
-            alerts.connectStream()
-        }
+        // 通知的取数和 SSE 都移到了 ``AppFeed``（上面那个 `loadOnce()`）。
+        //
+        // 原先这里是一个 `.task { await alerts.fetch(); alerts.connectStream() }`。
+        // 只有一个窗口时没问题，⌘N 之后就是**两条 SSE**：`connectStream()` 里那个
+        // `guard streamTask == nil` 只拦得住同一个 store 连两次，而那时每个窗口
+        // 各有一个 `NotificationsStore`。风险 6 写的是「每个会话最多一条通知流」。
     }
 
     // MARK: - 内容区
@@ -108,13 +152,15 @@ struct MainWindow: View {
     private var content: some View {
         switch model.section {
         case .listings:
-            ListingsPane(model: model, summary: summary)
+            ListingsPane(model: model, summary: feed.summary)
         case .map:
-            MapPane(model: model, store: mapStore)
+            MapPane(model: model, store: mapStore, windowWidth: windowWidth)
         case .calendar:
             CalendarPane(model: model, store: calendarStore)
         case .alerts:
-            AlertsPane(model: model, store: alerts)
+            AlertsPane(model: model, store: feed.alerts)
+        case .stats:
+            StatsPane(model: model, stats: statsStore)
         }
     }
 
@@ -132,7 +178,7 @@ struct MainWindow: View {
             Button {
                 Task {
                     async let a: Void = model.reload()
-                    async let b: Void = summary.load()
+                    async let b: Void = feed.refreshShared()
                     _ = await (a, b)
                 }
             } label: {
@@ -159,40 +205,6 @@ struct MainWindow: View {
                 Label("Inspector", systemImage: "sidebar.right")
             }
             .help(showInspector ? "Hide inspector" : "Show inspector")
-        }
-    }
-}
-
-/// 还没做的那几屏。
-///
-/// **明说它是占位，不假装有内容。** 侧栏留着 Map / Calendar / Alerts 三个条目是
-/// 对的（它们是产品的一部分，见 docs/DESIGN.md §7.2），但点进来必须能看出
-/// "这里还没做"，而不是一个空列表让人以为是没数据、或者加载失败。
-private struct NotBuiltYet: View {
-
-    let section: SidebarSection
-
-    var body: some View {
-        ContentUnavailableView {
-            Label("\(section.label) — not built yet", systemImage: section.systemImage)
-        } description: {
-            Text(detail)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-    }
-
-    private var detail: String {
-        switch section {
-        case .map:
-            return ""
-        case .calendar:
-            return "日历排在 Phase 3，而且要全部自绘——iOS 用的 UICalendarView "
-                 + "在 macOS 上不存在。形态本身也待定，见 docs/DESIGN.md §7.4。"
-        case .alerts:
-            return "通知排在 Phase 3。NotificationsStore 和 SSEClient 都在包里，"
-                 + "缺的是界面和系统通知中心的对接。"
-        case .listings:
-            return ""
         }
     }
 }

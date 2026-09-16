@@ -91,7 +91,7 @@ struct SignInPane: View {
             // 数字没回来之前显示 `—`，**不显示 0**——0 是"一条都没有"，
             // 和"还不知道"不是一回事。
             Text(summary.summary.map { "\($0.total)" } ?? "—")
-                .font(.system(size: 46, weight: .semibold, design: .monospaced))
+                .font(.system(size: 44, weight: .semibold, design: .monospaced))
                 .tracking(-1.6)
                 .monospacedDigit()
                 .padding(.top, 26)
@@ -262,7 +262,7 @@ struct SignInPane: View {
             auth.errorMessage = nil
         }
         .buttonStyle(.link)
-        .font(.callout)
+        .font(.body)
         .frame(maxWidth: .infinity)
         .padding(.top, 10)
     }
@@ -395,7 +395,7 @@ struct SignInPane: View {
                         mode = .create
                     }
                     .buttonStyle(.link)
-                    .font(.callout)
+                    .font(.body)
                 }
             }
             .foregroundStyle(.red)

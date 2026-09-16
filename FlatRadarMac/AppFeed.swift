@@ -1,0 +1,177 @@
+import SwiftUI
+import FlatRadarCore
+
+/// 跨窗口共享的那一层。
+///
+/// 为什么需要它
+/// -----------
+/// docs/MACOS.md 风险 6 把状态分成三层，其中**应用级**那一行写得很清楚：
+/// 「服务器、账户、认证客户端、推送、个人筛选配置、**通知数据与 SSE**」，
+/// 约束是「初始化和监听安装幂等；**每个会话最多一条通知流**」。
+///
+/// 而 Phase 4 之前的代码不是这样：`NotificationsStore` 和 `SummaryModel` 都是
+/// `MainWindow` 的 `@State`。只有一个窗口时两种写法没差别，所以一直没暴露。
+/// 一旦 ⌘N 能开第二个窗口，同一份代码就变成：
+///
+/// - **两条 SSE**。每个窗口的 `.task` 各调一次 `connectStream()`，而那个方法只
+///   拦得住"同一个 store 连两次"（`guard streamTask == nil`），拦不住两个 store。
+///   后端按连接收费的地方就是这里翻倍的。
+/// - **两次 `restoreSession()`**。`RootView.didRestore` 是窗口级 `@State`，
+///   第二个窗口一开又跑一遍，而风险 6 第一条就是「登录恢复只执行一次」。
+/// - **两份统计请求**。`SummaryModel` 自己的注释里早写了它是「可选共享缓存」
+///   那一层的候选，只是当时"只有一个窗口，抽了也验证不了"。现在验证得了了。
+///
+/// 什么**不**放进来
+/// ---------------
+/// `BrowseModel`（选择、排序、临时筛选、固定比较项）和三个带查询状态的 store
+/// （listings / map / calendar）仍然一窗一份——那正是风险 6 里窗口级那一行，
+/// 也是「两个窗口的选择与临时筛选互不覆盖」这条判据的实现方式。
+///
+/// 通知**数据**共享，但通知的**选中项**（`focusedAlert`）在 `BrowseModel` 里，
+/// 所以两个窗口可以同时看 Alerts 屏、各自选中不同的一条。
+@MainActor
+@Observable
+final class AppFeed {
+
+    /// 通知数据 + SSE。一个会话一条流，见类型注释。
+    let alerts = NotificationsStore()
+
+    /// 顶部统计带的数据。菜单栏常驻也读它——所以它必须在窗口之外活着。
+    let summary = SummaryModel()
+
+    /// 只是为了拿 `total` 和 `isFiltered` 的一个轻量 store。
+    ///
+    /// 菜单栏要显示「当前匹配数」，而这个数在**没有任何窗口**时也得有——
+    /// 不能从某个 `BrowseModel.listings` 里读。`pageSize: 1` 的一次 `fetch()`
+    /// 就能拿到服务端算好的 `total`（以及「这个数是不是套了你的个人筛选」），
+    /// 比自己拼一个 `limit=1` 的请求省事，也复用了已经测过的那条路径。
+    private let counter = ListingsStore(pageSize: 1)
+
+    var matchCount: Int? { counter.total > 0 ? counter.total : nil }
+    var matchIsFiltered: Bool { counter.isFiltered }
+
+    // MARK: - 一次性的启动动作
+
+    private var didRestore = false
+
+    /// 风险 6 第一条：「登录恢复只执行一次」。
+    ///
+    /// 这个 flag 原先在 `RootView` 里，是**窗口级**的 `@State`——第二个窗口一开
+    /// 就又恢复一次会话。移到这里之后，无论开几个窗口、无论哪个先出现，
+    /// `restoreSession()` 都只跑一遍。
+    ///
+    /// 收的是**闭包**不是 `AuthStore`：这样测试里能传一个只记数的闭包，
+    /// 不必真去碰钥匙串。「只跑一次」这件事本身和恢复什么无关。
+    func restoreOnce(_ work: () async -> Void) async {
+        guard !didRestore else { return }
+        didRestore = true
+        await work()
+    }
+
+    // MARK: - 内容窗口的计数
+
+    /// 现在开着几个**内容**窗口（登录屏不算）。
+    ///
+    /// 用它决定 SSE 该不该活着，见 ``syncStream(auth:)``。计数而不是布尔：
+    /// 关掉两个窗口里的一个，流不能断。
+    private(set) var contentWindows = 0
+
+    func windowAppeared(auth: AuthStore) {
+        contentWindows += 1
+        syncStream(auth: auth)
+    }
+
+    func windowDisappeared(auth: AuthStore) {
+        contentWindows = max(0, contentWindows - 1)
+        syncStream(auth: auth)
+    }
+
+    // MARK: - SSE 的生死
+
+    /// 菜单栏常驻开着没有。由 `FlatRadarMacApp` 从 `@AppStorage` 灌进来。
+    ///
+    /// 风险 6：「Phase 4 启用菜单栏常驻后，**没有内容窗口也可维持连接**」。
+    /// 所以这个开关是 SSE 生死判断的一部分，不只是个显示选项。
+    var menuBarResident = false {
+        didSet { if let auth = lastAuth { syncStream(auth: auth) } }
+    }
+
+    /// 最近一次判断用的 `AuthStore`。
+    ///
+    /// `menuBarResident` 的 `didSet` 需要它，而 `didSet` 拿不到参数。
+    /// 存 `unowned` 会在登出重建时悬垂，存强引用又会和 App 形成环——但
+    /// `AuthStore` 的生命周期就是整个进程，环了也无所谓，这里取最简单的写法。
+    private var lastAuth: AuthStore?
+
+    /// 按「该不该有流」这一个判断去连或断。
+    ///
+    /// 三个条件全是风险 6 的原文：
+    /// 1. 已登录 —— 没 bearer 连不上，`connectStream()` 自己也会拒。
+    /// 2. **不是访客** —— 「游客始终不连接个人流」。
+    /// 3. 至少一个内容窗口**或**菜单栏常驻着 —— 「最后一个窗口关闭且尚未启用
+    ///    菜单栏常驻时断流；重开窗口时重连并补页」。
+    ///
+    /// 写成一个幂等的「同步」而不是散在各处的 connect/disconnect 调用：
+    /// 开窗、关窗、登录、登出、切常驻开关全都只调它，不会漏掉某一条路径。
+    /// `connectStream()` 和 `disconnectStream()` 本身都是幂等的。
+    func syncStream(auth: AuthStore) {
+        lastAuth = auth
+        if Self.wantsStream(authenticated: auth.isAuthenticated,
+                            isGuest: auth.isGuest,
+                            contentWindows: contentWindows,
+                            menuBarResident: menuBarResident) {
+            alerts.connectStream()
+        } else {
+            alerts.disconnectStream()
+        }
+    }
+
+    /// 上面那个判断本身，抽成纯函数。
+    ///
+    /// 抽出来是为了**能测**：真去连一条 SSE 要有 token、要有网、要有后端，
+    /// 而这条规则里没有一个字和网络有关——它是 docs/MACOS.md 风险 6 的四句话
+    /// 翻译成的一个布尔表达式，值得被钉住。
+    nonisolated static func wantsStream(authenticated: Bool,
+                                        isGuest: Bool,
+                                        contentWindows: Int,
+                                        menuBarResident: Bool) -> Bool {
+        guard authenticated else { return false }
+        // 「游客始终不连接个人流」。
+        guard !isGuest else { return false }
+        // 「至少有一个内容窗口打开时维持 SSE……最后一个窗口关闭且尚未启用
+        // 菜单栏常驻时断流」——反过来说，常驻着就可以没有窗口。
+        return contentWindows > 0 || menuBarResident
+    }
+
+    // MARK: - 取数
+
+    /// 启动时拉一次共享数据。幂等：第二个窗口出现时再调不会重复发请求。
+    func loadOnce() async {
+        async let stats: Void = summary.load()
+        async let feed: Void = alerts.fetch()
+        async let count: Void = refreshMatchCount()
+        _ = await (stats, feed, count)
+    }
+
+    func refreshMatchCount() async {
+        guard !counter.isLoading else { return }
+        await counter.fetch()
+    }
+
+    /// 菜单栏的刷新，以及窗口里 ⌘R 的连带刷新。
+    func refreshShared() async {
+        async let stats: Void = summary.load()
+        async let count: Void = refreshMatchCount()
+        _ = await (stats, count)
+    }
+
+    /// 登出时把共享数据清干净。
+    ///
+    /// 风险 6：「任何窗口登出……都统一断流、**清空所有窗口的账户数据**」。
+    /// 通知是账户数据，统计不是（`/stats/public/*` 不需要 bearer），所以只清前者。
+    func signedOut() {
+        alerts.disconnectStream()
+        alerts.clear()
+        counter.clear()
+    }
+}

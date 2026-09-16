@@ -308,6 +308,8 @@ macOS **默认 13pt、最小 10pt**。控件字号 regular 13 / small 11 / mini 
 | 卡片标题 | 13 heavy | **11 semibold**（`.subheadline`） | |
 | 房源名 / 表格主文本 | 15.5 semibold | **13**（`.body`） | Table 行文本别加粗，加粗留给选中态 |
 | 价格 | 17 bold mono | **13 `.body.monospacedDigit()`** | |
+| **次级数据**（城市 / 面积 / 房型 / 可入住） | — | **12**（`.callout`） | 表格里和主文本同行、但不是你扫的那一列 |
+| **控件文字**（按钮 / 勾选框 / Toggle / 搜索框 / 分段选择 / token） | 17 | **13**（`.body`） | HIG 钉死的控件 regular 号；**不跟数据密度那几档走** |
 | meta | 12 / 12.5 | **11**（`.subheadline`） | |
 | sub-meta | 11.5 | **10**（`.caption`） | |
 | 状态胶囊文字 | 11 bold | **10 bold**（`.caption`） | |
@@ -316,6 +318,12 @@ macOS **默认 13pt、最小 10pt**。控件字号 regular 13 / small 11 / mini 
 
 **换算不是等比缩放，是重新分配。** 比如列标题那一档在 Mac 上直接消失了——因为 `Table` 自带列头，
 自绘只会和系统的排序箭头打架。
+
+⚠️ 「次级数据」和「控件文字」这两行是 2026-09-16 补的。原先表里没有它们，
+而上面那句 prose 又把 `.callout` 列进了白名单——**列进白名单却不给角色**，
+结果就是 `.callout` 成了事实上的默认字号（61 处，`.body` 只有 7 处），
+把本该 13pt 的控件和主数据一起拖到了 12pt。
+角色的权威定义在 ``Theme`` 顶部的注释里，这张表跟着它走，别让两边再分叉。
 
 ---
 
@@ -353,14 +361,19 @@ iOS 端的九处界面里，有三处在 Mac 上不该以「页面」的形式�
 | # | 页面 | 形态 | 状态 | 复用什么 | 新写什么 |
 |---|---|---|---|---|---|
 | 1 | **Listings** | `Table` + 服务端排序 | ✅ 已做（Phase 2） | `ListingsStore`、`ListingSort` | 游客入口、服务端筛选 |
-| 2 | **Inspector（详情）** | 右栏常驻，不是页面 | 🟡 雏形已做 | `Listing` 全部字段 | Features / Monitoring 分区、原站链接、价格历史 |
-| 3 | **比较** | Inspector 顶部并排卡 | ✅ 已做 | — | 从 2 套扩到 N 套？（待定） |
-| 4 | **Alerts（通知）** | 表格 or 列表 + SSE | ⬜ Phase 3 | `NotificationsStore`、`SSEClient` | 接系统通知中心；已读态的 Mac 表达 |
-| 5 | **Map** | 内容区，共享 inspector | ⬜ Phase 3 | `MapStore`、POI 过滤、可达圈计算 | 悬停预览、右键菜单、Sandbox 定位权限 |
-| 6 | **Calendar** | 内容区，共享 inspector | ⬜ Phase 3 | `CalendarStore` | **全部自绘**——`UICalendarView` 在 macOS 不存在 |
+| 2 | **Inspector（详情）** | 右栏常驻，不是页面 | ✅ 已做 | `Listing` 全部字段 | 八行事实 + 同类比价 + 小地图 + 动作行。**价格历史没做**：后端没这个接口，iOS 也没有 |
+| 3 | **比较** | **多窗口并排**（不再是 Inspector 里的卡） | ✅ 已做（Phase 4） | — | 双击 / 拖出去 / ⌘⇧O 开独立窗口；钉住仍在侧栏 |
+| 4 | **Alerts（通知）** | 列表 + SSE | ✅ 已做 | `NotificationsStore`、`SSEClient` | 系统通知中心**已接**（`MacPushDelegate`）；SSE 在应用级，一会话一条 |
+| 5 | **Map** | 内容区，共享 inspector | ✅ 已做 | `MapStore`、`MapPOI`、`Reachability` | 悬停卡、右键菜单、选中自动画可达圈。**不要定位权限**——这一屏答的是「房源分布在哪儿」，不是「我附近有什么」 |
+| 6 | **Calendar** | 内容区，共享 inspector | ✅ 已做 | `CalendarStore` | 全部自绘（`CalendarMonth`），`UICalendarView` 在 macOS 不存在 |
 | 7 | **设置** | `Settings {}` 独立场景，两个入口：⌘, 和侧栏底部 | ✅ 已做 | `MeFilterStore`、`AuthStore`、`PushStore` | 分 tab：General / Account / Notifications / Filters |
-| 8 | **登录** | 独立窗口 | 🟡 探针形态 | `AuthStore` | 设计化；游客入口 |
-| 9 | **菜单栏常驻** | `MenuBarExtra` | ⬜ Phase 4 | `DashboardStore.summary` | 匹配数 + 上次扫描时间 |
+| 8 | **登录** | 独立窗口 | ✅ 已做 | `AuthStore` | 登录 / 注册 / 游客三个入口。**Touch ID 没接**——Mac 有硬件，`BiometricAuthService` 也在包里 |
+| 9 | **菜单栏常驻** | `MenuBarExtra` | ✅ 已做（Phase 4） | `AppFeed`（统计 + 匹配数） | 匹配数 + 上次扫描 + 未读数；**默认关**，开关在设置页 |
+| 10 | **Stats** | 内容区，共享 inspector | ✅ 已做 | `/stats/public/charts`、`ChartPresentation` | 十二张图一屏铺开、不做钻取；选中一张右栏出明细。语义是「过去 N 天**新上架**的那批」，不是库存 |
+
+**状态列 2026-09-16 对过一遍。** 之前 4/5/6 标的是 ⬜ Phase 3、9 标的是 ⬜ Phase 4，
+但那四屏在 Phase 4 之前就做完了——表格没跟上代码，读的人会以为还有一大摊活。
+这次只改状态和「新写什么」那一列，**没有改任何设计决定**。
 
 ### 7.3 三处不做 Mac 版，以及为什么
 

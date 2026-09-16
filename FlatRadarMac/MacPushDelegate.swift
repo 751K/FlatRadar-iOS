@@ -113,4 +113,11 @@ extension Notification.Name {
     /// 不和 iOS 共用 `flatRadarOpenListing` 这个名字：iOS 是直接打开那套房的详情，
     /// Mac 这边打开的是 Alerts 屏——语义不同，名字一样只会让人以为行为也一样。
     static let flatRadarOpenAlerts = Notification.Name("FlatRadarOpenAlerts")
+
+    /// `h2smonitor://map/<id>` 点进来之后发。`userInfo["listing_id"]` 必有。
+    ///
+    /// 走通知中心而不是直接改 model：deep link 是在 `App` 那一层接到的
+    /// （`.onOpenURL` 挂在 `RootView` 上），而 `BrowseModel` 是**窗口级**的，
+    /// 场景那一层够不着。和上面那条是同一个理由。
+    static let flatRadarLocateOnMap = Notification.Name("FlatRadarLocateOnMap")
 }

@@ -26,6 +26,8 @@ struct ListingTable: View {
 
     @State private var hoveredID: Listing.ID?
 
+    @Environment(\.openWindow) private var openWindow
+
     var body: some View {
         VStack(spacing: 0) {
             ListingTableHeader(model: model)
@@ -42,14 +44,39 @@ struct ListingTable: View {
                                     isHovered: hoveredID == listing.id,
                                     isPinned: model.pinned.contains(listing.id))
                         .id(listing.id)
-                        .onHover { inside in
-                            if inside {
-                                hoveredID = listing.id
-                            } else if hoveredID == listing.id {
-                                hoveredID = nil
+                        // 点击 / 双击 / 拖出去 / **悬停**全交给 AppKit，
+                        // 理由见 ``ListingRowMouse``。它盖在行上，但不碰右键——
+                        // `.contextMenu` 照常。
+                        //
+                        // 悬停原先是这里的 `.onHover`，被这层 NSView 挡掉了：
+                        // 实测整行的悬停态直接不亮了。鼠标的事归一处管。
+                        .overlay {
+                            ListingRowMouse(
+                                listing: listing,
+                                onClick: { click(listing, modifiers: $0) },
+                                onDoubleClick: { openInNewWindow(listing) },
+                                onDragOutside: { openInNewWindow(listing) },
+                                onHoverChange: { inside in
+                                    if inside {
+                                        hoveredID = listing.id
+                                    } else if hoveredID == listing.id {
+                                        hoveredID = nil
+                                    }
+                                })
+                        }
+                        // 快捷动作排在鼠标层**之后**，否则被那层 NSView 盖住，
+                        // 按钮点不动。见 ``RowQuickActions``。
+                        .overlay(alignment: .trailing) {
+                            if hoveredID == listing.id {
+                                RowQuickActions(
+                                    listing: listing,
+                                    isSelected: model.selection.contains(listing.id),
+                                    isPinned: model.pinned.contains(listing.id),
+                                    onPin: { model.togglePin(listing.id) },
+                                    onOpenWindow: { openInNewWindow(listing) },
+                                    onOpenPlatform: { openOnPlatform(listing) })
                             }
                         }
-                        .onTapGesture { click(listing) }
                         .contextMenu { rowMenu(listing) }
                         // 行自己画背景和圆角，所以 List 那套默认 chrome 全关掉。
                         .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
@@ -77,8 +104,11 @@ struct ListingTable: View {
     /// - 单击：只选这一条
     /// - ⌘ 点：加进 / 移出选择集，焦点跟到点的那条
     /// - ⇧ 点：从当前焦点到点的那条整段选上
-    private func click(_ listing: Listing) {
-        let mods = NSEvent.modifierFlags
+    ///
+    /// `modifiers` 由 ``ListingRowMouse`` 从**那一下的事件**上取。原先是在这里读
+    /// 全局的 `NSEvent.modifierFlags`，读的是"此刻按着什么"——⌘ 点完立刻松开 ⌘，
+    /// 读到的就已经是松开后的状态了。
+    private func click(_ listing: Listing, modifiers mods: NSEvent.ModifierFlags) {
         if mods.contains(.command) {
             if model.selection.contains(listing.id) {
                 model.selection.remove(listing.id)
@@ -96,17 +126,119 @@ struct ListingTable: View {
 
     @ViewBuilder
     private func rowMenu(_ l: Listing) -> some View {
+        Button("Open in New Window") { openInNewWindow(l) }
         Button(model.pinned.contains(l.id) ? "Unpin" : "Pin for Comparison") {
             model.togglePin(l.id)
         }
         Divider()
-        Button("Open on \(Platform.displayName(l.source))") {
-            if let url = URL(string: l.url) { NSWorkspace.shared.open(url) }
-        }
+        // 「在地图上定位」——Phase 4 右键菜单那一条点名要的。
+        //
+        // 只切屏 + 写 `mapBuilding`，不在这里算镜头：地图的相机是 ``MapPane``
+        // 自己的 `@State`，从外面够不着。`MapPane` 有一个 `onChange` 接住这个
+        // 楼盘并飞过去，见它的 `focusRequest`。
+        Button("Show on Map") { model.locateOnMap(l) }
+        Divider()
+        Button("Open on \(Platform.displayName(l.source))") { openOnPlatform(l) }
         Button("Copy Link") {
             NSPasteboard.general.clearContents()
             NSPasteboard.general.setString(l.url, forType: .string)
         }
+        ListingShareMenuItem(listing: l)
+    }
+
+    private func openInNewWindow(_ l: Listing) {
+        openWindow(id: FlatRadarMacApp.listingWindowID, value: l.id)
+    }
+
+    private func openOnPlatform(_ l: Listing) {
+        guard let url = URL(string: l.url) else { return }
+        NSWorkspace.shared.open(url)
+    }
+}
+
+/// 悬停时从行右边浮出来的三个动作。
+///
+/// **必须排在 ``ListingRowMouse`` 上面**，所以它挂在 `ListingTable` 那一层、
+/// 在鼠标层之后。写在行自己的 `body` 里的话，那层 AppKit 的 NSView 会盖住它，
+/// 点按钮只会选中这一行——按钮在，但一个都按不动。
+///
+/// **盖在 Available 那一列上**，左边带一段渐变把底下的字化掉。这是 Mail 和
+/// Finder 的做法：表格的列宽是设计稿定死的九列，为三个按钮再让出一列会让
+/// 每一行都为"偶尔用一次"的东西付宽度。
+///
+/// 三个都有键盘 / 菜单等价入口——这是 Phase 4 完成判据里明写的一条
+/// （「悬停操作均有键盘或菜单等价入口」）：⌘D 钉住、⌘⇧O 开窗、⌘O 去平台。
+/// tooltip 里把快捷键写出来，因为 Mac 用户是从这些地方学会快捷键的。
+private struct RowQuickActions: View {
+
+    let listing: Listing
+    let isSelected: Bool
+    let isPinned: Bool
+    let onPin: () -> Void
+    let onOpenWindow: () -> Void
+    let onOpenPlatform: () -> Void
+
+    var body: some View {
+        HStack(spacing: 2) {
+            button(isPinned ? "pin.slash" : "pin",
+                   help: isPinned ? "Unpin (⌘D)" : "Pin for comparison (⌘D)",
+                   action: onPin)
+            button("macwindow",
+                   help: "Open in new window (⌘⇧O)",
+                   action: onOpenWindow)
+            button("arrow.up.right",
+                   help: "Open on \(Platform.displayName(listing.source)) (⌘O)",
+                   action: onOpenPlatform)
+        }
+        .padding(.trailing, 14)
+        .padding(.leading, 24)
+        .frame(height: 45)
+        .background {
+            // 把底下的 Available 日期化掉。用渐变不用实色块：实色块的左边缘
+            // 是一条硬线，在悬停那一帧像是行被切断了。
+            //
+            // **渐变只占最左边那一小段**（`fadeEnd`），右边全是实色。
+            // 第一版写的是 `colors: [clear, rowHover]`——那是从左到右线性铺满整块，
+            // 日期正好落在爬升段上，只被盖掉一半：拿红色探过，`1 Oct 2026` 透着
+            // 红显出来（而三个图标是实的，因为它们在渐变**上面**）。
+            // 把爬升压进左边那 24pt 的空白里，日期所在的位置就是纯色。
+            //
+            // **只在未选中时画**。选中的行走的是液态玻璃（见 ``RowSurface``），
+            // 底色根本不是 `rowHover`——在玻璃上糊一层不透明的 `rowHover`
+            // 会把那一段玻璃压成实色，看着像半行没被选中。
+            if !isSelected {
+                LinearGradient(stops: [
+                    .init(color: Theme.rowHover.opacity(0), location: 0),
+                    .init(color: Theme.rowHover, location: Self.fadeEnd),
+                    .init(color: Theme.rowHover, location: 1),
+                ], startPoint: .leading, endPoint: .trailing)
+            }
+        }
+    }
+
+    /// 渐变爬到全不透明的位置，按整块宽度的比例算。
+    ///
+    /// 整块 = 左边距 24 + 三个 24pt 按钮 + 右边距 14 ≈ 110pt，
+    /// 24 / 110 ≈ 0.22——正好是左边那段空白，第一个按钮开始时已经是纯色。
+    private static let fadeEnd: CGFloat = 0.22
+
+    private func button(_ symbol: String,
+                        help: String,
+                        action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 11, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 24, height: 24)
+                // 每个按钮自己带一层浅底：选中的行上没有那层渐变（见上），
+                // 光秃秃三个图标压在玻璃上会读成"行里的内容"而不是可点的控件。
+                .background(Color.primary.opacity(0.06),
+                            in: RoundedRectangle(cornerRadius: 6))
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(help)
+        .accessibilityLabel(help)
     }
 }
 

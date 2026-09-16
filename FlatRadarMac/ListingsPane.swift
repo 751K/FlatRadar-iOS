@@ -58,7 +58,7 @@ struct ListingsPane: View {
             }
             filterBar
             if model.showFilterPanel {
-                filterPanelPlaceholder
+                FilterPanel(model: model)
             }
         }
         .padding(.horizontal, 16)
@@ -66,30 +66,6 @@ struct ListingsPane: View {
         .padding(.bottom, 12)
     }
 
-    /// 筛选面板的位置先占住，内容下一轮做。
-    ///
-    /// 设计稿上那块是四列（Location / Price & size / Property / Status & timing）
-    /// 加一排平台 chip，每个选项后面跟一个计数。计数**全部本地算得出来**——
-    /// 822 条已经在内存里，而且设计稿上四组计数各自正好加到 822，说明取的是
-    /// 全局计数而不是交叉筛选后的计数。
-    ///
-    /// 卡在一个要定的问题上：**全局计数在筛过之后会误导**。筛到 Eindhoven 之后
-    /// `Occupied 588` 还写 588，但勾上只会多出百来条。交叉计数更诚实，代价是
-    /// 每点一下整块数字都在跳。
-    private var filterPanelPlaceholder: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "hammer")
-                .foregroundStyle(.secondary)
-            Text("筛选面板下一轮做。数据全在本地，不用等后端——"
-                 + "先要定计数是全局的还是交叉筛选后的。")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            Spacer()
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.quaternary.opacity(0.25), in: RoundedRectangle(cornerRadius: 8))
-    }
 
     /// 筛选条：搜索框 + 一排**带值的 token** + All filters + Clear。
     ///
@@ -97,7 +73,7 @@ struct ListingsPane: View {
     /// （`Eindhoven, Rotterdam` / `€400 – €1,200`），而不是一排永远长一样的下拉框。
     /// 差别在于扫一眼就知道"现在筛的是什么"，不用逐个点开确认。
     ///
-    /// 现在只有搜索一个条件，所以最多一个 token。完整面板（平台开关 + 四栏）下一轮做。
+    /// token 一个维度一条，见 ``BrowseModel/activeFilterTokens``。
     private var filterBar: some View {
         HStack(spacing: 7) {
             searchField
@@ -122,7 +98,7 @@ struct ListingsPane: View {
         } label: {
             HStack(spacing: 6) {
                 Text(token.label)
-                    .font(.callout)
+                    .font(.body)
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                 Image(systemName: "xmark")
@@ -148,7 +124,7 @@ struct ListingsPane: View {
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(.secondary)
                 Text("All filters")
-                    .font(.callout)
+                    .font(.body)
                 Image(systemName: model.showFilterPanel ? "chevron.up" : "chevron.down")
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(.tertiary)
@@ -167,7 +143,7 @@ struct ListingsPane: View {
                 .foregroundStyle(.tertiary)
             TextField("Search address or building", text: $model.searchText)
                 .textFieldStyle(.plain)
-                .font(.callout)
+                .font(.body)
                 .focused($focus, equals: .search)
                 // 边打字筛选边用 ↑↓ 翻结果，手不离开键盘。焦点留在搜索框里，
                 // 所以还能接着改关键词——Spotlight / Alfred 的手感。
@@ -263,8 +239,10 @@ struct ListingsPane: View {
 
     private var statusBar: some View {
         HStack(spacing: 10) {
+            // 窗口底栏是 chrome，不是数据：走 `.subheadline`（见 ``Theme`` 的字阶注释）。
+            // Finder 底栏也是这个量级。
             Text(rangeText)
-                .font(.callout)
+                .font(.subheadline)
                 .foregroundStyle(model.listings.loadMoreFailed ? .orange : .secondary)
             if model.listings.loadMoreFailed {
                 Button("Retry") { Task { await model.reload() } }
@@ -273,7 +251,7 @@ struct ListingsPane: View {
             Spacer()
             if !model.pinned.isEmpty {
                 Text("\(model.pinned.count) pinned")
-                    .font(.callout)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
             if model.listings.isLoading || model.listings.isLoadingMore {
@@ -292,8 +270,14 @@ struct ListingsPane: View {
             return "Loaded \(store.listings.count) of \(store.total) — "
                  + "paging failed, sorting covers only what loaded"
         }
+        // 判据是 `hasActiveFilters` 而不是"搜索框空不空"。
+        //
+        // 原来写的是 `model.searchText.isEmpty`——那时候搜索框**是**唯一的筛选条件，
+        // 两者等价。`FilterPanel` 进来之后就不等价了：勾了城市但没打字时，这一行
+        // 会继续说「84 listings」，而表里只有 37 条。状态栏报的数和眼前的表对不上，
+        // 是这一行最不该犯的错。
         let shown = model.rows.count
-        if model.searchText.isEmpty {
+        if !model.hasActiveFilters {
             return "\(store.total) listings, sorted by \(sortLabel)"
         }
         return "\(shown) of \(store.total) match, sorted by \(sortLabel)"

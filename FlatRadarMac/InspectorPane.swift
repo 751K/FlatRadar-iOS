@@ -16,9 +16,11 @@ import FlatRadarCore
 /// > —— 全屏卡片簇从三处减到一处。
 ///
 /// 钉住的两条现在只在**侧栏**的 Pinned 分区，外加表格行首那个墨色菱形。
-/// 「并排比较」这件事因此暂时没有落点——`BrowseModel.pinned` 和 `pinnedListings`
-/// 都还在，数据没丢，缺的是一个显示的地方（多窗口？单独的比较视图？）。
-/// 这是有意识的取舍，不是漏了。
+///
+/// 「并排比较」的落点是 **Phase 4 的多窗口**（``ListingWindow``）：把一套房源
+/// 双击 / 拖出去，开一个独立窗口，两个窗口真并排。这比塞回右栏的比较卡强在
+/// 两边可以各自滚动、各自留在屏上、各自被 Mission Control 管。
+/// `BrowseModel.pinned` 仍然是"我在这个窗口里盯着这两套"的标记，两者不冲突。
 struct InspectorPane: View {
 
     let model: BrowseModel
@@ -28,6 +30,12 @@ struct InspectorPane: View {
     @State private var thumbnails = MapThumbnailStore()
 
     /// 「你为什么收到这条」要读用户自己的筛选条件。
+    /// 右栏里那些可点的小行，鼠标正停在哪一行上。
+    ///
+    /// 两处（地图楼盘的单元、日历某天的条目）共用一份：同时只可能悬停一行，
+    /// 存 id 比给每行各配一个 `@State` 省事，也不用为此把行拆成独立的视图类型。
+    @State private var hoveredRow: String?
+
     @Environment(AuthStore.self) private var auth
 
     /// 正在问坐标。按钮变成 `Locating…` 并禁用，免得连点发多次请求。
@@ -64,7 +72,18 @@ struct InspectorPane: View {
                     alertDetail(alert)
                     Divider().padding(.vertical, 14)
                 }
-                body(for: model.focused)
+                // Stats 屏选中的那张图 —— **它是右栏的全部内容**，下面不再接
+                // 房源详情。
+                //
+                // 和上面三块不一样：地图选中一栋楼、日历选中一天、通知选中一条，
+                // 那三者底下接一条**具体房源**是自然的（点楼里的某一套、点那天的
+                // 某一条）。一张统计图底下接一条跟它毫无关系的房源，只是"右栏
+                // 恰好还留着上次选中的东西"。
+                if let chart = model.statsChart {
+                    chartBreakdown(chart)
+                } else {
+                    body(for: model.focused)
+                }
             }
             .padding(16)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -86,6 +105,71 @@ struct InspectorPane: View {
             partialDetail(unit)
         } else if model.mapBuilding == nil, model.calendarDay == nil {
             empty
+        }
+    }
+
+    // MARK: - Stats 选中的那张图
+
+    /// 完整明细：标签 / 数量 / 占比，外加一条按比例的底纹。
+    ///
+    /// 这是 Mac 取代 iOS 那个「点开看大图」sheet 的东西。卡里只画得下形状
+    /// （城市那张还只画前 8 条），精确的数字在这儿。**左边看形状、右边看数字**
+    /// ——这也是"多屏共用 inspector"这个结构第四次派上用场。
+    ///
+    /// 顺序**照抄卡里的顺序**，不在这儿重排：有序维度重排就毁了（见
+    /// ``ChartPresentation``），而两边顺序不一致的话，用户在卡上认的第三根柱子
+    /// 到这儿会对不上第三行。
+    private func chartBreakdown(_ chart: StatsSelection) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(chart.title)
+                    .font(.title2.weight(.semibold))
+                    .tracking(-0.25)
+                // 时序图说「31 天」，分布图说「20 类」。对着一列日期写
+                // "31 categories" 是把实现词漏给了用户。
+                Text("\(chart.entries.count) \(ChartPresentation.axis(for: chart.key) == .time ? "days" : "categories") · \(chart.total) listings")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+            VStack(spacing: 0) {
+                ForEach(chart.entries) { entry in
+                    breakdownRow(entry, chart: chart)
+                }
+            }
+            .padding(.top, 2)
+        }
+    }
+
+    private func breakdownRow(_ entry: ChartEntry, chart: StatsSelection) -> some View {
+        let share = chart.total > 0 ? Double(entry.count) / Double(chart.total) : 0
+        let tint = ChartPresentation.color(forKey: chart.key, label: entry.label) ?? Theme.chart
+        return HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text(ChartPresentation.shortLabel(entry.label, forKey: chart.key))
+                .font(.body)
+                .lineLimit(1)
+                // 从**头**截，理由同 `unitRow(_:)`：城市名前缀常常一样
+                // （`Amsterdam Naritaweg` / `Amsterdam Diemen`），从尾截会把
+                // 唯一能区分它们的那一段切掉。
+                .truncationMode(.head)
+            Spacer(minLength: 6)
+            Text("\(entry.count)")
+                .font(.body.monospacedDigit())
+            Text(share.formatted(.percent.precision(.fractionLength(0))))
+                .font(.subheadline.monospacedDigit())
+                .foregroundStyle(.tertiary)
+                .frame(width: 38, alignment: .trailing)
+        }
+        .padding(.horizontal, 8)
+        .frame(height: 28)
+        .background(alignment: .leading) {
+            // 一条按比例的底纹。比另起一列条形图省地方，而且它就在数字底下，
+            // 不用视线来回跳。
+            GeometryReader { geo in
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(tint.opacity(0.14))
+                    .frame(width: max(2, geo.size.width * share))
+            }
         }
     }
 
@@ -126,7 +210,7 @@ struct InspectorPane: View {
                 if day.count > dayRowLimit {
                     Button("Show all \(day.count)") { expandedDay = day }
                         .buttonStyle(.link)
-                        .font(.callout)
+                        .font(.body)
                         .padding(.top, 4)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
@@ -167,7 +251,7 @@ struct InspectorPane: View {
                     .frame(width: 6, height: 6)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(item.name)
-                        .font(.callout)
+                        .font(.body)
                         .lineLimit(1)
                         // 从头截，理由同 ``unitRow(_:)``：同楼的单元名前缀一样。
                         .truncationMode(.head)
@@ -180,14 +264,21 @@ struct InspectorPane: View {
                 }
                 Spacer(minLength: 6)
                 Text(PriceText.compact(item.priceRaw) ?? "—")
-                    .font(.callout.weight(.medium))
+                    .font(.body.weight(.medium))
                     .monospacedDigit()
             }
             .padding(.horizontal, 8)
             .frame(height: 44)
-            .background(RoundedRectangle(cornerRadius: 8)
-                .fill(selected ? Theme.selectionFill : .clear))
+            // 选中 / 悬停走全 App **同一份配方**（见 ``RowSurface``）：选中是染色的
+            // 液态玻璃，把那一行从背景里抬起来；悬停是白底 + 投影。
+            //
+            // 原来这里是自己 `fill` 一层 `Theme.selectionFill`。那是块实心浅灰
+            // （0xE7E7EA），压在 inspector 的玻璃底上几乎看不出选中——和日历格子
+            // 遇到的是同一个毛病（见 `CalendarPane.cellBackground` 的注释）。
+            // `RowSurface` 的文件头早就写了"两处各写一份迟早会漂移"，这就是那个"迟早"。
+            .modifier(RowSurface(isSelected: selected, isHovered: hoveredRow == item.id))
             .contentShape(Rectangle())
+            .onHover { hoveredRow = $0 ? item.id : (hoveredRow == item.id ? nil : hoveredRow) }
         }
         .buttonStyle(.plain)
     }
@@ -225,7 +316,7 @@ struct InspectorPane: View {
                 .foregroundStyle(.tertiary)
                 .padding(.top, 10)
             HStack(spacing: 7) {
-                actionButton("Open on \(Platform.displayName(unit.source))", prominent: true) {
+                ListingActionButton(title: "Open on \(Platform.displayName(unit.source))", prominent: true) {
                     if let url = URL(string: unit.url) { NSWorkspace.shared.open(url) }
                 }
                 openInMapsButton(.needsLookup(id: unit.id, name: unit.name))
@@ -256,25 +347,43 @@ struct InspectorPane: View {
     ///
     /// 访客态没有筛选器（也收不到通知），这一段自然就不显示。
     private func alertDetail(_ row: AlertRow) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        // 下半段会不会把这套房再说一遍。
+        //
+        // 会的话，上半段只留**这条通知独有**的信息：说了什么、什么时候、为什么给你。
+        // 房源的身份（名字、平台、当前状态）归下半段，上半段不再重复一遍——原来两段
+        // 各画一次标题、一次平台徽章、一次状态胶囊，右栏上下两截看着像同一块内容贴了
+        // 两遍。
+        //
+        // 状态那两个胶囊尤其坑：上面那个是**通知发生时**的状态，下面那个是**现在**的，
+        // 值经常不一样（截图里上面 Book、下面 Occupied），但长得一模一样、挨着摆，
+        // 读起来只会觉得是重复而不是"它变了"。现在上面不画胶囊，因为 `row.summary`
+        // 本来就把这件事写成了话（`New listing · Available to book` /
+        // `Reserved → Book`），下面那个胶囊就唯一地表示"现在"。
+        let listingBelow = model.listing(row.listingID) != nil
+        return VStack(alignment: .leading, spacing: 0) {
+            // 下半段接管标题时，这一行升成这一段的标题——它才是"这条通知说了什么"。
             Text(row.summary)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            Text(row.title)
-                .font(.title2.weight(.semibold))
-                .tracking(-0.25)
-                .padding(.top, 2)
-            HStack(spacing: 7) {
-                if let to = row.to { StatusPill(status: to) }
-                if let from = row.from, from != row.to {
-                    Text("was \(Theme.shortStatusLabel(ListingStatus.from(from)) ?? from)")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+                .font(listingBelow ? .title3.weight(.semibold) : .subheadline)
+                .foregroundStyle(listingBelow ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
+
+            // 房源不在已加载的那批里时下半段什么都不画，身份只能由这里给。
+            if !listingBelow {
+                Text(row.title)
+                    .font(.title2.weight(.semibold))
+                    .tracking(-0.25)
+                    .padding(.top, 2)
+                HStack(spacing: 7) {
+                    if let to = row.to { StatusPill(status: to) }
+                    if let from = row.from, from != row.to {
+                        Text("was \(Theme.shortStatusLabel(ListingStatus.from(from)) ?? from)")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
+                    if let source = row.source { PlatformBadge(source: source) }
+                    Spacer(minLength: 0)
                 }
-                if let source = row.source { PlatformBadge(source: source) }
-                Spacer(minLength: 0)
+                .padding(.top, 10)
             }
-            .padding(.top, 10)
 
             if let when = row.date {
                 Text("Notified at \(Self.longDateTime.string(from: when))")
@@ -394,7 +503,7 @@ struct InspectorPane: View {
                     .fill(Theme.statusColor(unit.statusKind))
                     .frame(width: 6, height: 6)
                 Text(unit.name)
-                    .font(.callout)
+                    .font(.body)
                     .lineLimit(1)
                     // 从**头**截，不是从尾。一栋楼里的单元名前缀全一样
                     // （`Kon. Wilhelminaplein 29 F6` / `… 29 H23`），从尾截会把
@@ -403,14 +512,15 @@ struct InspectorPane: View {
                     .truncationMode(.head)
                 Spacer(minLength: 6)
                 Text(PriceText.compact(unit.priceRaw) ?? unit.priceRaw)
-                    .font(.callout.weight(.medium))
+                    .font(.body.weight(.medium))
                     .monospacedDigit()
             }
             .padding(.horizontal, 8)
             .frame(height: 38)
-            .background(RoundedRectangle(cornerRadius: 8)
-                .fill(selected ? Theme.selectionFill : .clear))
+            // 同上：走 ``RowSurface``，不自己画一层灰底。
+            .modifier(RowSurface(isSelected: selected, isHovered: hoveredRow == unit.id))
             .contentShape(Rectangle())
+            .onHover { hoveredRow = $0 ? unit.id : (hoveredRow == unit.id ? nil : hoveredRow) }
         }
         .buttonStyle(.plain)
     }
@@ -441,7 +551,7 @@ struct InspectorPane: View {
                 .foregroundStyle(.tertiary)
                 .padding(.top, 10)
             HStack(spacing: 7) {
-                actionButton("Open on \(Platform.displayName(unit.source))", prominent: true) {
+                ListingActionButton(title: "Open on \(Platform.displayName(unit.source))", prominent: true) {
                     if let url = URL(string: unit.url) { NSWorkspace.shared.open(url) }
                 }
                 openInMapsButton(.mapListing(unit))
@@ -464,9 +574,11 @@ struct InspectorPane: View {
     @ViewBuilder
     private func detail(_ l: Listing) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            heading(l)
-            badges(l).padding(.top, 11)
-            facts(l).padding(.top, 20)
+            // 这四段在 ``ListingFacts`` 里，和独立详情窗口 ``ListingWindow`` 共用
+            // 同一份——两处显示的是同一套事实，不该有两个写法。
+            ListingHeading(listing: l)
+            ListingBadgeRow(listing: l).padding(.top, 11)
+            ListingFactsTable(listing: l).padding(.top, 20)
             comparison(l).padding(.top, 16)
             // 地图屏不画小地图：左边整屏就是地图，右栏再来一张是**同一件事说两遍**，
             // 而且两张地图的视野还不一样（大图跟着用户平移缩放，小图钉死在 6km），
@@ -482,74 +594,8 @@ struct InspectorPane: View {
                 MapThumbnail(listing: l, store: thumbnails).padding(.top, 12)
             }
             actions(l).padding(.top, 18)
-            provenance(l).padding(.top, 14)
+            ListingProvenance(listing: l).padding(.top, 14)
         }
-    }
-
-    private func heading(_ l: Listing) -> some View {
-        VStack(alignment: .leading, spacing: 3) {
-            Text(l.name)
-                .font(.title2.weight(.semibold))
-                .tracking(-0.25)
-                .textSelection(.enabled)
-            Text(subtitle(l))
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    /// `城市 · 楼盘`。
-    ///
-    /// 两者相同时只写一遍：Xior 有些房源的 `city` 和 `building` 是同一个串
-    /// （实测 157R 两边都是 "Amsterdam Naritaweg"），照拼会得到
-    /// 「Amsterdam Naritaweg · Amsterdam Naritaweg」。
-    private func subtitle(_ l: Listing) -> String {
-        var parts: [String] = []
-        if !l.city.isEmpty { parts.append(l.city) }
-        if let b = l.buildingText, !b.isEmpty,
-           b.caseInsensitiveCompare(l.city) != .orderedSame {
-            parts.append(b)
-        }
-        return parts.joined(separator: " · ")
-    }
-
-    private func badges(_ l: Listing) -> some View {
-        HStack(spacing: 7) {
-            StatusPill(status: l.status)
-            PlatformBadge(source: l.source)
-            Spacer(minLength: 0)
-        }
-    }
-
-    /// 八行「标签 值」。标签左对齐固定 78pt，值**右对齐**——
-    /// 右对齐让所有数值贴着同一条线，竖着扫的时候不用逐行找。
-    private func facts(_ l: Listing) -> some View {
-        VStack(spacing: 0) {
-            LabeledRow("Price", priceText(l), mono: true)
-            LabeledRow("Area", l.normalizedAreaText, mono: true)
-            LabeledRow("Type", RoomType.display(l.typeText))
-            LabeledRow("Floor", l.floorText)
-            LabeledRow("Energy", l.energyText, color: EnergyStyle.color(l.energyText))
-            LabeledRow("Contract", l.contractText)
-            LabeledRow("Platform", Platform.displayName(l.source))
-            LabeledRow("Available", l.availableFrom.map(ServerTime.displayDate))
-        }
-    }
-
-    /// 设计稿写的是 `€1,067 / mo`。
-    ///
-    /// 走 ``Listing/priceText`` 拿归一之后的串（`€1125`），不再原样显示
-    /// `price_raw`——各平台写法不是一套，OurDomain 的 `"€ 1.125"` 会被读成小数。
-    ///
-    /// 归一成功的串里不会再带平台自己的「per month」后缀，本可以无条件拼 `/ mo`；
-    /// 但归一失败时会**原样回退**，那种串可能自带后缀，所以下面那段判断保留——
-    /// 不判断的话会出现 "On request per month / mo"。
-    private func priceText(_ l: Listing) -> String? {
-        guard let raw = l.priceText, !raw.isEmpty else { return nil }
-        let lower = raw.lowercased()
-        let hasPeriod = lower.contains("mo") || lower.contains("month")
-                     || lower.contains("/") || lower.contains("p.m")
-        return hasPeriod ? raw : "\(raw) / mo"
     }
 
     // MARK: - 同类比价
@@ -621,20 +667,21 @@ struct InspectorPane: View {
     /// 把自己压成 "Open on Studen…"，而主操作的按钮文字被截断是最不该发生的。
     private func actions(_ l: Listing) -> some View {
         VStack(alignment: .leading, spacing: 7) {
-            HStack(spacing: 7) {
-                actionButton("Open on \(Platform.displayName(l.source))", prominent: true) {
+            WrappingRow {
+                ListingActionButton(title: "Open on \(Platform.displayName(l.source))",
+                                    prominent: true) {
                     open(l)
                 }
-                actionButton(model.pinned.contains(l.id) ? "Unpin" : "Pin") {
+                ListingActionButton(title: model.pinned.contains(l.id) ? "Unpin" : "Pin") {
                     model.togglePin(l.id)
                 }
-                Spacer(minLength: 0)
-            }
-            HStack(spacing: 7) {
-                actionButton("Copy Link") { copy(l) }
+                ListingActionButton(title: "Copy Link") { copy(l) }
+                // Share 和 Copy Link 是两件事，都留着：复制链接是"我自己待会儿用"，
+                // 分享是"发给别人"，后者还带着摘要正文（见 ``ListingShare``）。
+                ListingShareButton(listing: l)
                 openInMapsButton(.needsLookup(id: l.id, name: l.name))
-                Spacer(minLength: 0)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             mapsFailureNote
         }
     }
@@ -648,7 +695,7 @@ struct InspectorPane: View {
     /// 等待；问不到就**明说问不到**，不能静悄悄什么都不发生。
     @ViewBuilder
     private func openInMapsButton(_ source: OpenInMaps.Source) -> some View {
-        actionButton(locating ? "Locating…" : "Open in Maps") {
+        ListingActionButton(title: locating ? "Locating…" : "Open in Maps") {
             locating = true
             Task {
                 let ok = await OpenInMaps.open(source, thumbnails: thumbnails)
@@ -672,41 +719,6 @@ struct InspectorPane: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.top, 6)
-        }
-    }
-
-    /// 设计稿的按钮是 26pt 高、圆角 7、11.5pt 文字——比 AppKit 默认按钮矮一档，
-    /// 和右栏其余元素的密度对得上。主按钮填 ink（强调色），其余填 6% 灰。
-    private func actionButton(_ title: String,
-                              prominent: Bool = false,
-                              action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Text(title)
-                .font(.callout.weight(prominent ? .medium : .regular))
-                .foregroundStyle(prominent ? AnyShapeStyle(Color(nsColor: .textBackgroundColor))
-                                           : AnyShapeStyle(Color.primary))
-                .padding(.horizontal, 11)
-                .frame(height: 26)
-                .background(prominent ? AnyShapeStyle(Theme.ink)
-                                      : AnyShapeStyle(Color.primary.opacity(0.06)),
-                            in: RoundedRectangle(cornerRadius: 7))
-        }
-        .buttonStyle(.plain)
-    }
-
-    /// `First seen 38m ago · last checked 2m ago`。
-    /// 两个都是后端已有的字段（`first_seen` / `last_seen`），不是新东西。
-    @ViewBuilder
-    private func provenance(_ l: Listing) -> some View {
-        let parts = [
-            l.firstSeen.map { "First seen \(ServerTime.relativeTime($0))" },
-            l.lastSeen.map { "last checked \(ServerTime.relativeTime($0))" },
-        ].compactMap { $0 }
-
-        if !parts.isEmpty {
-            Text(parts.joined(separator: " · "))
-                .font(.caption)
-                .foregroundStyle(.tertiary)
         }
     }
 

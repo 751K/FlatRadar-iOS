@@ -14,6 +14,7 @@ enum SidebarSection: String, Hashable, CaseIterable, Identifiable {
     case map
     case calendar
     case alerts
+    case stats
 
     var id: String { rawValue }
 
@@ -23,6 +24,7 @@ enum SidebarSection: String, Hashable, CaseIterable, Identifiable {
         case .map:      return "Map"
         case .calendar: return "Calendar"
         case .alerts:   return "Alerts"
+        case .stats:    return "Stats"
         }
     }
 
@@ -32,12 +34,7 @@ enum SidebarSection: String, Hashable, CaseIterable, Identifiable {
         case .map:      return "map"
         case .calendar: return "calendar"
         case .alerts:   return "bell"
+        case .stats:    return "chart.bar"
         }
     }
-
-    /// 这一屏做完没有。没做完的走占位面板，占位面板会**明说**它是占位。
-    ///
-    /// 不用 `#if` 或注释掉条目：条目留在侧栏里是对的（它们是产品的一部分，
-    /// 见 docs/DESIGN.md §7.2），但点进去不能假装有内容。
-    var isImplemented: Bool { self == .listings }
 }

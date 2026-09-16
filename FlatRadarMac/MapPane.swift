@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 import MapKit
 import FlatRadarCore
 
@@ -12,24 +13,105 @@ import FlatRadarCore
 ///
 /// 标记的单位是**楼盘**不是房源，理由见 ``MapBuilding``：同一地址的若干套共用
 /// 一个近似坐标，画成 12 枚针是用 12 个假位置冒充 12 个地点。
+/// 地图最近一次的相机和可视区域。
+///
+/// 是 class 不是值类型：见 ``MapPane/track`` 的注释——窗口尺寸变化的补偿要在
+/// 连续几十次几何回调之间累加，需要"写进去立刻读得回来"。
+@MainActor
+private final class CameraTrack {
+    var region: MKCoordinateRegion?
+    var camera: MapCamera?
+}
+
 struct MapPane: View {
 
     @Bindable var model: BrowseModel
     let store: MapStore
 
+    /// 窗口内容区有多宽。地图拿它判断自己的右沿有没有顶到窗口右边缘。
+    let windowWidth: CGFloat
+
+    /// 地图的右沿是不是已经顶到窗口右边缘了——等价于"inspector 收起来了"。
+    ///
+    /// 和左边那个一样**自己量**，而且这次是必须的：原来用的是 `showInspector`
+    /// 那个布尔值，它在点下去的**瞬间**就翻了，而 inspector 是滑进来的——于是
+    /// 图例先弹到顶，地图这时还铺到窗口右边缘，图例就和刷新 / 钉住 / inspector
+    /// 那三个工具栏按钮叠在一起闪一下。按几何判断就不会有这个时间差：地图的右沿
+    /// 缩回来多少，图例就跟着让多少。
+    @State private var atWindowTrailingEdge = false
+
+    /// 顶栏那条带子的高度。实测 51pt——`Hide Sidebar` 按钮的 frame 就是
+    /// `[148, 0, 43×51]`，整条带子和它一样高。
+    private static let toolbarBand: CGFloat = 51
+
+    /// 顶栏**右端**那三个按钮（刷新 / 钉住 / inspector）占的宽度。实测它们的 frame
+    /// 从 1282 排到 1396，靠右留 4pt，取 150 留一点余量。
+    private static let toolbarTrailing: CGFloat = 150
+
     @State private var camera: MapCameraPosition = .automatic
     /// 当前缩放对应的纬度跨度，用来决定画楼盘还是画城市团。
     @State private var span: CLLocationDegrees = 1
 
-    /// 最近一次的可视区域。
+    /// 最近一次的相机 / 可视区域。
     ///
-    /// `MapCameraPosition` 读不出当前 region（它只是"要去哪儿"的指令，不是
-    /// "现在在哪儿"的状态），而 + / − 按钮要拿当前跨度乘个系数。
-    /// 所以在 `onMapCameraChange` 里留一份。
-    @State private var lastRegion: MKCoordinateRegion?
+    /// 存在**引用类型**里，不用 `@State`：一次开合动画里几何回调会连着来几十次，
+    /// 补偿要在回调之间累加（见下面的注释）。`@State` 在同一轮更新里连写连读不保证
+    /// 读到刚写的值，累加就断了；一个 class 写进去立刻就能读回来。
+    @State private var track = CameraTrack()
+
+
+    /// 「All filters」浮层开没开。
+    ///
+    /// **本地状态，不用 `model.showFilterPanel`。** 那个 flag 只有 `ListingsPane`
+    /// 在渲染，地图这边 toggle 它什么都不会发生——正是这个按钮点不开的原因。
+    /// 而且它是两屏共用的：在地图上点一下，切回 Listings 会发现那条占位面板莫名
+    /// 其妙地开着。两屏的筛选界面本来就是两回事，状态也该各存各的。
+    @State private var showFilters = false
+
+    /// 鼠标正停在哪个楼盘标记上。悬停卡按它显示，见 ``hoverCard(_:)``。
+    @State private var hoveredBuilding: MapBuilding.ID?
+
+    /// 地图自己要说的一句话（「这条不在列表里」「这条不在地图上」）。
+    ///
+    /// 不用弹窗：这些都是"没能跳过去"的解释，不是需要确认的事。弹窗要点掉，
+    /// 而用户下一步多半是继续在图上找，让他先点一个 OK 是添乱。
+    @State private var mapNote: String?
+
+    /// 我们自己发起的一次飞行会持续到什么时候。
+    ///
+    /// 用来让下面那段**尺寸变化补偿**在飞行途中闭嘴。两者的目的是冲突的：
+    /// 补偿要的是"视图变了但地图别动"，飞行要的是"地图动到指定的中心"。
+    /// 从列表切到地图屏时两件事同时发生——布局刚换完，补偿就把刚落位的中心
+    /// 又推走。实测推了 0.0032° 经度 ≈ 220m，而那时可视范围只有 1.1km，
+    /// 等于把目标推到了视野的五分之一开外。
+    @State private var flyingUntil: Date?
+
+    /// 连点 + / − 时的**目标**跨度，以及它什么时候过期。
+    ///
+    /// `scale(by:)` 原先每次都从 `track.region` 现读当前跨度算。那个值是
+    /// **动画进行中的中间值**——连点四下实测：0.0635 → 0.0614 → 0.0614 → 0.0611，
+    /// 四次各自从几乎同一个起点算出几乎同一个终点，最后一次盖掉前三次，
+    /// 于是**点四下只等于点了一下**。
+    ///
+    /// 记住目标之后，动画期间的第二下从"上一下要去的地方"接着算，连点才累积。
+    /// 过期时间给得比动画（0.2s）长一点：超过这个间隔说明上一段已经落定，
+    /// 或者用户中途自己拖过缩放过，这时候该以地图的真实状态为准。
+    @State private var zoomTarget: (span: CLLocationDegrees, until: Date)?
+
+    @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        content.task { await load() }
+        content
+            .task { await load() }
+            // 列表那边右键「Show on Map」→ 切到这一屏 → 这里接住并飞过去。
+            //
+            // 盯的是 `seq` 不是 id：连着对同一套房点两次也要生效（见
+            // ``BrowseModel/mapFocusRequest``）。
+            .onChange(of: model.mapFocusRequest?.seq) { _, _ in focusRequestedListing() }
+            // 切到地图屏的**那一次**也要接：`onChange` 只认变化，而
+            // `locateOnMap` 是先切 section 再写请求，这一屏可能是在请求写下之后
+            // 才第一次出现的——那时 `onChange` 根本没挂上。
+            .task(id: model.mapFocusRequest?.seq) { focusRequestedListing() }
     }
 
     @ViewBuilder
@@ -57,6 +139,16 @@ struct MapPane: View {
     /// 一堆瓦片数学。0.5° ≈ 55km，正好是"看得见整个兰斯塔德"那一档。
     private var showsClusters: Bool { span > 0.5 }
 
+    /// 当前缩放下显示哪些 POI。见 ``MapPOI``。
+    ///
+    /// 直接拿 `span` 比，不像 iOS 那样先量化：那边量化是因为它的 `currentRegion`
+    /// 本来就按 log2 桶更新（clustering 要用），顺手复用同一组桶而已。这边
+    /// `span` 是每次相机变化都刷的，而**跨度只在缩放时变、平移不变**，
+    /// 所以阈值附近不会来回抖——`showsClusters` 用的也是同一种裸比较。
+    private var visiblePointsOfInterest: PointOfInterestCategories {
+        MapPOI.categories(atSpan: span)
+    }
+
     // MARK: - 地图
 
     private var mapBody: some View {
@@ -68,6 +160,8 @@ struct MapPane: View {
                     }
                 }
             } else {
+                // 可达圈画在标记**下面**：它是底图的一部分，压住 pin 就本末倒置了。
+                reachRings
                 ForEach(buildings) { building in
                     Annotation("", coordinate: building.coordinate, anchor: .center) {
                         buildingMarker(building)
@@ -75,16 +169,244 @@ struct MapPane: View {
                 }
             }
         }
-        .mapStyle(.standard(elevation: .flat, pointsOfInterest: .excludingAll))
+        // POI 跟着缩放开关，类目和阈值在包里（``MapPOI``），和 iOS 共用一份。
+        //
+        // 原先是死的 `.excludingAll`，理由是概览视角下满屏聚类气泡再叠 POI 太吵。
+        // 那条理由只在**缩得远**的时候成立：放大到一个城区之后，"楼下有没有超市、
+        // 离车站多远"恰恰是这张图能直接回答、而房源数据里没有的东西。
+        //
+        // 和可达圈是配套的：圈回答"十分钟能到哪儿"，POI 回答"到了那儿有什么"。
+        // 只画圈不画 POI，圈里是空的。
+        .mapStyle(.standard(elevation: .flat, pointsOfInterest: visiblePointsOfInterest))
         .onMapCameraChange(frequency: .continuous) { context in
             span = context.region.span.latitudeDelta
             // `MapCameraPosition` 读不出当前 region，+ / − 按钮要拿它算新跨度，
             // 所以每次相机变化都留一份最近值。
-            lastRegion = context.region
+            track.region = context.region
+            track.camera = context.camera
         }
-        .overlay(alignment: .topLeading) { filterTokens.padding(14) }
-        .overlay(alignment: .topTrailing) { legend.padding(14) }
+        // 停下来之后，把落点记成**相机**（中心 + 距离），而不是 region。
+        //
+        // 这一条修的是"收起侧栏地图会缩放"：`fitAll()` 存进 `camera` 的是
+        // `.region(...)`，语义是**"这块经纬度范围要整个可见"**。视图一变宽、长宽比
+        // 一变，MapKit 为了让整块范围仍然装得下就会重新缩放——实测收起侧栏后 span
+        // 越过 0.5，标记从单套价格整片变成城市团。
+        //
+        // `.camera(...)` 的语义是"从多高往下看"，`distance` 以米计，和视图宽高无关。
+        // 于是变宽只是**露出更多地图**，比例尺一点不动——这才是用户收侧栏时要的。
+        //
+        // 为什么是 `.onEnd` 不是 `.continuous`：`.continuous` 里往 `camera` 回写会
+        // 和 MapKit 自己的更新打架（写一次触发一次变化，再触发一次写）。落定之后写
+        // 一次，写进去的就是它当前的位置，不会再动。
+        .onMapCameraChange(frequency: .onEnd) { context in
+            // **只在当前存的还是 region 时**才转成相机。
+            //
+            // 已经是相机就别覆盖：尺寸变化的补偿（见下一条）刚把中心写进去，
+            // 而这个回调会紧跟着以"补之前的相机"触发一次，无条件写回去正好把补偿
+            // 抹掉——实测收 inspector 时补偿完全不生效，就是被这里盖的。
+            if camera.region != nil {
+                camera = .camera(context.camera)
+            }
+        }
+        // 视图尺寸一变，把相机中心**补回去**，让地图在屏幕上纹丝不动。
+        //
+        // 上面那条只保住了比例尺，没保住位置：相机中心永远落在**视图的正中**，
+        // 而收起侧栏时视图往左长了 195pt，中点跟着往左移了 97pt——同一块地理
+        // 因此整体左移 97pt。用户看到的就是"地图偏移了一下"。
+        //
+        // 补法：中心按**视图中点在屏幕上移动了多少**反向挪回去。设旧中点在屏幕
+        // 上是 m、新的是 m′，那么新中心应当取"补之前 m′ 那个位置上的地理"，
+        // 也就是 `中心 + (m′ − m) × 每点多少度`。这个式子不关心是哪一侧变的：
+        // 侧栏在左、inspector 在右，中点往哪边移就往哪边补。
+        //
+        // 每点多少度从 `lastRegion` 和**旧尺寸**算：region 的跨度正是那一版视图
+        // 装下的范围。纬度方向屏幕向下为正、纬度向下为负，所以那一项取减号。
+        .onGeometryChange(for: Bool.self) {
+            // 阈值是**工具栏那三个按钮占的宽度**，不是 0。
+            //
+            // 先写的是 `maxX > windowWidth - 8`，意思是"地图右沿还贴着窗口右边缘"。
+            // 稳态没问题，动画中途出事：inspector 滑进来时地图右沿是连续缩回去的，
+            // 缩了 10pt 就不算"贴边"了，图例立刻弹到顶——而那三个按钮占着最右边
+            // 约 140pt，这时图例正好落在它们底下闪一下。
+            //
+            // 改成"地图右沿还在按钮那一段里就继续让"，退到按钮左边才归位。
+            windowWidth > 0 && $0.frame(in: .global).maxX > windowWidth - Self.toolbarTrailing
+        } action: { edge in
+            atWindowTrailingEdge = edge
+        }
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { old, new in
+            // 正在飞就别补：见 ``flyingUntil``。
+            if let until = flyingUntil {
+                if Date() < until { return }
+                flyingUntil = nil
+            }
+            guard old.width > 1, old.height > 1,
+                  let region = track.region, let cam = track.camera else { return }
+            let dx = new.midX - old.midX
+            let dy = new.midY - old.midY
+            // 只有尺寸变化才补。窗口被整体拖动时 frame 也会变，但那种情况下
+            // 宽高不变、地图在屏幕上本来就跟着窗口走，补了反而会把地图挪掉。
+            guard new.size != old.size, dx != 0 || dy != 0 else { return }
+            let degPerPointX = region.span.longitudeDelta / old.width
+            let degPerPointY = region.span.latitudeDelta / old.height
+            let center = CLLocationCoordinate2D(
+                latitude: region.center.latitude - dy * degPerPointY,
+                longitude: region.center.longitude + dx * degPerPointX)
+            let moved = MapCamera(centerCoordinate: center, distance: cam.distance,
+                                  heading: cam.heading, pitch: cam.pitch)
+            camera = .camera(moved)
+
+            // **自己的记录要立刻跟上。**
+            //
+            // 一次开合动画里几何变化是连着来几十次的，每次只差两三个点（实测
+            // `1237x816 → 1240x816`）。而 `onMapCameraChange` 不保证在两次之间插
+            // 进来——不自己跟上的话，每一步都从**同一个旧中心**出发算偏移，后一步
+            // 覆盖前一步，几十步累下来只剩最后那一步的一两个点，看着就是"完全没补"。
+            //
+            // 收侧栏那次之所以看着是好的，纯属它的 frame 变化恰好一步到位。
+            // inspector 那次是逐帧长的，立刻暴露了这个问题。
+            track.region = MKCoordinateRegion(center: center, span: region.span)
+            track.camera = moved
+        }
+        // 右上角一摞：图例在上、筛选在下，右对齐。
+        //
+        // 原来筛选那一排在**左上角**、图例在右上角，两块浮层分踞两头。并到一起是
+        // 因为它们是同一类东西——都是"这张图现在给你看的是什么"的说明，而地图本身
+        // 才是内容；分在两个角会让眼睛在开头就分两路。
+        //
+        // 并过来还顺手去掉了一整块复杂度：左上角没有浮层了，就不用再防着交通灯和
+        // 侧栏开关（那两个控件在窗口左上角，地图顶到窗口左边缘时会压住浮层）。
+        //
+        // **贴窗口上沿，不跟随工具栏的安全区。** 地图是满幅的（一直画到窗口顶边），
+        // 而 overlay 默认吃工具栏那 51pt 的安全区，浮层会被压到 65pt 处，上面空出
+        // 一整条纯地图、什么都不放。
+        .overlay(alignment: .topTrailing) {
+            VStack(alignment: .trailing, spacing: 8) {
+                legend
+                filterTokens
+            }
+            .padding(14)
+            // 右栏一收，地图就顶到窗口右边缘，而那儿是刷新 / 钉住 / 右栏开关三个
+            // 工具栏按钮的地盘——这一摞得让开。
+            .padding(.top, atWindowTrailingEdge ? Self.toolbarBand : 0)
+            .ignoresSafeArea(.container, edges: .top)
+        }
         .overlay(alignment: .bottomTrailing) { zoomControls }
+        .overlay(alignment: .bottom) { noteBanner }
+    }
+
+    /// 地图自己要说的那一句话（跳不过去的两种情况）。
+    ///
+    /// 浮在底部中间、带一个 ✕，不自动消失：这是对"你刚才那个操作为什么没反应"的
+    /// 回答，自动消失的话正好错过——用户点完菜单眼睛还在菜单原来的位置上。
+    @ViewBuilder
+    private var noteBanner: some View {
+        if let note = mapNote {
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "info.circle")
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+                Text(note)
+                    .font(.subheadline)
+                    .fixedSize(horizontal: false, vertical: true)
+                Button {
+                    mapNote = nil
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 9, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Dismiss")
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .frame(maxWidth: 380, alignment: .leading)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 10))
+            .padding(.bottom, 16)
+            .transition(.opacity)
+        }
+    }
+
+    // MARK: - 可达圈
+
+    /// 选中一栋楼时，在它周围画两个「多久能到」的圈。
+    ///
+    /// **跟着选中自动画，没有单独的开关。** 右键里再加一个「画可达圈」是多一步：
+    /// 你点一栋楼，问的就是"这儿周围是什么样"，圈正是那个问题的答案。
+    ///
+    /// 两档都取 **10 分钟**：步行 641m、骑车 1923m，和 iOS 那边一样。
+    ///
+    /// 一度把步行收到 5 分钟（320m），想让内圈落在"楼下这一片"的量级上。
+    /// 改回来了——**两个圈的分钟数一样，比较才是一句话**：站在同一个时间预算上，
+    /// 走能到哪儿、骑能到哪儿，差的就是那三倍。分钟数不同的话，读者得先在脑子里
+    /// 把两个数换算到同一个基准，而这张图本来是用来省掉那一步的。
+    ///
+    /// 顺带也让两端对齐了：同一套房在 iPhone 和 Mac 上画出来的圈一样大。
+    ///
+    /// 半径算法和绕路系数在包里（``Reachability``），和 iOS 共用一份。
+    /// **这不是等时线**：圆是直线距离，除以 1.3 的绕路系数只是让它保守一点。
+    private struct ReachRing: Identifiable {
+        let id: String
+        let minutes: Int
+        let radius: CLLocationDistance
+        let symbol: String
+        let tint: Color
+        /// 外圈画虚线：两个同心圆在这个尺度上相隔很远，实线看着像两个无关的圈；
+        /// 虚线一眼就是"边界／大约到这儿"，也把内外层次分开。
+        let dashed: Bool
+    }
+
+    /// 配色照搬 iOS，理由也一样：`ListingStatus` 已经占了绿（Book）、橙（Lottery）、
+    /// 蓝（Reserved）、灰（Occupied）。骑车圈用绿是双重撞车——既撞"可直接预订"
+    /// 这个语义，又画在一张大面积是绿地的底图上，低透明度下基本看不见。
+    /// 紫色在状态色里没有，在苹果底图的调色板（绿地／灰建筑／白路／蓝水）里也没有。
+    ///
+    /// 步行那圈用蓝：它和 Reserved 的蓝确实同色系，但两者一个是**面**一个是
+    /// 胶囊上的**点**，而且这一圈只在选中时出现——那时注意力本来就在这栋楼上。
+    private static let reachRings: [ReachRing] = [
+        ReachRing(id: "walk", minutes: 10,
+                  radius: Reachability.radius(kmh: Reachability.walkingKmh, minutes: 10),
+                  symbol: "figure.walk", tint: .blue, dashed: false),
+        ReachRing(id: "cycle", minutes: 10,
+                  radius: Reachability.radius(kmh: Reachability.cyclingKmh, minutes: 10),
+                  symbol: "bicycle", tint: .purple, dashed: true),
+    ]
+
+    /// 外圈半径，米。相机要装得下它，见 ``focusRequestedListing()``。
+    static var outerReachRadius: CLLocationDistance {
+        reachRings.map(\.radius).max() ?? 0
+    }
+
+    @MapContentBuilder
+    private var reachRings: some MapContent {
+        if let b = model.mapBuilding {
+            ForEach(Self.reachRings) { ring in
+                MapCircle(center: b.coordinate, radius: ring.radius)
+                    // 填充压得很淡：两个圆是同心的，内圈那块会被叠两层。
+                    .foregroundStyle(ring.tint.opacity(0.045))
+                    .stroke(ring.tint.opacity(0.55),
+                            style: StrokeStyle(lineWidth: 2,
+                                               dash: ring.dashed ? [10, 7] : []))
+            }
+            // 圈上的标签。不标的话两个同心圆不表达任何东西——用户看到的只是两个圈，
+            // 不知道哪个是走的、哪个是骑的、各代表多久。
+            ForEach(Self.reachRings) { ring in
+                Annotation("", coordinate: CLLocationCoordinate2D(
+                    latitude: Reachability.offsetNorth(latitude: b.coordinate.latitude,
+                                                       meters: ring.radius),
+                    longitude: b.coordinate.longitude)) {
+                    Label("\(ring.minutes) min", systemImage: ring.symbol)
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(ring.tint)
+                        .labelStyle(.titleAndIcon)
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 3)
+                        .background(.regularMaterial, in: Capsule())
+                }
+                .annotationTitles(.hidden)
+            }
+        }
     }
 
     // MARK: - 标记
@@ -97,6 +419,7 @@ struct MapPane: View {
         return Button {
             select(b)
         } label: {
+
             HStack(spacing: 6) {
                 Circle()
                     .fill(markerColor(b))
@@ -123,6 +446,121 @@ struct MapPane: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("\(b.name), \(b.city), \(b.count) listing\(b.count == 1 ? "" : "s")")
+        // 悬停预览：Phase 4 的「地图 pin 划过出卡片」。
+        //
+        // 卡片走 `.overlay` + `.offset` 浮在标记上方，**不进标记自己的布局**——
+        // 塞进 `VStack` 的话，鼠标一划过标记就会被卡片顶得往下跳，而标记的位置
+        // 是它唯一的信息。
+        .overlay(alignment: .bottom) {
+            if hoveredBuilding == b.id, !selected {
+                hoverCard(b)
+                    // 卡片本身不接鼠标：它盖在标记上方，能接的话鼠标从标记移上去
+                    // 会先离开标记 → 卡片消失 → 鼠标又回到标记 → 卡片出现，闪烁。
+                    .allowsHitTesting(false)
+                    .offset(y: -32)
+                    .transition(.opacity)
+            }
+        }
+        .onHover { inside in
+            if inside {
+                hoveredBuilding = b.id
+            } else if hoveredBuilding == b.id {
+                hoveredBuilding = nil
+            }
+        }
+        .contextMenu { markerMenu(b) }
+    }
+
+    /// 悬停卡：楼盘名、城市、几套、最低价、状态分布。
+    ///
+    /// 和标记上那一行的分工：标记回答"这儿多少钱"（扫图时看的），卡片回答
+    /// "这儿是什么"（停下来看的）。所以卡片上**不重复**价格以外的标记内容，
+    /// 而是补标记放不下的那几件事。
+    private func hoverCard(_ b: MapBuilding) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Text(b.name)
+                .font(.body.weight(.medium))
+                .lineLimit(1)
+            Text(b.city)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            HStack(spacing: 5) {
+                ForEach(statusBreakdown(b), id: \.status) { part in
+                    HStack(spacing: 3) {
+                        Circle()
+                            .fill(Theme.statusColor(part.status))
+                            .frame(width: 5, height: 5)
+                        Text("\(part.count)")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .padding(.top, 1)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: 200, alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 9))
+        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(Color.primary.opacity(0.08)))
+        .shadow(color: .black.opacity(0.22), radius: 8, y: 3)
+        .fixedSize()
+    }
+
+    /// 楼里各状态各几套，按业务优先级排（可订在前）。
+    private func statusBreakdown(_ b: MapBuilding) -> [(status: ListingStatus, count: Int)] {
+        Dictionary(grouping: b.units, by: \.statusKind)
+            .map { (status: $0.key, count: $0.value.count) }
+            .sorted { $0.status.priority < $1.status.priority }
+    }
+
+    /// pin 的右键菜单。Phase 4 的「右键菜单：扩展在地图上定位、画可达圈等操作」。
+    ///
+    /// **没有「画可达圈」。** 那需要等时圈（isochrone）数据——从一个点出发 15 分钟
+    /// 骑车能到哪儿，是一块多边形，不是一个半径。MapKit 只给路线（`MKDirections`），
+    /// 算不出等时圈；后端也没有这个接口。画一个"半径 2km 的圆"冒充可达圈是假的：
+    /// 阿姆斯特丹到处是运河，直线距离和骑行距离差得很远。宁可不做。
+    @ViewBuilder
+    private func markerMenu(_ b: MapBuilding) -> some View {
+        Button("Zoom to This Building") {
+            zoom(to: [b.coordinate], padding: 1)
+        }
+        Button("Zoom to All") { fitAll() }
+        Divider()
+        if let unit = b.units.first {
+            Button("Open in New Window") {
+                openWindow(id: FlatRadarMacApp.listingWindowID, value: unit.id)
+            }
+            Button("Show in List") { showInList(unit.id) }
+            Divider()
+            Button("Open on \(Platform.displayName(unit.source))") {
+                if let url = URL(string: unit.url) { NSWorkspace.shared.open(url) }
+            }
+            Button("Copy Link") {
+                NSPasteboard.general.clearContents()
+                NSPasteboard.general.setString(unit.url, forType: .string)
+            }
+            // 走 `MapListing` 那个入口：地图上的这一套不一定在 `/listings` 里，
+            // 见 ``ListingShareMenuItem``。
+            ListingShareMenuItem(unit: unit)
+        }
+    }
+
+    /// 从地图跳回列表并选中那一条。
+    ///
+    /// 可能**跳不过去**：`/map` 和 `/listings` 覆盖的集合不一样（前者是坐标缓存，
+    /// 后者套着账号的个人筛选），地图上看得见的不一定在列表里。那就留在地图上
+    /// 并说明，不做一次"切过去发现什么都没选中"的空跳。
+    private func showInList(_ id: Listing.ID) {
+        guard model.listing(id) != nil else {
+            mapNote = "This listing isn’t in the list — /map and /listings cover "
+                    + "different sets, and your saved filter applies to the list."
+            return
+        }
+        model.focused = id
+        model.selection = [id]
+        model.section = .listings
     }
 
     /// 城市团：墨色圆 + 套数。点一下飞过去。
@@ -170,26 +608,123 @@ struct MapPane: View {
                 mapToken(token.label, remove: token.remove)
             }
             Button {
-                model.showFilterPanel.toggle()
+                showFilters.toggle()
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "line.3.horizontal.decrease")
                         .font(.system(size: 11, weight: .medium))
-                    Text("All filters").font(.callout)
+                    Text("All filters").font(.body)
                 }
-                .foregroundStyle(.white)
                 .padding(.horizontal, 10)
                 .frame(height: 26)
-                .background(Theme.ink, in: RoundedRectangle(cornerRadius: 8))
+                // 和地图上其它浮层同一种材质。原来这里是实心的 `Theme.ink` + 白字，
+                // 在一排玻璃 token 中间像贴了块不透明的纸——而它和旁边那些 token
+                // 是同一排、同一件事（筛选），不该是两种材质。
+                //
+                // `.interactive()` 跟 + / − / Fit 那三个按钮一致：会按下去的用
+                // interactive，只是展示的（图例、token）用普通的 `.regular`。
+                .glassEffect(.regular.interactive(), in: RoundedRectangle(cornerRadius: 8))
             }
             .buttonStyle(.plain)
+            // 明写 `.bottom`：按钮挪到右上角之后，不指定的话 SwiftUI 会把浮层朝**上**
+            // 弹，直接顶出窗口上沿（按钮离窗口顶只有 180pt，而浮层高 520pt）。
+            .popover(isPresented: $showFilters, arrowEdge: .bottom) { filterPopover }
         }
+    }
+
+    /// 「All filters」的浮层。
+    ///
+    /// 地图的筛选**一直是真的**：`MapStore` 上五个条件（城市 / 平台 / 最高租金 /
+    /// 最小面积 / 状态）一直在过滤标记，左上角那排 token 也能逐个把它们删掉。
+    /// 缺的只是**设**它们的地方——Mac 上一个都没有，token 只能减不能加。
+    /// 所以这个浮层不是新功能，是把已经在跑的东西接上一个入口。
+    ///
+    /// 控件和 iOS 的 `MapFilterSheet` 一一对应（城市 / 平台两个 Picker、
+    /// 租金 / 面积两个输入框、状态开关、Reset），因为背后是同一个 store。
+    /// 用 popover 而不是像 Listings 那样往下推一块面板：地图是整屏的，
+    /// 推一块面板下来会把图挤变形，而浮层从按钮上长出来，关掉就还原。
+    private var filterPopover: some View {
+        @Bindable var store = store
+        return Form {
+            Section {
+                Picker("City", selection: $store.cityFilter) {
+                    Text("All").tag("")
+                    ForEach(store.cityOptions, id: \.self) { Text($0).tag($0) }
+                }
+                Picker("Platform", selection: $store.sourceFilter) {
+                    Text("All").tag("")
+                    ForEach(store.sourceOptions, id: \.self) {
+                        Text(Platform.displayName($0)).tag($0)
+                    }
+                }
+            }
+
+            Section {
+                LabeledContent("Max rent") {
+                    TextField("Any", text: $store.maxRentText)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 80)
+                }
+                LabeledContent("Min area") {
+                    TextField("Any", text: $store.minAreaText)
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 80)
+                }
+            } footer: {
+                // 读不出价格 ≠ 超预算。说清楚，免得用户以为漏了。和 iOS 同一句话。
+                Text("Listings whose rent or area cannot be read are kept rather than hidden.")
+            }
+
+            Section("Status") {
+                ForEach(ListingStatus.byPriority) { status in
+                    Toggle(isOn: statusBinding(status)) {
+                        HStack(spacing: 7) {
+                            Circle()
+                                .fill(Theme.statusColor(status))
+                                .frame(width: 7, height: 7)
+                            Text(Theme.shortStatusLabel(status) ?? status.label)
+                            Spacer(minLength: 8)
+                            // 只显示这一档有几套。0 也照显示——"这一档一套都没有"
+                            // 和"我把它关掉了"是两件事。
+                            Text("\(store.statusCounts[status] ?? 0)")
+                                .font(.caption.monospacedDigit())
+                                .foregroundStyle(.tertiary)
+                        }
+                    }
+                }
+            }
+
+            Section {
+                HStack {
+                    // Reset 回**默认**（终态默认关），不是全开——全开是左上角那个
+                    // `Status: N` token 的行为，两者语义不同，别混。
+                    Button("Reset") { store.resetFilters() }
+                    Spacer()
+                    Button("Done") { showFilters = false }
+                        .keyboardShortcut(.defaultAction)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        // 520 是量出来的：两个 Picker + 两个输入框 + 两行脚注 + 五档状态 + 按钮行，
+        // 430 的时候正好差一截，浮层里会出现一条滚动条——一个能一眼看完的筛选面板
+        // 不该要滚动。状态是固定五档，内容高度不会再涨。
+        .frame(width: 300, height: 520)
+    }
+
+    private func statusBinding(_ status: ListingStatus) -> Binding<Bool> {
+        Binding(
+            get: { store.activeStatuses.contains(status) },
+            set: { on in
+                if on { store.activeStatuses.insert(status) }
+                else { store.activeStatuses.remove(status) }
+            })
     }
 
     private func mapToken(_ label: String, remove: @escaping () -> Void) -> some View {
         Button(action: remove) {
             HStack(spacing: 6) {
-                Text(label).font(.callout)
+                Text(label).font(.body)
                 Image(systemName: "xmark")
                     .font(.system(size: 9, weight: .semibold))
                     .foregroundStyle(.tertiary)
@@ -283,12 +818,13 @@ struct MapPane: View {
 
     /// 「看到了多少」。缩到城市团那一档时说城市数，否则说楼盘数——
     /// 因为那一档屏幕上根本没有楼盘标记，报楼盘数对不上眼前看到的东西。
+    /// 只说**看得见几套房**。
+    ///
+    /// 原来后面还跟着 `· 12 buildings` / `· 8 cities`——那是"地图上有几个标记"，
+    /// 和用户在这一屏想知道的事（有多少套房）不是一回事，而且标记数会随缩放在
+    /// 楼盘和城市团之间跳，读起来更像噪音。
     private var rangeText: String {
-        let units = buildings.reduce(0) { $0 + $1.count }
-        if showsClusters {
-            return "\(units) shown · \(clusters.count) cities"
-        }
-        return "\(units) shown · \(buildings.count) buildings"
+        "\(buildings.reduce(0) { $0 + $1.count }) shown"
     }
 
     // MARK: - 动作
@@ -297,6 +833,53 @@ struct MapPane: View {
         guard store.listings.isEmpty else { return }
         await store.fetch()
         fitAll()
+    }
+
+    /// 接住列表那边的「Show on Map」：找到这条房源所在的楼，选中并飞过去。
+    ///
+    /// 找不到就**明说找不到**。地图和列表覆盖的集合不一样（`/map` 是坐标缓存 +
+    /// 新鲜度窗口，`/listings` 套着账号的个人筛选），而且地图数据可能还没拉完。
+    /// 静悄悄什么都不发生的话，用户只会觉得这个菜单项坏了。
+    private func focusRequestedListing() {
+        guard let request = model.mapFocusRequest else { return }
+        // 数据还没到：不清请求，等 `store` 拉完之后这个 `task(id:)` 会再跑一次。
+        guard !store.listings.isEmpty else { return }
+        model.clearMapFocusRequest()
+
+        guard let building = buildings.first(where: { b in
+            b.units.contains { $0.id == request.id }
+        }) else {
+            mapNote = "This listing has no map position yet — its address hasn’t been "
+                    + "geocoded, or it falls outside the map’s freshness window."
+            return
+        }
+        mapNote = nil
+        model.mapBuilding = building
+        model.focused = request.id
+        // 缩到**装得下外面那个可达圈**，不是装得下这一个点。
+        //
+        // 「Show on Map」是"带我过去看看这附近"，而选中会自动画出两个圈——
+        // 只按点定位的话默认跨度 0.01°（≈1.1km）比骑车 10 分钟那圈（1.92km）还小，
+        // 一落地就有半个圈在视野外，看起来像画坏了。
+        //
+        // 把圈的四个边缘点丢给 `zoom(to:)`，让它已有的包围盒算法去算跨度。
+        zoom(to: Self.ringBounds(around: building.coordinate), padding: 1.15)
+    }
+
+    /// 外圈的东南西北四个边缘点。喂给 `zoom(to:)` 当包围盒用。
+    private static func ringBounds(
+        around c: CLLocationCoordinate2D
+    ) -> [CLLocationCoordinate2D] {
+        let r = outerReachRadius
+        let dLat = r / 111_320
+        // 经度方向要按纬度收窄：同样的米数在 52°N 上跨的经度更多。
+        let dLon = r / (111_320 * cos(c.latitude * .pi / 180))
+        return [
+            CLLocationCoordinate2D(latitude: c.latitude + dLat, longitude: c.longitude),
+            CLLocationCoordinate2D(latitude: c.latitude - dLat, longitude: c.longitude),
+            CLLocationCoordinate2D(latitude: c.latitude, longitude: c.longitude + dLon),
+            CLLocationCoordinate2D(latitude: c.latitude, longitude: c.longitude - dLon),
+        ]
     }
 
     /// 选中一栋楼：inspector 换成这栋楼的单元列表，镜头挪过去。
@@ -312,10 +895,25 @@ struct MapPane: View {
     }
 
     private func scale(by factor: Double) {
-        guard let region = lastRegion else { return }
-        let s = MKCoordinateSpan(
-            latitudeDelta: min(max(region.span.latitudeDelta * factor, 0.002), 60),
-            longitudeDelta: min(max(region.span.longitudeDelta * factor, 0.002), 60))
+        guard let region = track.region else { return }
+        // 连点时从**上一下的目标**接着算，不是从动画中间那一帧现读，见 ``zoomTarget``。
+        let base: CLLocationDegrees
+        if let target = zoomTarget, Date() < target.until {
+            base = target.span
+        } else {
+            base = region.span.latitudeDelta
+        }
+        let lat = min(max(base * factor, 0.002), 60)
+        // 经度按**当前视图的长宽比**同比缩，不各自乘 factor：各乘各的在连点时会把
+        // 两个方向的比例越拉越偏（纬度被上下限夹住而经度没有时尤其明显）。
+        let ratio = region.span.latitudeDelta > 0
+            ? region.span.longitudeDelta / region.span.latitudeDelta : 1
+        let s = MKCoordinateSpan(latitudeDelta: lat, longitudeDelta: lat * ratio)
+
+        zoomTarget = (lat, Date().addingTimeInterval(0.35))
+        // 和 `zoom(to:)` 同理：先把 `span` 推到目标，免得飞行途中穿过
+        // `showsClusters` / POI 的阈值，标记整批换掉把动画掐断在半路。
+        span = lat
         withAnimation(.easeOut(duration: 0.2)) {
             camera = .region(MKCoordinateRegion(center: region.center, span: s))
         }
@@ -336,6 +934,21 @@ struct MapPane: View {
         let s = MKCoordinateSpan(
             latitudeDelta: max((lats.max()! - lats.min()!) * padding, 0.01),
             longitudeDelta: max((lons.max()! - lons.min()!) * padding, 0.01))
+        // **先把 `span` 推到目标值，再开始动画。**
+        //
+        // 不这么做的话，飞行途中 `span` 会穿过 `showsClusters` 的 0.5 阈值，
+        // `Map` 里那个 `if showsClusters` 就在动画进行中把标记从「城市团」整批换成
+        // 「楼盘」——内容一换，MapKit 把正在跑的相机动画**掐断在半路**。
+        //
+        // 实测：从列表右键「Show on Map」跳过去，落点离目标楼盘约 80pt，中心那儿
+        // 一个标记都没有。日志里 `span=1.000000 clusters=1`——`span` 的初值就是 1，
+        // 所以刚切到地图屏时画的是城市团，正好每次都撞上这个切换。
+        //
+        // 反方向（`fitAll` 缩到全局）同样受益：提前切成城市团比在动画途中切更稳，
+        // 而且缩出去的过程里本来就该看到团。
+        span = s.latitudeDelta
+        // 动画 0.4s，留一点余量让布局也落定。
+        flyingUntil = Date().addingTimeInterval(0.7)
         withAnimation(.easeOut(duration: 0.4)) {
             camera = .region(MKCoordinateRegion(center: center, span: s))
         }
