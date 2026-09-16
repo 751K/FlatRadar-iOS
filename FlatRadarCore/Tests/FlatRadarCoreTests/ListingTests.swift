@@ -250,4 +250,53 @@ final class ListingTests: XCTestCase {
         return try JSONDecoder().decode(Listing.self, from: Data(json.utf8))
     }
 
+    // MARK: - priceText / 面积的小数点
+
+    private func make(priceRaw: String? = nil, priceValue: Double? = nil,
+                      area: String? = nil) throws -> Listing {
+        var obj: [String: Any] = ["id": "1", "name": "N", "status": "S", "url": "", "city": ""]
+        if let priceRaw { obj["price_raw"] = priceRaw }
+        if let priceValue { obj["price_value"] = priceValue }
+        if let area { obj["feature_map"] = ["area": area] }
+        return try JSONDecoder().decode(
+            Listing.self, from: JSONSerialization.data(withJSONObject: obj))
+    }
+
+    /// 各平台的 `price_raw` 不是一套写法。OurDomain 用荷兰式**点分位**，
+    /// 原样显示会被读成小数——Mac 的 Price 列上一版就是这样，
+    /// `€ 1.125` 和 `€1337` 并排，前者看着像一块一。
+    func test_各平台的价格归一成同一个样子() throws {
+        // OurDomain：点分位
+        XCTAssertEqual(try make(priceRaw: "€ 1.125").priceText, "€1125")
+        // Holland2Stay：没有分隔符
+        XCTAssertEqual(try make(priceRaw: "€1337").priceText, "€1337")
+        // 欧陆写法带小数
+        XCTAssertEqual(try make(priceRaw: "€ 1.067,50 p/m").priceText, "€1068")
+    }
+
+    /// 后端给了 `price_value` 就用它，不再去解析字符串——少一次出错的机会。
+    func test_优先用后端解析好的数值() throws {
+        let l = try make(priceRaw: "€ 1.125", priceValue: 1125)
+        XCTAssertEqual(l.priceText, "€1125")
+        XCTAssertEqual(try make(priceValue: 707).priceText, "€707")
+    }
+
+    /// 解析不出来就**原样显示**，不是显示 "€0"，也不是显示空。
+    /// 格式不统一好过丢信息；编一个数字则是另一回事。
+    func test_解析不出来时原样回退() throws {
+        XCTAssertEqual(try make(priceRaw: "On request").priceText, "On request")
+        XCTAssertNil(try make().priceText)
+    }
+
+    /// 面积是同一个病根：也是平台原样串，OurDomain 用逗号当小数点。
+    func test_面积的逗号小数点统一成点() throws {
+        XCTAssertEqual(try make(area: "22,56 m²").normalizedAreaText, "22.56 m²")
+        XCTAssertEqual(try make(area: "22,56").normalizedAreaText, "22.56m²")
+        // 本来就是英美写法的不动
+        XCTAssertEqual(try make(area: "33.78 m²").normalizedAreaText, "33.78 m²")
+        // 整数不动
+        XCTAssertEqual(try make(area: "28 m²").normalizedAreaText, "28 m²")
+        // 逗号后正好三位数字当分位符，不当小数点
+        XCTAssertEqual(try make(area: "1,067 m²").normalizedAreaText, "1,067 m²")
+    }
 }

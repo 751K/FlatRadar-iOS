@@ -213,7 +213,7 @@ struct InspectorPane: View {
             }
             .padding(.top, 11)
             VStack(spacing: 0) {
-                LabeledRow("Price", unit.priceRaw, mono: true)
+                LabeledRow("Price", PriceText.compact(unit.priceRaw) ?? unit.priceRaw, mono: true)
                 LabeledRow("City", unit.city)
                 LabeledRow("Building", unit.building.isEmpty ? nil : unit.building)
                 LabeledRow("Platform", Platform.displayName(unit.source))
@@ -402,7 +402,7 @@ struct InspectorPane: View {
                     // "Kon. Wilhelminaplein…"——而这一列存在的意义就是区分它们。
                     .truncationMode(.head)
                 Spacer(minLength: 6)
-                Text(unit.priceRaw)
+                Text(PriceText.compact(unit.priceRaw) ?? unit.priceRaw)
                     .font(.callout.weight(.medium))
                     .monospacedDigit()
             }
@@ -428,8 +428,8 @@ struct InspectorPane: View {
             }
             .padding(.top, 11)
             VStack(spacing: 0) {
-                LabeledRow("Price", unit.priceRaw, mono: true)
-                LabeledRow("Area", unit.area.isEmpty ? nil : unit.area, mono: true)
+                LabeledRow("Price", PriceText.compact(unit.priceRaw) ?? unit.priceRaw, mono: true)
+                LabeledRow("Area", AreaText.normalized(unit.area), mono: true)
                 LabeledRow("City", unit.city)
                 LabeledRow("Platform", Platform.displayName(unit.source))
                 LabeledRow("Available", unit.availableFrom.isEmpty ? nil
@@ -536,11 +536,16 @@ struct InspectorPane: View {
         }
     }
 
-    /// 设计稿写的是 `€1,067 / mo`。后端给的是 `price_raw` 原样字符串，
-    /// 里面**可能已经带**「per month」之类的后缀（各平台写法不同），
-    /// 所以不无条件拼 "/ mo"——那样会出现 "€1,067 per month / mo"。
+    /// 设计稿写的是 `€1,067 / mo`。
+    ///
+    /// 走 ``Listing/priceText`` 拿归一之后的串（`€1125`），不再原样显示
+    /// `price_raw`——各平台写法不是一套，OurDomain 的 `"€ 1.125"` 会被读成小数。
+    ///
+    /// 归一成功的串里不会再带平台自己的「per month」后缀，本可以无条件拼 `/ mo`；
+    /// 但归一失败时会**原样回退**，那种串可能自带后缀，所以下面那段判断保留——
+    /// 不判断的话会出现 "On request per month / mo"。
     private func priceText(_ l: Listing) -> String? {
-        guard let raw = l.priceRaw, !raw.isEmpty else { return nil }
+        guard let raw = l.priceText, !raw.isEmpty else { return nil }
         let lower = raw.lowercased()
         let hasPeriod = lower.contains("mo") || lower.contains("month")
                      || lower.contains("/") || lower.contains("p.m")

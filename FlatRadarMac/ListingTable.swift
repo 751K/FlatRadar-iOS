@@ -274,7 +274,7 @@ private struct ListingTableRow: View {
     private var a11yLabel: String {
         var parts: [String] = [listing.name]
         if !listing.city.isEmpty { parts.append(listing.city) }
-        if let p = listing.priceRaw { parts.append(p) }
+        if let p = listing.priceText { parts.append(p) }
         if let a = listing.normalizedAreaText { parts.append(a) }
         let kind = ListingStatus.from(listing.status)
         parts.append(Theme.shortStatusLabel(kind) ?? listing.status)
@@ -316,7 +316,7 @@ private struct ListingTableRow: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
         case .price:
-            Text(listing.priceRaw ?? "—")
+            Text(listing.priceText ?? "—")
                 .font(.system(.body, design: .monospaced).weight(.semibold))
                 .monospacedDigit()
         case .area:

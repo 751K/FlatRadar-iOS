@@ -108,7 +108,7 @@ struct ListingDetailView: View {
     /// 用 \n 分行，让 iMessage / 邮件 / Notes 等通讯类接收方显示更清晰。
     private func shareMessage(for listing: Listing) -> String {
         var head: [String] = [listing.sourceShortText, listing.name]
-        if let price = listing.priceRaw, !price.isEmpty { head.append(price) }
+        if let price = listing.priceText, !price.isEmpty { head.append(price) }
         if !listing.city.isEmpty { head.append(listing.city) }
         var lines = [head.joined(separator: " · ")]
         if !listing.url.isEmpty { lines.append(listing.url) }
@@ -118,7 +118,7 @@ struct ListingDetailView: View {
     /// Share Sheet 顶部预览的标题——地址 + 价格（如有），比 deep link 字符串
     /// 友好得多。
     private func sharePreviewTitle(for listing: Listing) -> String {
-        if let price = listing.priceRaw, !price.isEmpty {
+        if let price = listing.priceText, !price.isEmpty {
             return "\(listing.name) · \(price)"
         }
         return listing.name
@@ -219,7 +219,7 @@ struct ListingDetailView: View {
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     DetailMetricCard(
                         title: "Price",
-                        value: listing.priceRaw ?? "Unknown",
+                        value: listing.priceText ?? "Unknown",
                         systemImage: "eurosign.circle")
                         DetailMetricCard(
                             title: "Available",

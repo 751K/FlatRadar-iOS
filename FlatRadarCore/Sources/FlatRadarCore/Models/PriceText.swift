@@ -23,15 +23,28 @@ public nonisolated enum PriceText {
     /// 各平台的写法差得很远（`"€ 1.067,50 p/m"` / `"1067.5"` / `"€1,067.50"`），
     /// 原样显示会让同一列里出现三种格式。
     ///
-    /// **不带千位分隔符**，虽然设计稿写的是 `€1,180`。理由是一致性：app 里
-    /// 其它地方（列表的 Price 列、详情的 `€1980 / mo`）一直是不带的，同一列里
-    /// 出现两种格式比没有逗号糟得多。四位数的租金也确实不靠分隔符断读。
+    /// **不带千位分隔符**，虽然设计稿写的是 `€1,180`。四位数的租金不靠分隔符断读，
+    /// 而少一个符号就少一次「这个点/逗号是分位还是小数」的判断——各平台原样串
+    /// 之所以会被读错，根子就在这个判断上。
+    ///
+    /// 这句话以前是**假的**：注释写着"app 里其它地方一直是不带的"，而 iOS 列表的
+    /// `ListingRow` 自己揣着一个加逗号的 formatter，显示 `€1,067`。两端不一致了
+    /// 很久，只是没人把两块屏幕并排看过。现在两端所有显示价格的地方都走这里，
+    /// 那个 formatter 已经删掉，这句话才真的成立。
     ///
     /// 一律不带小数：租金列表里 `.50` 那两位不影响任何判断，却要吃掉三个字符。
     /// 解析不出来时返回 nil，**不返回 "€0"**——那是在编一个数字。
     public static func compact(_ raw: String?) -> String? {
         guard let value = parse(raw) else { return nil }
-        return formatter.string(from: NSNumber(value: value.rounded()))
+        return format(value)
+    }
+
+    /// ``compact(_:)`` 的后半段：已经是数字了，只负责格式化成 `€1125`。
+    ///
+    /// 单独暴露出来，是给**后端已经解析好**的那条路用（`Listing.price_value`）。
+    /// 那种情况下再去解析一遍 `price_raw` 是多此一举，而且多一次出错的机会。
+    public static func format(_ value: Double) -> String? {
+        formatter.string(from: NSNumber(value: value.rounded()))
     }
 
     private static let formatter: NumberFormatter = {

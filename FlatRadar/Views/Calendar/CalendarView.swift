@@ -350,7 +350,7 @@ struct CalendarView: View {
             Spacer()
             VStack(alignment: .trailing, spacing: 4) {
                 if !l.priceRaw.isEmpty {
-                    Text(l.priceRaw)
+                    Text(PriceText.compact(l.priceRaw) ?? l.priceRaw)
                         .font(.subheadline.weight(.semibold))
                 }
                 Image(systemName: "chevron.right")

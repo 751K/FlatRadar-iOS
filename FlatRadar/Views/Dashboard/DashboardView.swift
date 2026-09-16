@@ -756,7 +756,7 @@ struct DashboardView: View {
                         .lineLimit(1)
                         .truncationMode(.tail)
                     Spacer(minLength: 8)
-                    Text(listing.priceRaw ?? "—")
+                    Text(listing.priceText ?? "—")
                         .font(.system(size: 17, weight: .bold))
                         .lineLimit(1)
                 }
@@ -860,7 +860,7 @@ struct DashboardView: View {
     /// 露价格 / 状态点 / 城市+面积，比之前两行（仅 price + city）多一档信息。
     private func matchPreviewCard(_ listing: Listing) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(listing.priceRaw ?? "—")
+            Text(listing.priceText ?? "—")
                 .font(.system(size: 13, weight: .bold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)

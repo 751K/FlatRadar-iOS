@@ -80,4 +80,15 @@ final class PriceTextTests: XCTestCase {
         XCTAssertNil(PriceText.compact(""))
         XCTAssertNil(PriceText.compact(nil))
     }
+
+    // MARK: - format
+
+    /// `format` 是 `compact` 的后半段：给已经解析好的数值用。
+    /// 两条路必须落到同一个样子，否则同一列里会按"后端给没给 price_value"分叉。
+    func test_format和compact落到同一个样子() {
+        XCTAssertEqual(PriceText.format(1125), "€1125")
+        XCTAssertEqual(PriceText.format(1067.5), "€1068")   // 四舍五入，不留小数
+        XCTAssertEqual(PriceText.format(1125), PriceText.compact("€ 1.125"))
+        XCTAssertEqual(PriceText.format(452), PriceText.compact("€452"))
+    }
 }

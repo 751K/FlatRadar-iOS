@@ -144,7 +144,11 @@ struct MapPane: View {
     }
 
     private func priceLabel(_ b: MapBuilding) -> String {
-        guard let low = b.lowestPrice else { return b.units.first?.priceRaw ?? "—" }
+        guard let low = b.lowestPrice else {
+            // 兜底也要归一：OurDomain 的 `"€ 1.125"` 原样贴到地图标记上会被读成小数。
+            let raw = b.units.first?.priceRaw
+            return PriceText.compact(raw) ?? raw ?? "—"
+        }
         let n = Int(low.rounded())
         return b.count > 1 ? "from €\(n)" : "€\(n)"
     }

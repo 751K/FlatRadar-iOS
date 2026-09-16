@@ -249,29 +249,15 @@ struct ListingRow: View {
         .frame(width: 88, alignment: .leading)
     }
 
+    /// 走包里的 ``Listing/priceText``，这里不再自己格式化。
+    ///
+    /// 原来这里揣着一个**加千分位逗号**的 `NumberFormatter`（`€1,067`），而 Mac
+    /// 和 iOS 其它几屏都是不带分隔符的 `€1067`——同一套数据两种写法。formatter
+    /// 连同那段"共享 static let 避免每帧 new 一个"的优化一起删了：包里的
+    /// `PriceText.formatter` 同样是 `static let`，共享范围还更大。
     private var priceText: String {
-        if let v = listing.priceValue {
-            // 用 static let 共享 NumberFormatter —— 之前每次 priceText 调用
-            // （compact / medium / regular 三种 body 每帧都跑一次）都 new 一
-            // 个 NumberFormatter，列表 100 行 + 60fps 滚动 ≈ 6000 实例/秒，
-            // 完全没必要。NumberFormatter.string(from:) 本身是线程安全的，
-            // 但视图都在 MainActor 上，不存在并发问题。
-            let n = Self.priceFormatter.string(from: NSNumber(value: v))
-                ?? "\(Int(v))"
-            return "€\(n)"
-        }
-        return listing.priceRaw ?? "—"
+        listing.priceText ?? "—"
     }
-
-    /// 千分位英文逗号 + 整数（`1,067`）格式化器。整个 App 共享一份。
-    private static let priceFormatter: NumberFormatter = {
-        let f = NumberFormatter()
-        f.numberStyle = .decimal
-        f.locale = Locale(identifier: "en_US")
-        f.maximumFractionDigits = 0
-        f.usesGroupingSeparator = true
-        return f
-    }()
 
     @ViewBuilder
     private var statusBadge: some View {

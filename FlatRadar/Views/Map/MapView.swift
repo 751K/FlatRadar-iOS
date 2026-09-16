@@ -1021,9 +1021,10 @@ struct MapView: View {
             // 等宽 + 分隔线。原先是 Label 横排，间距由文字长短决定，三样东西
             // 疏密不一，看着像没对齐。
             HStack(spacing: 0) {
-                statCell(l.priceRaw.isEmpty ? "—" : l.priceRaw, caption: "per month")
+                statCell(PriceText.compact(l.priceRaw) ?? (l.priceRaw.isEmpty ? "—" : l.priceRaw),
+                         caption: "per month")
                 statDivider
-                statCell(l.area.isEmpty ? "—" : l.area, caption: "area")
+                statCell(AreaText.normalized(l.area) ?? "—", caption: "area")
                 statDivider
                 // 哨兵日期（2050-01-01 =「未定」）显示成 "—"，不冒充成日期。
                 statCell(availableText(l), caption: "available")

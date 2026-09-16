@@ -157,14 +157,26 @@ public extension Listing {
         featureValue(matching: ["area", "surface", "living area", "m2", "m²"])
     }
 
-    /// 已规范化的面积串（"65 m²"）：trim + 补 m² 后缀。
-    /// 列表行每滚动一帧都用，缓存在 dataclass-style computed property 上
-    /// 避免在视图层每次 render 重 trim/lowercased。
+    /// 价格的**显示**串（`€1125`）。
+    ///
+    /// **别直接显示 `priceRaw`。** 那是各平台自己写的，不是一套格式：
+    /// Holland2Stay 给 `"€1337"`，OurDomain 给 `"€ 1.125"`——荷兰式的**点分位**。
+    /// 两种摆进同一列，`€ 1.125` 会被读成"一块一"：点在英文语境里就是小数点。
+    ///
+    /// 优先用后端已经解析好的 `price_value`；没有才回退去解析 `priceRaw`。
+    /// 两条路都不通（`"On request"` / `"n.v.t."`）就原样返回 `priceRaw`——
+    /// 格式不统一好过丢信息，但**不会**返回 `"€0"`，那是在编一个数字。
+    nonisolated var priceText: String? {
+        if let priceValue { return PriceText.format(priceValue) }
+        if let parsed = PriceText.compact(priceRaw) { return parsed }
+        return priceRaw
+    }
+
+    /// 已规范化的面积串（`"65 m²"`）。归一逻辑在 ``AreaText`` 里——地图那份
+    /// 精简模型（`MapListing.area`）没有 `featureMap`，走不到这个属性，
+    /// 但要的是同一套写法。
     nonisolated var normalizedAreaText: String? {
-        guard let raw = areaText else { return nil }
-        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty { return nil }
-        return trimmed.lowercased().contains("m") ? trimmed : "\(trimmed)m²"
+        AreaText.normalized(areaText)
     }
 
     nonisolated var floorText: String? {
