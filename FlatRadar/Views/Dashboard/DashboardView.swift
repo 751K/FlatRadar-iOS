@@ -1266,30 +1266,7 @@ struct DashboardView: View {
     private func typeMiniCard(height: CGFloat) -> some View {
         exploreCard(title: "By type", tapKey: "type_dist", tapTitle: "By Type", height: height) {
             if !typeTopThree.isEmpty {
-                let merged = typeTopThree   // cached top-3 (bucketed + sorted)
-                let maxCount = merged.map(\.count).max() ?? 1
-
-                VStack(spacing: 5) {
-                    ForEach(Array(merged)) { entry in
-                        HStack(spacing: 6) {
-                            Text(entry.label)
-                                .font(.system(.caption2))
-                                .lineLimit(1)
-                                // `minWidth` 不是 `width`：字号跟系统涨之后，
-                                // 写死的 44pt 会把标签裁掉。
-                                .frame(minWidth: 44, alignment: .leading)
-                            GeometryReader { proxy in
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(.blue.opacity(0.6))
-                                    .frame(width: proxy.size.width * ratio(entry.count, maxCount))
-                            }
-                            .frame(height: 5 * chartScale(for: height))
-                            Text("\(entry.count)")
-                                .font(.system(.caption2, weight: .bold))
-                                .frame(minWidth: 26, alignment: .trailing)
-                        }
-                    }
-                }
+                MiniBarRows(rows: typeTopThree, barHeight: 5 * chartScale(for: height))
             }
         }
     }
@@ -1325,33 +1302,9 @@ struct DashboardView: View {
     private func tenantMiniCard(height: CGFloat) -> some View {
         exploreCard(title: "By tenant", tapKey: "tenant_dist", tapTitle: "By Tenant", height: height) {
             if !tenantTopThree.isEmpty {
-                let maxCount = tenantTopThree.map(\.count).max() ?? 1
-
-                VStack(spacing: 5) {
-                    ForEach(tenantTopThree) { entry in
-                        HStack(spacing: 6) {
-                            Text(Self.tenantMiniLabel(entry.label, within: tenantTopThree))
-                                .font(.system(.caption2))
-                                .lineLimit(1)
-                                // 撞名时标签会退回原文（"Student Only" /
-                                // "Student And Employed"），比缩写长。让它先于
-                                // 那根条拿空间，并且允许缩到 0.8 再截断——
-                                // 两行同名比截断严重得多，但能不截当然更好。
-                                .minimumScaleFactor(0.8)
-                                .layoutPriority(1)
-                                .frame(minWidth: 54, alignment: .leading)
-                            GeometryReader { proxy in
-                                RoundedRectangle(cornerRadius: 2)
-                                    .fill(.blue.opacity(0.6))
-                                    .frame(width: proxy.size.width * ratio(entry.count, maxCount))
-                            }
-                            .frame(height: 5 * chartScale(for: height))
-                            Text("\(entry.count)")
-                                .font(.system(.caption2, weight: .bold))
-                                .frame(minWidth: 24, alignment: .trailing)
-                        }
-                    }
-                }
+                MiniBarRows(rows: tenantTopThree,
+                            label: { Self.tenantMiniLabel($0.label, within: tenantTopThree) },
+                            barHeight: 5 * chartScale(for: height))
             }
         }
     }
@@ -1759,6 +1712,97 @@ struct PressScaleModifier: ViewModifier {
 }
 
 /// 按钮场景的按压缩放样式：用 configuration.isPressed 驱动，无手势冲突。
+/// 「标签 · 条 · 数字」三列的小横条图。Explore 里的 **By type** 和
+/// **By tenant** 两张卡共用。
+///
+/// 为什么标签列必须是**整张卡一个宽度**
+/// --------------------------------
+/// 这两张卡原先各写一遍，标签列是写死的 44 / 54pt。改动态字号那一轮我把它们
+/// 换成了 `minWidth`——想的是"字大了让它自己撑开"，结果撑开的是**每一行各自**
+/// 的标签：
+///
+///     Student Only          条从 x=1769 起，长 490
+///     Working               条从 x=1740 起，长 267
+///     Student And Employed  条从 x=1872 起，长 29
+///
+/// 三个左端各在一处，而且更糟的是——每行剩给条的轨道宽度不一样，于是**条的
+/// 长度不在同一个尺度上**。按 194 算，100 那根该是 0.515 倍（画成了 0.545），
+/// 15 那根该是 0.077 倍（画成了 0.059）。一张条形图的条不共用一条基线、不共用
+/// 一个尺度，它就不是条形图了。
+///
+/// 所以宽度要按**这张卡里最宽的那个标签**来定，一次定好、三行共用。量法见
+/// `measuringStack`。
+///
+/// 上限
+/// ----
+/// 标签列最多吃掉卡片宽度的 45%。长标签截断了还看得懂（点开卡片有完整图表），
+/// 条被挤成一根线就彻底没用了——两害相权。
+private struct MiniBarRows: View {
+
+    let rows: [ChartEntry]
+    /// 标签的显示形式。tenant 卡要先缩写并处理撞名，type 卡直接用原文。
+    var label: (ChartEntry) -> String = { $0.label }
+    let barHeight: CGFloat
+
+    /// 默认值是原来那两张卡写死的宽度，只在第一帧量出来之前用一下。
+    @State private var labelColumn: CGFloat = 54
+    @State private var countColumn: CGFloat = 26
+    @State private var totalWidth: CGFloat = 0
+
+    private static let labelMaxFraction: CGFloat = 0.45
+
+    var body: some View {
+        let maxCount = max(rows.map(\.count).max() ?? 1, 1)
+        let cap = totalWidth > 0 ? totalWidth * Self.labelMaxFraction : labelColumn
+        let column = min(labelColumn, cap)
+
+        VStack(spacing: 5) {
+            ForEach(rows) { entry in
+                HStack(spacing: 6) {
+                    Text(label(entry))
+                        .font(.system(.caption2))
+                        .lineLimit(1)
+                        .frame(width: column, alignment: .leading)
+                    GeometryReader { proxy in
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(.blue.opacity(0.6))
+                            .frame(width: proxy.size.width
+                                   * CGFloat(entry.count) / CGFloat(maxCount))
+                    }
+                    .frame(height: barHeight)
+                    Text("\(entry.count)")
+                        .font(.system(.caption2, weight: .bold))
+                        .frame(width: countColumn, alignment: .trailing)
+                }
+            }
+        }
+        .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { totalWidth = $0 }
+        .background(alignment: .topLeading) { measuringStack }
+    }
+
+    /// 量「最宽的那个标签 / 数字，自然宽度是多少」。
+    ///
+    /// 藏起来但**仍然参与布局**，所以量得到；`fixedSize` 保证量到的是文字的
+    /// 自然宽度。不能直接量上面那几行可见的文字——它们的宽度正是这里要算出来
+    /// 的那个值，量它等于自己量自己。
+    private var measuringStack: some View {
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(rows) { Text(label($0)).font(.system(.caption2)).fixedSize() }
+            }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { labelColumn = $0 }
+            VStack(alignment: .trailing, spacing: 0) {
+                ForEach(rows) {
+                    Text("\($0.count)").font(.system(.caption2, weight: .bold)).fixedSize()
+                }
+            }
+            .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { countColumn = $0 }
+        }
+        .hidden()
+        .accessibilityHidden(true)
+    }
+}
+
 struct ScaleButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label

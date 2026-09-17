@@ -125,6 +125,20 @@ final class NavigationCoordinator {
     #endif
     var listingsPath: [ListingRoute] = []
 
+    /// 宽窗口下 Map / Calendar 两个独立 tab **各自的**导航栈。
+    ///
+    /// 为什么不能共用 `listingsPath`
+    /// ---------------------------
+    /// 窄窗口下三个视图挤在 Browse 一个 tab 里，共用一个栈是对的。宽窗口下它们
+    /// 是三个并排的顶层 tab，各有各的 `NavigationStack`——从地图点进一套房，
+    /// 详情应该压在**地图那一栈**上，返回就回到地图。
+    ///
+    /// 这两条以前不存在，`mapTab` / `calendarTab` 的 `NavigationStack` 既没有
+    /// path 也没有 `navigationDestination`，根本推不动。所以那时的做法是跳到
+    /// Listings 去显示详情——人从日历点进去，返回落在列表里。那是绕过，不是设计。
+    var mapPath: [ListingRoute] = []
+    var calendarPath: [ListingRoute] = []
+
     /// deep link 里的 listing id 是否可信。
     ///
     /// - 非空
@@ -153,14 +167,30 @@ final class NavigationCoordinator {
     /// `selectedBrowseMode` 写成 `.list`——从日历点进一套房、按返回，人落在
     /// 列表里，日历没了。iPhone 走的是另一个分支所以一直正常。
     ///
-    /// 判据换成 ``usesCompactTabs``：窄窗口就往当前这个栈上推一层，宽窗口下
-    /// Listings 是独立 tab、详情本来就归它，才走 `openListing`。
+    /// 不管哪种形态，都是**往人当前站着的那一栈上推一层**，不换屏。
+    /// 窄窗口只有 Browse 一个栈；宽窗口下 Map / Calendar / Listings 各有各的。
     func showListing(id: String, titleHint: String? = nil) {
         guard Self.isValidListingID(id) else { return }
-        if usesCompactTabs {
-            listingsPath.append(.byId(id, titleHint: titleHint))
-        } else {
-            openListing(id: id, titleHint: titleHint)
+        let route = ListingRoute.byId(id, titleHint: titleHint)
+        switch currentStack {
+        case .map:      mapPath.append(route)
+        case .calendar: calendarPath.append(route)
+        case .listings: listingsPath.append(route)
+        }
+    }
+
+    /// 人此刻站在哪一条导航栈上。
+    ///
+    /// 窄窗口永远是 Browse 那一条（`listingsPath`）——List / Map / Calendar
+    /// 只是它的三个模式，共用一个 `NavigationStack`。宽窗口下才按 tab 分。
+    enum ListingStack { case listings, map, calendar }
+
+    var currentStack: ListingStack {
+        guard !usesCompactTabs else { return .listings }
+        switch selectedTab {
+        case .map:      return .map
+        case .calendar: return .calendar
+        default:        return .listings
         }
     }
 
@@ -191,7 +221,12 @@ final class NavigationCoordinator {
         // 还盖在上面，点「在地图上查看」看起来毫无反应。
         //
         // 而且在 path 非空时换根视图，SwiftUI 的行为是未定义的。
+        //
+        // **两条栈都要清**：窄窗口下地图在 Browse 那一栈的根上（`listingsPath`），
+        // 宽窗口下它在自己那一栈的根上（`mapPath`）。只清一条的话，另一种形态下
+        // 详情页仍然盖在地图上面。
         listingsPath = []
+        mapPath = []
         selectedTab = .map
         selectedBrowseMode = .map
     }
@@ -207,12 +242,17 @@ final class NavigationCoordinator {
     /// 会看到上个用户最后停留的 tab + listings 详情页（残留 listingsPath
     /// 里的 ListingRoute），既诡异又可能泄露上一会话的房源 id。
     ///
+    /// ⚠️ **新加导航栈时这里要跟着加一条**。`mapPath` / `calendarPath` 和
+    /// `listingsPath` 一样会残留房源 id。
+    ///
     /// 由 ``FlatRadarApp`` 监听 ``AuthStore.isAuthenticated`` 切到 false
     /// 时统一调用，覆盖手动 logout、401 自动 logout、deleteAccount 三种路径。
     func reset() {
         selectedTab = .dashboard
         selectedBrowseMode = .list
         listingsPath = []
+        mapPath = []
+        calendarPath = []
         pendingMapFocusID = nil
     }
 }

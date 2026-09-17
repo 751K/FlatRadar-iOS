@@ -137,16 +137,58 @@ final class DesignSystemTests: XCTestCase {
         XCTAssertEqual(coord.listingsPath.count, 1)
     }
 
-    /// 宽窗口：Listings 是独立 tab，详情本来就归它那条栈。
-    func test_宽窗口从日历点进详情走_Listings_那条栈() {
+    /// 宽窗口：Map / Calendar 各是独立 tab，详情压在**它自己那一栈**上，
+    /// 返回就回到人来时的那一屏。
+    func test_宽窗口从日历点进详情留在日历那一栈() {
         let coord = NavigationCoordinator()
         coord.usesCompactTabs = false
         coord.selectedTab = .calendar
 
         coord.showListing(id: "abc123")
 
-        XCTAssertEqual(coord.selectedTab, .listings)
-        XCTAssertEqual(coord.listingsPath.count, 1)
+        XCTAssertEqual(coord.selectedTab, .calendar, "不该被换到 Listings 去。")
+        XCTAssertEqual(coord.calendarPath.count, 1)
+        XCTAssertTrue(coord.listingsPath.isEmpty)
+    }
+
+    func test_宽窗口从地图点进详情留在地图那一栈() {
+        let coord = NavigationCoordinator()
+        coord.usesCompactTabs = false
+        coord.selectedTab = .map
+
+        coord.showListing(id: "abc123")
+
+        XCTAssertEqual(coord.selectedTab, .map)
+        XCTAssertEqual(coord.mapPath.count, 1)
+        XCTAssertTrue(coord.listingsPath.isEmpty)
+    }
+
+    /// 「在地图上查看」要把**两种形态**的栈都清掉，否则详情页还盖在地图上。
+    func test_openMap_两条栈都清() {
+        let coord = NavigationCoordinator()
+        coord.usesCompactTabs = false
+        coord.selectedTab = .map
+        coord.showListing(id: "abc123")
+        coord.listingsPath = [.byId("zzz", titleHint: nil)]
+
+        coord.openMap(focusing: "abc123")
+
+        XCTAssertTrue(coord.mapPath.isEmpty)
+        XCTAssertTrue(coord.listingsPath.isEmpty)
+    }
+
+    /// 登出要把新加的那两条栈也清掉——里面同样残留房源 id。
+    func test_reset_清掉每一条导航栈() {
+        let coord = NavigationCoordinator()
+        coord.listingsPath = [.byId("a", titleHint: nil)]
+        coord.mapPath = [.byId("b", titleHint: nil)]
+        coord.calendarPath = [.byId("c", titleHint: nil)]
+
+        coord.reset()
+
+        XCTAssertTrue(coord.listingsPath.isEmpty)
+        XCTAssertTrue(coord.mapPath.isEmpty)
+        XCTAssertTrue(coord.calendarPath.isEmpty)
     }
 
     /// id 校验不能因为换了入口就丢掉。

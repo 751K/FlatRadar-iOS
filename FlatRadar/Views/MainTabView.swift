@@ -233,15 +233,34 @@ struct MainTabView: View {
         }
     }
 
+    // 这两个 tab 各自绑自己的 path，并且各自挂一份
+    // `navigationDestination(for: ListingRoute.self)`。
+    //
+    // 以前它们是裸的 `NavigationStack { MapView() }`——没有 path 也没有
+    // destination，推不了详情。所以那时从地图/日历点一套房是**跳到 Listings
+    // 那个 tab** 去显示的，返回就落在列表里，而不是人来时的那一屏。
+    // 见 ``NavigationCoordinator/mapPath``。
     private var mapTab: some View {
-        NavigationStack {
+        NavigationStack(path: Binding(
+            get: { coord.mapPath },
+            set: { coord.mapPath = $0 }
+        )) {
             MapView()
+                .navigationDestination(for: ListingRoute.self) { route in
+                    ListingDetailView(route: route)
+                }
         }
     }
 
     private var calendarTab: some View {
-        NavigationStack {
+        NavigationStack(path: Binding(
+            get: { coord.calendarPath },
+            set: { coord.calendarPath = $0 }
+        )) {
             CalendarView()
+                .navigationDestination(for: ListingRoute.self) { route in
+                    ListingDetailView(route: route)
+                }
         }
     }
 
