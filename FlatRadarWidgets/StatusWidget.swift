@@ -165,13 +165,24 @@ struct StatusLayout: View {
 
     private var large: some View {
         VStack(alignment: .leading, spacing: 0) {
+            // 顶上那一行。
+            //
+            // **手机上不写 `FlatRadar`**：那一格就贴在自家图标旁边，长按还会显示
+            // app 名字，写一遍是重复。桌面上留着——通知中心那一栏里挤着一排来自
+            // 不同 app 的格子，一个字号 12.5 的字比图标好认。
+            //
+            // 时间那一段两端都留，它是不能省的：底下所有数字都是「截至那一刻」的，
+            // 没有它就没法判断新旧（见 `WidgetSnapshot.footnote(at:)`）。
             HStack(spacing: 8) {
-                Text("FlatRadar")
-                    .font(.system(size: 12.5, weight: .bold))
-                    .tracking(-0.2)
-                    .foregroundStyle(palette.ink)
-                Spacer(minLength: 4)
+                if skin == .mac {
+                    Text("FlatRadar")
+                        .font(.system(size: 12.5, weight: .bold))
+                        .tracking(-0.2)
+                        .foregroundStyle(palette.ink)
+                    Spacer(minLength: 4)
+                }
                 LiveFooter(entry: entry, showsCount: false)
+                if skin == .phone { Spacer(minLength: 4) }
             }
 
             HStack(alignment: .lastTextBaseline, spacing: 9) {
