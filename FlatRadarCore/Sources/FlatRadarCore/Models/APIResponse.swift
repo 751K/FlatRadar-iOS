@@ -179,9 +179,36 @@ public enum ServerTime {
 
     /// "2m ago" / "1h ago" / "3d ago" style relative time from ISO 8601.
     public nonisolated static func relativeTime(_ iso: String) -> String {
+        relativeTime(iso, now: Date())
+    }
+
+    /// 同上，但「现在」是传进来的。
+    ///
+    /// 小组件需要它。WidgetKit **提前**渲染视图，到了时间轴上那个点才把它贴上屏：
+    /// 视图体里写 `Date()` 拿到的是**渲染**那一刻，不是读者**看见**那一刻。一条
+    /// 半小时后才上屏的 "scanned 4m ago" 仍然写着 4m，而它已经是 34m 了。所以那边
+    /// 每个时间轴条目自带「打算什么时候显示」，文字按那个时刻算。
+    ///
+    /// 顺带这是 `relativeTime` 第一次可测：原来那版把 `Date()` 焊死在函数体里，
+    /// 除了 `0s ago` 之外没有一档能断言——四个分档里有三档从来没被测过。
+    public nonisolated static func relativeTime(_ iso: String, now: Date) -> String {
         guard !iso.isEmpty, iso != "--" else { return "--" }
         guard let date = parse(iso) else { return iso }
-        let secs = max(0, Int(Date().timeIntervalSince(date)))
+        return ago(seconds: now.timeIntervalSince(date))
+    }
+
+    /// 已经是 `Date` 的时间点走这条，不必先格式化成字符串再解析回来。
+    ///
+    /// 和上面**共用同一套分档**，所以「后端什么时候扫的」和「这份数据什么时候
+    /// 取的」两句话的措辞不会漂成两套。
+    public nonisolated static func relativeTime(since date: Date, now: Date) -> String {
+        ago(seconds: now.timeIntervalSince(date))
+    }
+
+    /// 分档本身。`max(0,)` 挡的是时钟回拨和服务端时间略微超前——那时候差值是负的，
+    /// 不挡就会显示 `-3s ago`。
+    private nonisolated static func ago(seconds: TimeInterval) -> String {
+        let secs = max(0, Int(seconds))
         switch secs {
         case 0..<60: return "\(secs)s ago"
         case 60..<3600: return "\(secs / 60)m ago"

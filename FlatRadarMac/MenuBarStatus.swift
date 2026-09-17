@@ -65,7 +65,7 @@ struct MenuBarStatusView: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(feed.matchCount.map(String.init) ?? "—")
+                Text(StatusWording.countText(feed.matchCount))
                     // 44pt 展示数字，和统计带、日历、Alerts 那三处同一档
                     // （见 ``Theme`` 顶部的字阶注释，写死磅值的三个例外之一）。
                     .font(.system(size: 44, weight: .semibold, design: .monospaced))
@@ -79,17 +79,19 @@ struct MenuBarStatusView: View {
         }
     }
 
-    /// 和统计带上那一格用同一套措辞：套了个人筛选叫 `Matching filters`，
-    /// 没套就是 `Showing`。两处说法不一致的话，用户会以为是两个数。
+    // 这三句话（标题、大数字、时间）和桌面小组件用的是**同一份**，见
+    // ``StatusWording``。原先这里各写一遍字面量，而上面那句注释说「没套就是
+    // `Showing`」、它正下方的代码返回的却是 `Listings`——注释和代码在同一个
+    // 屏幕上就已经漂了，正是把文案收成一份要防的那种事。
     private var countLabel: String {
-        feed.matchIsFiltered ? "Matching filters" : "Listings"
+        StatusWording.countLabel(isFiltered: feed.matchIsFiltered)
     }
 
-    /// `scanned 4m ago`。拿不到就说拿不到，**不写 "scanned unknown"**——
-    /// 那会被读成"扫过了，但不知道什么时候"，而实际是"没拿到这条信息"。
     private var scannedLabel: String {
-        guard let ago = feed.summary.scannedAgoText else { return "Last scan time unavailable" }
-        return "scanned \(ago)"
+        guard let ago = feed.summary.scannedAgoText else {
+            return StatusWording.scanTimeUnavailable
+        }
+        return StatusWording.scanned(ago)
     }
 
     // MARK: - 中间
@@ -145,7 +147,7 @@ struct MenuBarStatusView: View {
     private func refresh() async {
         guard !refreshing else { return }
         refreshing = true
-        await feed.refreshShared()
+        await feed.refreshShared(auth: auth)
         refreshing = false
     }
 }

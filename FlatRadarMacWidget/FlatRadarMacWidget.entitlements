@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+
+	<!-- 和宿主 app 共用的容器，小组件的数据唯一的来源。
+	     macOS 上组名**必须**带 team 前缀（`$(TeamIdentifierPrefix)` 展开成
+	     `HGXZB3UC25.`）；写成 iOS 那样的裸 `group.` 时容器 URL 直接是 nil，
+	     而且不报错，小组件只会永远显示空。理由和常量见 `WidgetBridge`。 -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>$(TeamIdentifierPrefix)group.com.j.kong.FlatRadar</string>
+	</array>
+
+	<!--
+	    这里**没有**的三条，每一条都是有意不给的：
+
+	    - `network.client`：这一格不发任何请求，数字全部由宿主 app 算好写进
+	      共享容器。见 `WidgetSnapshot` 顶部——口径一致是这么来的。
+	    - `keychain-access-groups`：不联网就不需要 bearer token。token 多一个
+	      进程碰得到，就多一处要一起对的地方。
+	    - `files.user-selected.read-write`：小组件不存盘。
+	-->
+</dict>
+</plist>

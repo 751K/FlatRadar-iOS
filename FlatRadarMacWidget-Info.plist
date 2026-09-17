@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	    扩展点的声明。这一条**只能**写在 Info.plist 里：它是字典套字典，
+	    `INFOPLIST_KEY_*` 那套 build setting 表达不了嵌套（整个 Xcode 27 的
+	    build setting 表里也搜不到 NSExtensionPointIdentifier）。工程根那份
+	    Info.plist 留着 CFBundleURLTypes 是同一个理由。
+
+	    其余的键仍然由 GENERATE_INFOPLIST_FILE = YES 生成并与这里合并，
+	    所以这份文件只有这一条。
+
+	    为什么在工程根，不在 FlatRadarMacWidget/ 里（注：XML 注释里不能出现连续
+	    两个减号，所以这份文件的小标题没有下划线那条横线）：
+
+	    那个目录是 `PBXFileSystemSynchronizedRootGroup`，扔进去的文件**自动**
+	    成为 target 的资源。Info.plist 放进去时 Xcode 会直接警告：
+
+	        warning: The Copy Bundle Resources build phase contains this
+	        target's Info.plist file '.../FlatRadarMacWidget/Info.plist'.
+
+	    也就是说它会被当成一份普通资源，再拷一份进 .appex。这和 `d7971f5`
+	    把两份 test plan 挪出 FlatRadar/ 是同一件事（见
+	    `tests/test_testplan_location.py`），只是那次的代价大得多——
+	    plan 里有明文凭据。Xcode 提供了 `membershipExceptions` 可以把单个文件
+	    排除掉，这里不用：放在同步目录外面的文件**不可能**被拷进去，
+	    而例外清单要有人记得维护。
+
+	    工程根那份 Info.plist（两个 app target 共用）在这儿是同一个道理。
+	-->
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.widgetkit-extension</string>
+	</dict>
+</dict>
+</plist>

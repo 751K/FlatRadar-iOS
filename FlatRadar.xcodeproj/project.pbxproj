@@ -12,6 +12,8 @@
 		FCC02E5A2FD10C0DE0000026 /* FlatRadarCore in Frameworks */ = {isa = PBXBuildFile; productRef = FCC02E5A2FD10C0DE0000025 /* FlatRadarCore */; };
 		FCC02E5A2FD10C0DE000003A /* FlatRadarCore in Frameworks */ = {isa = PBXBuildFile; productRef = FCC02E5A2FD10C0DE0000039 /* FlatRadarCore */; };
 		FCC02E5A2FD10C0DE0000041 /* AppIcon.icon in Resources */ = {isa = PBXBuildFile; fileRef = FCC02E5A2FD10C0DE0000040 /* AppIcon.icon */; };
+		FCC02E5A2FD10C0DE000006A /* FlatRadarCore in Frameworks */ = {isa = PBXBuildFile; productRef = FCC02E5A2FD10C0DE0000069 /* FlatRadarCore */; };
+		FCC02E5A2FD10C0DE000006C /* FlatRadarMacWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FCC02E5A2FD10C0DE0000061 /* FlatRadarMacWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -43,6 +45,13 @@
 			remoteGlobalIDString = FCC02E5A2FD10C0DE0000010;
 			remoteInfo = FlatRadarMac;
 		};
+		FCC02E5A2FD10C0DE000006D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = FC1F385B2FB72DA000FC7A33 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = FCC02E5A2FD10C0DE0000060;
+			remoteInfo = FlatRadarMacWidget;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
@@ -54,6 +63,7 @@
 		FCC02E5A2FD10C0DE0000031 /* FlatRadarMacTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FlatRadarMacTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FCC02E5A2FD10C0DE0000040 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIcon.icon; path = FlatRadar/AppIcon.icon; sourceTree = "<group>"; };
 		FCC02E5A2FD10C0DE0000051 /* FlatRadarMacUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FlatRadarMacUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		FCC02E5A2FD10C0DE0000061 /* FlatRadarMacWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = FlatRadarMacWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -85,6 +95,11 @@
 		FCC02E5A2FD10C0DE0000052 /* FlatRadarMacUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = FlatRadarMacUITests;
+			sourceTree = "<group>";
+		};
+		FCC02E5A2FD10C0DE0000062 /* FlatRadarMacWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = FlatRadarMacWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -136,6 +151,14 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		FCC02E5A2FD10C0DE0000064 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FCC02E5A2FD10C0DE000006A /* FlatRadarCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -148,6 +171,7 @@
 				FCC02E5A2FD10C0DE0000012 /* FlatRadarMac */,
 				FCC02E5A2FD10C0DE0000032 /* FlatRadarMacTests */,
 				FCC02E5A2FD10C0DE0000052 /* FlatRadarMacUITests */,
+				FCC02E5A2FD10C0DE0000062 /* FlatRadarMacWidget */,
 				FC5588742FBDB6A300855C9D /* FlatRadarUITests */,
 				FCB189392FCCC22E006E5796 /* FlatRadarTests */,
 				FC1F38642FB72DA000FC7A33 /* Products */,
@@ -161,6 +185,7 @@
 				FCC02E5A2FD10C0DE0000011 /* FlatRadarMac.app */,
 				FCC02E5A2FD10C0DE0000031 /* FlatRadarMacTests.xctest */,
 				FCC02E5A2FD10C0DE0000051 /* FlatRadarMacUITests.xctest */,
+				FCC02E5A2FD10C0DE0000061 /* FlatRadarMacWidget.appex */,
 				FC5588732FBDB6A300855C9D /* FlatRadarUITests.xctest */,
 				FCB189382FCCC22E006E5796 /* FlatRadarTests.xctest */,
 			);
@@ -247,10 +272,12 @@
 				FCC02E5A2FD10C0DE0000013 /* Sources */,
 				FCC02E5A2FD10C0DE0000014 /* Frameworks */,
 				FCC02E5A2FD10C0DE0000015 /* Resources */,
+				FCC02E5A2FD10C0DE000006B /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				FCC02E5A2FD10C0DE000006E /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				FCC02E5A2FD10C0DE0000012 /* FlatRadarMac */,
@@ -310,6 +337,29 @@
 			productReference = FCC02E5A2FD10C0DE0000051 /* FlatRadarMacUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		FCC02E5A2FD10C0DE0000060 /* FlatRadarMacWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = FCC02E5A2FD10C0DE0000066 /* Build configuration list for PBXNativeTarget "FlatRadarMacWidget" */;
+			buildPhases = (
+				FCC02E5A2FD10C0DE0000063 /* Sources */,
+				FCC02E5A2FD10C0DE0000064 /* Frameworks */,
+				FCC02E5A2FD10C0DE0000065 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				FCC02E5A2FD10C0DE0000062 /* FlatRadarMacWidget */,
+			);
+			name = FlatRadarMacWidget;
+			packageProductDependencies = (
+				FCC02E5A2FD10C0DE0000069 /* FlatRadarCore */,
+			);
+			productName = FlatRadarMacWidget;
+			productReference = FCC02E5A2FD10C0DE0000061 /* FlatRadarMacWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -328,6 +378,9 @@
 						TestTargetID = FC1F38622FB72DA000FC7A33;
 					};
 					FCC02E5A2FD10C0DE0000010 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					FCC02E5A2FD10C0DE0000060 = {
 						CreatedOnToolsVersion = 27.0;
 					};
 				};
@@ -355,6 +408,7 @@
 			targets = (
 				FC1F38622FB72DA000FC7A33 /* FlatRadar */,
 				FCC02E5A2FD10C0DE0000010 /* FlatRadarMac */,
+				FCC02E5A2FD10C0DE0000060 /* FlatRadarMacWidget */,
 				FCC02E5A2FD10C0DE0000030 /* FlatRadarMacTests */,
 				FC5588722FBDB6A300855C9D /* FlatRadarUITests */,
 				FCC02E5A2FD10C0DE0000050 /* FlatRadarMacUITests */,
@@ -407,6 +461,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		FCC02E5A2FD10C0DE0000065 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
@@ -452,7 +513,28 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		FCC02E5A2FD10C0DE0000063 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		FCC02E5A2FD10C0DE000006B /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				FCC02E5A2FD10C0DE000006C /* FlatRadarMacWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
 		CCB5ABCC2B325B8F89AE238A /* PBXTargetDependency */ = {
@@ -474,6 +556,11 @@
 			isa = PBXTargetDependency;
 			target = FCC02E5A2FD10C0DE0000010 /* FlatRadarMac */;
 			targetProxy = FCC02E5A2FD10C0DE000005A /* PBXContainerItemProxy */;
+		};
+		FCC02E5A2FD10C0DE000006E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = FCC02E5A2FD10C0DE0000060 /* FlatRadarMacWidget */;
+			targetProxy = FCC02E5A2FD10C0DE000006D /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -895,6 +982,68 @@
 			};
 			name = Release;
 		};
+		FCC02E5A2FD10C0DE0000067 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = FlatRadarMacWidget/FlatRadarMacWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 199;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "FlatRadarMacWidget-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = FlatRadar;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.j.kong.FlatRadar.MacWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		FCC02E5A2FD10C0DE0000068 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = FlatRadarMacWidget/FlatRadarMacWidget.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 199;
+				ENABLE_HARDENED_RUNTIME = YES;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "FlatRadarMacWidget-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = FlatRadar;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@executable_path/../../../../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 26.0;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.j.kong.FlatRadar.MacWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = macosx;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -961,6 +1110,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
+		FCC02E5A2FD10C0DE0000066 /* Build configuration list for PBXNativeTarget "FlatRadarMacWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				FCC02E5A2FD10C0DE0000067 /* Debug */,
+				FCC02E5A2FD10C0DE0000068 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -984,6 +1142,10 @@
 			productName = FlatRadarCore;
 		};
 		FCC02E5A2FD10C0DE0000039 /* FlatRadarCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = FlatRadarCore;
+		};
+		FCC02E5A2FD10C0DE0000069 /* FlatRadarCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = FlatRadarCore;
 		};

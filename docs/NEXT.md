@@ -9,7 +9,7 @@
 |---|---|
 | Core 迁成本地 SwiftPM 包（macOS 版的前置条件，见 [MACOS.md](MACOS.md) Phase 0） | 完成 |
 | macOS 客户端：见 [MACOS.md](MACOS.md)。Phase 1 起没有截止日期，也不阻塞本版发布 | Phase 1 进行中 |
-| 主屏 / 锁屏小组件：上次扫描时间 + 我的匹配数。不做房源列表 | 未开始 |
+| 主屏 / 锁屏小组件：上次扫描时间 + 我的匹配数。不做房源列表 | Mac 端完成，iOS 未开始 |
 | AI 筛选：自然语言 → `ListingFilter`。入口只在 `SystemLanguageModel` 可用时出现 | 未开始 |
 | App 图标：浅色和 tinted 两张重导，去掉烤进 PNG 的白圆角，tinted 改灰度 | 未开始 |
 | iPad `NavigationSplitView`：横屏点房源不再把列表整个顶掉 | 未开始 |

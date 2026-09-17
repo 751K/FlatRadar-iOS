@@ -25,6 +25,19 @@
 	<key>com.apple.security.files.user-selected.read-write</key>
 	<true/>
 
+	<!-- App Group。桌面小组件（FlatRadarMacWidget）和这个 app 之间唯一的通道：
+	     app 把「匹配数 + 上次扫描时间」整份写进这个容器，小组件只读。
+	     小组件因此不需要联网、不需要 token、也不需要知道服务器地址——
+	     理由和那份数据的形状见 FlatRadarCore 的 `WidgetSnapshot` / `WidgetBridge`。
+
+	     macOS 上组名**必须**带 team 前缀（`$(TeamIdentifierPrefix)` 展开成
+	     `HGXZB3UC25.`）。写成 iOS 那样的裸 `group.` 时 `containerURL(...)` 返回
+	     nil 而且不报错，症状只是小组件永远空着。 -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>$(TeamIdentifierPrefix)group.com.j.kong.FlatRadar</string>
+	</array>
+
 	<!-- Keychain Sharing。
 	     不是为了"共享"，是为了拿到 application-identifier：macOS 的
 	     data protection 钥匙串（见 KeychainManager.dataProtection）要求签名带它，

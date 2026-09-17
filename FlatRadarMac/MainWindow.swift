@@ -110,7 +110,7 @@ struct MainWindow: View {
             // （统计、通知、匹配数）。`loadOnce()` 幂等，第二个窗口出现时不会
             // 重复发请求。
             async let listings: Void = model.load()
-            async let shared: Void = feed.loadOnce()
+            async let shared: Void = feed.loadOnce(auth: auth)
             _ = await (listings, shared)
         }
         // 内容窗口的开合要报给 ``AppFeed``：它据此决定 SSE 该不该活着。
@@ -122,6 +122,14 @@ struct MainWindow: View {
         // 挂在 `MainWindow` 上而不是 `RootView` 上：登录屏不算内容窗口。
         .onAppear { feed.windowAppeared(auth: auth) }
         .onDisappear { feed.windowDisappeared(auth: auth) }
+        // 未读数会**自己**变：SSE 推一条新提醒过来，没有任何刷新调用发生。
+        // 桌面上那一格显示着这个数，所以在这里补一次写。
+        //
+        // 只有开着窗口时才有这条路。菜单栏常驻、一个窗口都没有的形态下，
+        // 那一格要等下一次刷新（打开菜单栏面板，或 ⌘R）——这是有意的：
+        // 为了一个次要的数字去装一条常驻的写路径，不值得。它也不会因此说谎，
+        // 快照旧了那行小字自己会改口，见 `WidgetSnapshot.footnote(at:)`。
+        .onChange(of: feed.alerts.unreadCount) { feed.publishWidgetSnapshot(auth: auth) }
         .focusedSceneValue(\.browseModel, model)
         // 点了推送通知 → 切到 Alerts 屏，新来的那条就在最上面。
         //
@@ -198,7 +206,7 @@ struct MainWindow: View {
             Button {
                 Task {
                     async let a: Void = model.reload()
-                    async let b: Void = feed.refreshShared()
+                    async let b: Void = feed.refreshShared(auth: auth)
                     _ = await (a, b)
                 }
             } label: {

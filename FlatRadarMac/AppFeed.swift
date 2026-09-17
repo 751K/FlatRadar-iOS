@@ -146,11 +146,12 @@ final class AppFeed {
     // MARK: - 取数
 
     /// 启动时拉一次共享数据。幂等：第二个窗口出现时再调不会重复发请求。
-    func loadOnce() async {
+    func loadOnce(auth: AuthStore) async {
         async let stats: Void = summary.load()
         async let feed: Void = alerts.fetch()
         async let count: Void = refreshMatchCount()
         _ = await (stats, feed, count)
+        publishWidgetSnapshot(auth: auth)
     }
 
     func refreshMatchCount() async {
@@ -159,19 +160,47 @@ final class AppFeed {
     }
 
     /// 菜单栏的刷新，以及窗口里 ⌘R 的连带刷新。
-    func refreshShared() async {
+    func refreshShared(auth: AuthStore) async {
         async let stats: Void = summary.load()
         async let count: Void = refreshMatchCount()
         _ = await (stats, count)
+        publishWidgetSnapshot(auth: auth)
     }
 
     /// 登出时把共享数据清干净。
     ///
     /// 风险 6：「任何窗口登出……都统一断流、**清空所有窗口的账户数据**」。
     /// 通知是账户数据，统计不是（`/stats/public/*` 不需要 bearer），所以只清前者。
+    ///
+    /// 桌面上那一格也是账户数据，而且**比窗口更显眼**——窗口里清干净了，
+    /// 上一个账号的匹配数还挂在桌面上，那条判据就没做完。
     func signedOut() {
         alerts.disconnectStream()
         alerts.clear()
         counter.clear()
+        WidgetBridge.clear()
+    }
+
+    // MARK: - 桌面小组件
+
+    /// 把手上这份共享数据整个落给小组件。
+    ///
+    /// 为什么是**这一层**在写：小组件要的三样（匹配数、口径、上次扫描时间）
+    /// 正好就是 `AppFeed` 存在的理由——「没有任何窗口时也得有」。换成在某个
+    /// 视图里写，关掉窗口那条路就断了，而菜单栏常驻恰恰是没有窗口的那种形态。
+    ///
+    /// `auth` 显式传进来，不读 ``lastAuth``：那个字段只在 ``syncStream(auth:)``
+    /// 跑过之后才有值，而 `loadOnce` 和它谁先跑没有保证。为一个能直接传的参数
+    /// 去赌时序不值得。
+    func publishWidgetSnapshot(auth: AuthStore) {
+        WidgetBridge.publish(WidgetSnapshot(
+            matchCount: matchCount,
+            isFiltered: matchIsFiltered,
+            lastScrape: summary.summary?.lastScrape ?? "",
+            newToday: summary.newToday,
+            unreadAlerts: alerts.unreadCount,
+            // 访客没有个人通知流，那个数永远是 0。和菜单栏那一行同一个判断。
+            showsUnread: !auth.isGuest,
+            capturedAt: Date()))
     }
 }
