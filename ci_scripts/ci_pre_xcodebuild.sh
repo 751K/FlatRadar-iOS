@@ -181,10 +181,38 @@ fi
 #   - `defaults` 把屏保空闲时间设成 0（不需要 sudo，当前用户域就够）；
 #   - `caffeinate` 兜底，`-d` 阻止显示器睡眠、`-i` 阻止系统空闲睡眠、`-u` 声明
 #     用户活跃。`nohup` + `&` 让它活过这个脚本；一小时后自己退出，不会赖在机器上。
-echo "› [awake] 关屏保 + caffeinate"
+echo "› [awake] 防锁屏"
+
+# 先报告上一次留下的还活着没有——这一条是诊断，不是摆设。
+#
+# build 375 的日志里 caffeinate 明明起来了（pid=3795），屏幕照样锁了，录像里是
+# "local / Enter Password"。所以问题不是"没启动"，而是**启动了没活下来**：
+# `nohup` 挡得住 SIGHUP，挡不住 Xcode Cloud 在脚本退出时清理整个进程组。
+#
+# 下一轮看这一行就知道改法成没成。
+if pgrep -x caffeinate > /dev/null 2>&1; then
+  echo "› [awake]   已有 caffeinate 在跑：$(pgrep -x caffeinate | tr '\n' ' ')"
+else
+  echo "› [awake]   没有存活的 caffeinate"
+fi
+
 defaults -currentHost write com.apple.screensaver idleTime -int 0 2>/dev/null || true
-nohup caffeinate -dimsu -t 3600 >/dev/null 2>&1 &
-echo "› [awake]   caffeinate pid=$!"
+defaults write com.apple.screensaver askForPassword -int 0 2>/dev/null || true
+
+# 交给 launchd 托管，而不是当这个脚本的子进程。
+#
+# `launchctl submit` 把它注册成一个 launchd 作业，进程组被清理时不受影响。
+# 先 remove 一次，免得第二趟因为同名作业已存在而失败。
+launchctl remove flatradar.keepawake 2>/dev/null || true
+if launchctl submit -l flatradar.keepawake -- /usr/bin/caffeinate -dimsu -t 5400 2>/dev/null; then
+  echo "› [awake]   launchctl submit 成功"
+else
+  echo "› [awake]   launchctl submit 失败，退回 nohup（可能活不过脚本）"
+  nohup caffeinate -dimsu -t 5400 >/dev/null 2>&1 &
+fi
+
+# 再补一刀：直接把屏保引擎停掉。锁屏是 loginwindow 干的，killall 让它重置计时。
+killall ScreenSaverEngine 2>/dev/null || true
 
 REPO_PATH="${CI_PRIMARY_REPOSITORY_PATH:-}"
 XCB_ACTION="${CI_XCODEBUILD_ACTION:-}"
