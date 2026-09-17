@@ -7,4 +7,10 @@ import SwiftUI
 /// ⌘R 刷新的是你正在看的那一个，不是随便某一个。
 extension FocusedValues {
     @Entry var browseModel: BrowseModel?
+
+    /// 右栏（`.inspector`）的显示开关，同样按窗口走。
+    ///
+    /// 为什么要传 `Binding` 而不是 `Bool`：菜单项要能**改**它，不只是读。
+    /// 两个窗口各自收放右栏，⌥⌘I 作用在你正在看的那一个上。
+    @Entry var inspectorVisible: Binding<Bool>?
 }

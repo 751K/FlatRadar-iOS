@@ -58,6 +58,10 @@ struct MainWindow: View {
                         .inspectorColumnWidth(min: 270, ideal: 300, max: 420)
                 }
                 .toolbar { toolbar }
+                // 右栏开关的菜单入口要能改它，所以把 binding 本身送上去。
+                // 工具栏那个按钮原先是**唯一**的入口（连快捷键都没有），
+                // 而工具栏是可以被藏起来的——藏了就再也打不开右栏。
+                .focusedSceneValue(\.inspectorVisible, $showInspector)
                 // 顶栏**不画自己那层材质**。
                 //
                 // 原先的样子：AppKit 默认会在整条 titlebar 上盖一层材质，而它盖在

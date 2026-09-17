@@ -14,6 +14,10 @@ struct FlatRadarMacApp: App {
 
     @State private var auth = AuthStore()
     @State private var push = PushStore()
+    /// 打赏和评分都是**应用级**的：一台 Mac 一份商品列表、一份"问过没有"的
+    /// 计数，不随窗口数变。和 `push` 同一个理由。
+    @State private var coffee = CoffeeStore()
+    @State private var review = ReviewPromptStore()
     /// 通知筛选的保存状态。只有设置页用，但放应用级：设置窗口和主窗口是两个场景，
     /// 放进任何一个窗口里，另一个都拿不到。
     @State private var filterStore = MeFilterStore()
@@ -30,6 +34,31 @@ struct FlatRadarMacApp: App {
 
     /// 房源详情窗口场景的 id。
     static let listingWindowID = "listing"
+
+    /// Help 菜单那条的动作：给 support 写信，主题里带上版本。
+    ///
+    /// 带版本是为了收信的人少问一轮——Mac 版和 iOS 版号是分开的（`1.0.0` vs
+    /// `2.2.0`），只说"FlatRadar"看不出是哪一端。
+    ///
+    /// 拆成 URL 和"打开"两步，是为了前一半能测。要防的是把地址放进
+    /// `c.host`——那样拼出来是 `mailto://support@…`，多两个斜杠就不是合法的
+    /// mailto 了，而代码读起来和正确写法一模一样。见 `SupportMailTests`。
+    static var supportMailURL: URL? {
+        var c = URLComponents()
+        c.scheme = "mailto"
+        c.path = supportAddress
+        c.queryItems = [URLQueryItem(name: "subject",
+                                     value: "FlatRadar for Mac \(AppVersion.short) — Support")]
+        return c.url
+    }
+
+    /// 和条款里写的是同一个地址（`LegalText`），不另造一个。
+    static let supportAddress = "support@flatradar.app"
+
+    static func openSupportMail() {
+        guard let url = supportMailURL else { return }
+        NSWorkspace.shared.open(url)
+    }
 
     /// APNs token 只能从 app delegate 拿到。实例由 SwiftUI 构造并持有，
     /// 通过 ``RootView`` 交给 ``PushStore/setup(bridge:)``。
@@ -120,6 +149,8 @@ struct FlatRadarMacApp: App {
                 .environment(auth)
                 .environment(push)
                 .environment(feed)
+                .environment(coffee)
+                .environment(review)
         }
         // 设计稿画的就是 1440×900。三栏加起来的下限：侧栏 196 + 表格九列约 620
         // + inspector 300 ≈ 1120，再窄就得先收 inspector。
@@ -145,15 +176,42 @@ struct FlatRadarMacApp: App {
                 SignOutCommand(auth: auth, push: push, feed: feed)
                 Divider()
             }
-            // 侧栏那四屏的键盘入口。`CommandGroup(before: .toolbar)` 会落进
-            // 系统自动生成的 View 菜单里，和 `Show Toolbar` / `Enter Full Screen`
-            // 排在一起——Mac 上「切换视图」这类命令的惯例位置就是 View。
-            CommandGroup(before: .toolbar) {
+            // 侧栏那五屏的键盘入口，落在系统自动生成的 View 菜单里——
+            // Mac 上「切换视图」这类命令的惯例位置就是那儿。
+            //
+            // ⚠️ 锚点必须是 `.sidebar`，**不能是 `.toolbar`**。原先写的是
+            // `CommandGroup(before: .toolbar)`，结果这五条**整组不出现**：
+            // 这个 app 没有 AppKit 意义上的 toolbar（`.toolbar` 修饰符给的是
+            // SwiftUI 工具栏，不生成 `Show Toolbar` / `Customize Toolbar…`），
+            // 那个命令组根本不存在，`before:` 一个不存在的锚点等于没挂上。
+            //
+            // **而且是静默的**：菜单里没有这五条，⌘1–⌘5 也一起失效（快捷键是
+            // 菜单项注册的），编译不报错、运行不报错。实测过：改锚点前
+            // View 菜单只有 `Show Tab Bar / Show All Tabs / Reload Listings /
+            // Filter… / Enter Full Screen`，按 ⌘5 没反应；改成 `.sidebar` 之后
+            // `Listings / Map / Calendar / Alerts / Stats` 五条就位。
+            //
+            // 同一个文件里 `BrowseCommands` 用的是 `after: .toolbar`，它反而
+            // 落得下来——`after:` 一个空组仍然有落点，`before:` 没有。
+            CommandGroup(after: .sidebar) {
+                PaneCommands()
+                Divider()
                 SectionCommands()
                 Divider()
             }
             CommandMenu("Listing") {
                 ListingCommands()
+            }
+            // Help 菜单默认只有一条 `FlatRadarMac Help`，而这个 app **没有
+            // help book**（Info.plist 里没有 `CFBundleHelpBookName`，产物的
+            // Resources 里也没有 `.help` 包）——点下去只会弹一句「帮助不可用」。
+            //
+            // 一条点了没反应的菜单项比没有这个菜单更糟：它承诺了不存在的东西。
+            // 换成真的能用的那个入口。`flatradar.app/legal` 实测 404，站上也没有
+            // 文档页，所以能给的只有邮件；地址和条款里写的是同一个
+            // （`LegalText`），不另造一个。
+            CommandGroup(replacing: .help) {
+                Button("Contact Support…") { Self.openSupportMail() }
             }
         }
 
@@ -178,6 +236,8 @@ struct FlatRadarMacApp: App {
                 .environment(auth)
                 .environment(push)
                 .environment(filterStore)
+                .environment(coffee)
+                .environment(review)
         }
 
         // 菜单栏常驻。**默认关**，由设置页那个开关打开（见 ``MenuBarResidency``）。
@@ -507,6 +567,46 @@ private struct SectionCommands: View {
                 .keyboardShortcut(KeyEquivalent(Character("\(index + 1)")))
                 .disabled(model == nil)
         }
+    }
+}
+
+/// 侧栏和右栏的开关。
+///
+/// 为什么必须有这两条
+/// ------------------
+/// 它们此前**只存在于工具栏**：侧栏是 `NavigationSplitView` 自带的那个按钮，
+/// 右栏是 `MainWindow` 自己补的。而工具栏在 Mac 上是可以隐藏的——藏了之后
+/// 这两栏就没有任何入口能再打开，右栏连快捷键都没有。
+///
+/// docs/MACOS.md 引的那条规矩说得更直接：**每个工具栏项都必须同时是一条菜单
+/// 命令**，因为工具栏可以被自定义、可以被隐藏。反过来不成立。
+private struct PaneCommands: View {
+    @FocusedValue(\.inspectorVisible) private var inspector
+
+    var body: some View {
+        // 侧栏走响应链，不自己存状态。
+        //
+        // `MainWindow` 那边**故意没有** `columnVisibility:` 绑定（理由写在那里：
+        // 绑了之后每次开合都重算整个 body，右栏的右对齐数值会跟着做位移动画，
+        // 逐帧量过 `€1766` 左跳 30pt）。所以这里不能读那个状态，只能把动作
+        // 发给系统自己的 `toggleSidebar(_:)`——和工具栏那个按钮走的是同一条路，
+        // 行为天然一致。
+        //
+        // 代价是标题只能是静态的 `Toggle Sidebar`，不是随状态变的
+        // Show / Hide。拿不到状态就别假装拿得到。
+        Button("Toggle Sidebar") {
+            NSApp.keyWindow?.firstResponder?.tryToPerform(
+                #selector(NSSplitViewController.toggleSidebar(_:)), with: nil)
+        }
+        .keyboardShortcut("s", modifiers: [.control, .command])
+
+        // 右栏这边有 binding，标题就跟着状态走。⌥⌘I 是 Finder 的「显示简介 /
+        // 检查器」那个键位，Mac 用户手上是熟的。
+        Button(inspector?.wrappedValue == false ? "Show Inspector" : "Hide Inspector") {
+            inspector?.wrappedValue.toggle()
+        }
+        .keyboardShortcut("i", modifiers: [.option, .command])
+        .disabled(inspector == nil)
     }
 }
 
