@@ -202,39 +202,41 @@ struct StatusLayout: View {
             bars(height: largeBars, spacing: 4, radius: 2).padding(.top, 12)
             axis.padding(.top, 4)
 
-            HStack(spacing: 6) {
-                StatChip(title: StatusWording.liveNow,
-                         value: snapshot?.totalListings, dimmed: !isFresh)
-                // 4a 把未读放在三格里；4b 把它做成了数字右边的胶囊，
-                // 所以手机那一端这儿不再重复一遍。
-                if skin == .mac, snapshot?.showsUnread ?? false {
-                    StatChip(title: StatusWording.unread,
-                             value: snapshot?.unreadAlerts, tinted: true, dimmed: !isFresh)
-                }
-                // 设计稿这一格是 `Watching 12`——没有那个数据，见类型注释。
+            // `Group` 包一层：`.padding` 挂不到裸的 if/else 上
+            // （"reference to member 'padding' cannot be resolved without a
+            // contextual type"）。
+            Group {
+            if skin == .phone {
+                // 手机那一档：**三格统计收成一行字**。
                 //
-                // 套了个人筛选时放匹配数；**没套的时候放状态变更**。因为没套筛选
-                // 时 `/listings` 的 total 就是全库 total，那一格会和左边的
-                // `Live now` 显示同一个数——渲染访客那一版时一眼看到：
-                // `Live now 831` / `Listings 831`，两格一模一样。
-                if snapshot?.isFiltered ?? false {
-                    StatChip(title: StatusWording.countLabel(isFiltered: true),
-                             value: snapshot?.matchCount, dimmed: !isFresh)
-                } else {
-                    StatChip(title: StatusWording.statusChanges,
-                             value: snapshot?.statusChanges, dimmed: !isFresh)
+                // 三个填充块在 364pt 宽里各占 110pt，里面装的是「一个标题 + 一个
+                // 数」——信息密度很低，而它吃掉的 40pt 高度正是下面那三条房源最
+                // 缺的。收成一行之后，那三条的行高从 33 长到 44、标题 11.5→13、
+                // 副标题 9.5→11，手机是拿在手里看的，地址和价钱才是要读的东西。
+                summaryLine
+            } else {
+                HStack(spacing: 6) {
+                    StatChip(title: StatusWording.liveNow,
+                             value: snapshot?.totalListings, dimmed: !isFresh)
+                    if snapshot?.showsUnread ?? false {
+                        StatChip(title: StatusWording.unread,
+                                 value: snapshot?.unreadAlerts, tinted: true, dimmed: !isFresh)
+                    }
+                    // 设计稿这一格是 `Watching 12`——没有那个数据，见类型注释。
+                    //
+                    // 套了个人筛选时放匹配数；**没套的时候放状态变更**。因为没套
+                    // 筛选时 `/listings` 的 total 就是全库 total，那一格会和左边的
+                    // `Live now` 显示同一个数——渲染访客那一版时一眼看到：
+                    // `Live now 831` / `Listings 831`，两格一模一样。
+                    if snapshot?.isFiltered ?? false {
+                        StatChip(title: StatusWording.countLabel(isFiltered: true),
+                                 value: snapshot?.matchCount, dimmed: !isFresh)
+                    } else {
+                        StatChip(title: StatusWording.statusChanges,
+                                 value: snapshot?.statusChanges, dimmed: !isFresh)
+                    }
                 }
-                if skin == .phone {
-                // 4b 那三格是 `Live now / Watching / Closing`，**后两个都没有数据**：
-                // 没有"关注列表"这个概念，抽签截止时刻在 openapi 里
-                // （`deadline` / `closes` / `draw_at`）各出现 0 次。
-                //
-                // 换成 `New this week`——`/stats/public/summary` 里本来就有的
-                // `new_7d`，不用多发请求，而且和左边那格是同一类问题
-                // （"现在有多少" / "这一周来了多少"）。
-                StatChip(title: StatusWording.newThisWeek,
-                         value: snapshot?.newThisWeek, dimmed: !isFresh)
-                }
+            }
             }
             .padding(.top, 12)
 
@@ -243,7 +245,8 @@ struct StatusLayout: View {
             // 而实际是还没有数据。
             if !(snapshot?.newest.isEmpty ?? true) {
                 SectionLabel(text: StatusWording.newest).padding(.top, 12).padding(.leading, 2)
-                newestRows(longSubtitle: true, limit: largeRows).padding(.top, 6)
+                newestRows(longSubtitle: true, limit: largeRows, roomy: skin == .phone)
+                    .padding(.top, 6)
             }
 
             Spacer(minLength: 8)
@@ -364,7 +367,7 @@ struct StatusLayout: View {
     /// 少的是**同一种**信息的第三条，不是少一类信息；而大号比中号多的是
     /// 柱子、统计和下一个可入住日——它给的仍然更多，只是不在这一段上。
     @ViewBuilder
-    private func newestRows(longSubtitle: Bool, limit: Int) -> some View {
+    private func newestRows(longSubtitle: Bool, limit: Int, roomy: Bool = false) -> some View {
         let rows = Array((snapshot?.newest ?? []).prefix(limit))
         if rows.isEmpty {
             // 一条都没有时不画空槽。设计稿那三行是有内容才成立的。
@@ -373,9 +376,42 @@ struct StatusLayout: View {
             VStack(spacing: 3) {
                 ForEach(Array(rows.enumerated()), id: \.element.id) { index, listing in
                     ListingRow(listing: listing, index: index, now: entry.date,
-                               longSubtitle: longSubtitle)
+                               longSubtitle: longSubtitle, roomy: roomy)
                 }
             }
+        }
+    }
+
+    /// 手机大号那一行汇总。
+    ///
+    /// 要的形状是「几段事实用 `·` 串成一行」。原话给的例子是
+    /// `831 live · 12 watching · 1 lottery closes in 2d`，后两段**都没有数据源**，
+    /// 这是同一个缺口第三次撞上来：
+    ///
+    /// | 想要的 | 为什么没有 |
+    /// |---|---|
+    /// | `12 watching` | 没有"关注列表"这个概念。Mac 那边 `BrowseModel.pinned` 是「钉两套并排比」，上限 2、窗口级；iOS 连这个都没有 |
+    /// | `1 lottery closes in 2d` | 抽签截止时刻在 openapi 里（`deadline` / `closes` / `draw_at`）**各出现 0 次**，listings 表只有 `available_from`，而且只到日 |
+    ///
+    /// 换成同样形状、真有数的三段：全库多少、我匹配多少、这一周来了多少。
+    /// 规矩还是 `CalendarPane` 顶上那条——宁可不画，也不拿假数据把控件填满。
+    ///
+    /// **拿不到的那一段整段不出现**，不写 `— live`：一行里出现一个破折号，
+    /// 读的人得先判断那是"没取到"还是"真的是零"。
+    @ViewBuilder
+    private var summaryLine: some View {
+        if let text = StatusWording.summaryLine([
+            snapshot?.totalListings.map(StatusWording.liveCount),
+            // 没套个人筛选时不说这一段：那时它和 `831 live` 是同一个数。
+            (snapshot?.isFiltered ?? false)
+                ? snapshot?.matchCount.map(StatusWording.matchingCount) : nil,
+            snapshot?.newThisWeek.map(StatusWording.weekCount),
+        ]) {
+            Text(text)
+                .font(.system(size: 12))
+                .foregroundStyle(isFresh ? palette.ink : palette.muted)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
         }
     }
 

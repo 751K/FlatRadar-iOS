@@ -88,6 +88,28 @@ public nonisolated enum StatusWording {
     /// `831 live`。小号底下那行的前半句。
     public static func liveCount(_ n: Int) -> String { "\(n) live" }
 
+    /// `84 matching`。汇总行里的一段。
+    ///
+    /// 只在套了个人筛选时才说得通——没套筛选时 `/listings` 的 total 就是全库
+    /// total，那就成了把 `831 live` 换个说法再讲一遍。
+    public static func matchingCount(_ n: Int) -> String { "\(n) matching" }
+
+    /// `118 this week`。汇总行里的一段，`new_7d`。
+    public static func weekCount(_ n: Int) -> String { "\(n) this week" }
+
+    /// `47 changed`。汇总行里的一段，`changes_24h`。
+    public static func changedCount(_ n: Int) -> String { "\(n) changed" }
+
+    /// 汇总行本身：拿 `·` 把有值的几段串起来。
+    ///
+    /// **拿不到的那几段整段不出现**，不写 `— live`。一行里出现一个破折号，
+    /// 读的人得先判断那是"没取到"还是"真的是零"；整段不出现就没有这个问题。
+    /// 全都没有时返回 nil，由调用方省掉这一行。
+    public static func summaryLine(_ parts: [String?]) -> String? {
+        let kept = parts.compactMap { $0 }
+        return kept.isEmpty ? nil : kept.joined(separator: " · ")
+    }
+
     /// `avg 19`。中号左栏那一行窄，`vs. 14-day average of 19` 放不下。
     public static func avgShort(_ average: Int) -> String { "avg \(average)" }
 

@@ -135,39 +135,46 @@ struct ListingRow: View {
     let now: Date
     /// 中号只放城市，大号放 `城市 · 平台`。
     var longSubtitle = false
+    /// 手机的大号把这几行放大了一档——那一档腾出了三格统计的高度，
+    /// 而手机是拿在手里看的，11.5pt 的地址偏小。见 ``StatusLayout/large``。
+    var roomy = false
     @Environment(\.palette) private var palette
+
+    private var rowHeight: CGFloat { roomy ? 44 : 33 }
+    private var titleSize: CGFloat { roomy ? 13 : 11.5 }
+    private var subtitleSize: CGFloat { roomy ? 11 : 9.5 }
 
     var body: some View {
         HStack(spacing: 8) {
             Diamond(color: index == 0 ? palette.accent : palette.pinIdle, size: 5)
             VStack(alignment: .leading, spacing: 1) {
                 Text(listing.name)
-                    .font(.system(size: 11.5, weight: .semibold))
+                    .font(.system(size: titleSize, weight: .semibold))
                     .tracking(-0.1)
                     .foregroundStyle(palette.ink)
                     .lineLimit(1)
                 Text(longSubtitle ? listing.longSubtitle : listing.shortSubtitle)
-                    .font(.system(size: 9.5))
+                    .font(.system(size: subtitleSize))
                     .foregroundStyle(palette.muted)
                     .lineLimit(1)
             }
             Spacer(minLength: 6)
             VStack(alignment: .trailing, spacing: 1) {
                 Text(listing.price)
-                    .font(.system(size: 11.5, weight: .semibold, design: .monospaced))
+                    .font(.system(size: titleSize, weight: .semibold, design: .monospaced))
                     .monospacedDigit()
                     .foregroundStyle(palette.ink)
                     .lineLimit(1)
                 Text(listing.ageText(at: now))
-                    .font(.system(size: 9.5))
+                    .font(.system(size: subtitleSize))
                     .foregroundStyle(palette.muted)
                     .lineLimit(1)
             }
         }
         .padding(.horizontal, 8)
         // 设计稿是 33/34。一度收到 30 是为了在 345pt 的大号里排下三条，
-        // 现在大号只放两条，回到稿子的数。
-        .frame(height: 33)
+        // 现在 Mac 大号只放两条，回到稿子的数；手机大号走 `roomy`。
+        .frame(height: rowHeight)
         .background(index % 2 == 0 ? palette.rowA : palette.rowB,
                     in: RoundedRectangle(cornerRadius: 7, style: .continuous))
     }
