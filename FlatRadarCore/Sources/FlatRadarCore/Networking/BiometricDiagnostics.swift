@@ -9,12 +9,25 @@ import LocalAuthentication
 /// 的条目，读它要过 Touch ID——**没法在无人值守的测试里读**。于是最容易出问题的
 /// 那一半反而测不到：增和查落没落在同一个钥匙串上。
 ///
-/// 这里绕开认证：查的时候只要 `kSecReturnAttributes`，不要 `kSecReturnData`。
-/// 系统只在**取数据**时才要求认证，所以"存进去的条目能不能被找到"这件事可以
-/// 无提示地验证——而那正是 macOS 上漏 `kSecUseDataProtectionKeychain` 时
-/// 出错的地方（增和查落在两个不同的钥匙串上，表现是"存了但读不到"）。
+/// 原打算这样绕开认证：查的时候只要 `kSecReturnAttributes`，不要 `kSecReturnData`，
+/// 赌"系统只在取数据时才要求认证"。**这个赌法是错的，2026-09-17 实测推翻了。**
 ///
-/// 剩下那一半（Touch ID 弹出来、按下去、拿到明文）只能手动验，自动化验不了。
+/// macOS 上 ``BiometricAuthService/accessControlFlags`` 是 `.userPresence`，
+/// 而它明确允许密码和 Apple Watch 兜底——于是 `SecItemCopyMatching` 命中一条这样
+/// 的条目时，**只要属性也照样弹**「输入密码 / 用手表解锁」。证据有两条：
+///
+/// 1. 跑 Mac 测试套时那个框会弹出来，没人按就是两条失败（`saved` / `found` 全 false）。
+/// 2. 把那个测试删掉之后，整套测试从 2.3–7.9 秒掉到 **0.097 秒**。原来的注释把那
+///    几秒记成"查一条 `.userPresence` 条目实测要 3.5–5 秒"的钥匙串延迟，
+///    实际上那是弹窗在等人。
+///
+/// 所以**它现在没有自动化调用方**：`BiometricMacTests` 已删（一个会弹框要人按的
+/// 测试不能留在套件里，它把整套变成不能无人值守）。留着这个探针是因为那条路仍然
+/// 值得在一台有 Touch ID 的机器上手验一次——照 `--keychain-selftest` 的样子接一个
+/// 命令行入口就能跑，那个入口还没做。
+///
+/// 要验的是什么：增和查有没有落在同一个钥匙串上（漏
+/// `kSecUseDataProtectionKeychain` 时会落在两个上，表现是"存了但读不到"）。
 public enum BiometricDiagnostics {
 
     /// 探针用的账号，和真凭据分开，跑完就删。

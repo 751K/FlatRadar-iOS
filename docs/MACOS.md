@@ -656,6 +656,15 @@ Core 对 `PushDelegate.shared` 的反向引用换成了 `PushPlatformBridge` 协
 明文副本。剩下的 -34018 卡在设备注册。`BiometricAuthService` 也在审计范围内；开启 Touch ID 前覆盖无生物识别
 硬件、用户取消、认证失败、凭据失效和删除凭据。普通密码登录不能依赖生物识别可用性。
 
+**2026-09-17：`BiometricMacTests` 删了。** 它基于一个错的假设——「查的时候只要属性
+不要数据就不会弹认证」。macOS 上那条条目的 flag 是 `.userPresence`，明确允许密码和
+Apple Watch 兜底，所以只要属性照样弹「输入密码 / 用手表解锁」。后果是整套 Mac 测试
+**不能无人值守**：没人按框就是两条失败，而且因为它偶尔被最近一次手表解锁自动满足，
+症状表现为"偶发失败、复现不了"（实测复现不了 9 轮）。删掉之后套件从 2.3–7.9 秒
+掉到 0.097 秒——那几秒一直是弹窗在等人。`BiometricDiagnostics` 留着，但现在没有自动
+调用方；要验那条路得在有 Touch ID 的机器上手跑，照 `--keychain-selftest` 接一个命令行
+入口即可（还没做）。
+
 ### 3. 推送要后端配合
 
 先按 Phase 1 确定的 Bundle ID 与签名配置启用 Mac 推送能力。Apple 支持同一 App Store 记录下
