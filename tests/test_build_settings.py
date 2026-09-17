@@ -46,10 +46,11 @@ _DEFAULT_ISOLATION = re.compile(r"SWIFT_DEFAULT_ACTOR_ISOLATION = ([^;]+);")
 #
 # 2026-09-09 从 6 改到 8 再到 10：先加 macOS target，再加它的测试目标
 # （docs/MACOS.md Phase 1）。
+# 2026-09-17 到 12：加 FlatRadarMacUITests（Mac 端 App Store 截图自动化）。
 # 注意 Core 的语言模式**不在这里**——它迁进本地 SwiftPM 包之后由
 # `FlatRadarCore/Package.swift` 的 `.swiftLanguageMode(.v6)` 管，
 # 见下面 test_core_package_pins_language_mode_and_isolation。
-EXPECTED_CONFIG_COUNT = 10
+EXPECTED_CONFIG_COUNT = 12
 
 
 def _source() -> str:

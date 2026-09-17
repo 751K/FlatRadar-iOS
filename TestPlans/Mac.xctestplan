@@ -1,0 +1,27 @@
+{
+  "configurations" : [
+    {
+      "id" : "7F41A2D8-16CE-5B03-9D62-4A8E0C93F715",
+      "name" : "Configuration 1",
+      "options" : {}
+    }
+  ],
+  "defaultOptions" : {},
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:FlatRadar.xcodeproj",
+        "identifier" : "FCC02E5A2FD10C0DE0000030",
+        "name" : "FlatRadarMacTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:FlatRadar.xcodeproj",
+        "identifier" : "FCC02E5A2FD10C0DE0000050",
+        "name" : "FlatRadarMacUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

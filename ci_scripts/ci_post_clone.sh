@@ -1,5 +1,5 @@
 #!/bin/sh
-# Xcode Cloud：把凭据注入截图用的 test plan。
+# Xcode Cloud：把凭据注入截图用的 test plan（iOS 一份、Mac 一份）。
 #
 # 为什么要绕这一道
 # ----------------
@@ -35,32 +35,38 @@ set -eu
 # 脚本的工作目录是 ci_scripts 自己，所以路径走 CI_PRIMARY_REPOSITORY_PATH，
 # 它指向克隆下来的仓库根。
 #
-# plan 必须放在仓库根的 TestPlans/，不能放回 FlatRadar/
-# ----------------------------------------------------
-# `FlatRadar/` 是 PBXFileSystemSynchronizedRootGroup——扔进去的文件会自动成为
-# app target 的资源，跟着 .app 一起打包上架。而本脚本往截图 plan 里写的是
-# **明文凭据**。两件事撞在一起，就是凭据随 App Store 包发出去。
+# 两端各一份截图 plan，而且**两份都必须在仓库根的 TestPlans/**
+# ---------------------------------------------------------
+# `FlatRadar/`、`FlatRadarMac/` 这些是 PBXFileSystemSynchronizedRootGroup——
+# 扔进去的文件会自动成为 app target 的资源，跟着 .app 一起打包上架。而本脚本
+# 往这些 plan 里写的是**明文凭据**。两件事撞在一起，就是凭据随 App Store 包
+# 发出去。
 #
-# 这不是假想：2.2.0 的 App Store 导出包里实测有
-# `Payload/FlatRadar.app/Screenshots.xctestplan`。当时侥幸没出事，只因为
-# 「iOS Build」这条 workflow 没配 UI_TEST_* 环境变量，脚本原样跳过了注入——
-# 也就是说，离泄漏只差在网页上勾一个变量。
+# 这不是假想：iOS 那两份原先就在 `FlatRadar/` 里，2.2.0 的 App Store 导出包
+# 里实测有 `Payload/FlatRadar.app/Screenshots.xctestplan`。当时侥幸没出事，
+# 只因为「iOS Build」这条 workflow 没配 UI_TEST_* 环境变量，脚本原样跳过了
+# 注入——也就是说，离泄漏只差在网页上勾一个变量。它们已经挪走了。
 #
 # TestPlans/ 不在任何同步目录里，也没有任何 pbxproj 条目，只被 scheme 用
 # `container:TestPlans/...` 引用，所以不会进 .app。
-# tests/test_testplan_location.py 把这条钉住。
-PLAN="$CI_PRIMARY_REPOSITORY_PATH/TestPlans/Screenshots.xctestplan"
+# tests/test_testplan_location.py 扫仓库里每一个 plan 把这条钉住——包括以后
+# 新加的，不需要有人记得回来补一行。
+PLANS="$CI_PRIMARY_REPOSITORY_PATH/TestPlans/Screenshots.xctestplan
+$CI_PRIMARY_REPOSITORY_PATH/TestPlans/MacScreenshots.xctestplan"
 
-if [ ! -f "$PLAN" ]; then
-    echo "找不到 test plan：$PLAN"
-    exit 1
-fi
+for PLAN in $PLANS; do
+    if [ ! -f "$PLAN" ]; then
+        echo "找不到 test plan：$PLAN"
+        exit 1
+    fi
+done
 
 if [ -z "${UI_TEST_USERNAME:-}" ] || [ -z "${UI_TEST_PASSWORD:-}" ]; then
     echo "未设置 UI_TEST_USERNAME / UI_TEST_PASSWORD，跳过注入（将以访客模式截图）"
     exit 0
 fi
 
+for PLAN in $PLANS; do
 python3 - "$PLAN" <<'PY'
 import json, os, sys
 
@@ -85,3 +91,4 @@ with open(path, "w", encoding="utf-8") as f:
 # 不打印值。只确认写进去了。
 print("已注入 %d 个环境变量到 %s" % (len(entries), os.path.basename(path)))
 PY
+done

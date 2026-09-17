@@ -105,10 +105,11 @@ enum ScreenshotMode {
         d.set(true, forKey: "terms_accepted")
         d.set(true, forKey: "onboarding_completed")
         d.set(true, forKey: "crash_prompt_suppressed")
-        // 菜单栏常驻默认是开的。开着会在截图里的菜单栏右侧多一个图标——
-        // 窗口截图看不见它，但它会让 App 在最后一个窗口关掉后不退出，
-        // 于是下一条用例的 `app.launch()` 拿到的是**上一条留下来的窗口**，
-        // 连同上一条设的 section。关掉它，每条用例都是干净的冷启动。
+        // 菜单栏常驻默认本来就是关的（`MenuBarResidency.defaultOn`），这里再写
+        // 一次是为了盖掉**上一次跑留下的偏好**——本地反复跑时 UserDefaults 是
+        // 同一份。开着的后果不是图上多个图标（窗口截图看不见菜单栏），而是
+        // App 在最后一个窗口关掉后不退出，下一条用例的 `app.launch()` 拿到的
+        // 是上一条留下来的窗口，连同上一条设的 section。
         d.set(false, forKey: MenuBarResidency.storageKey)
         // 外观固定跟随系统（也就是 Xcode Cloud 上的浅色），不让上一次跑剩下的
         // 偏好把某一张拍成深色。

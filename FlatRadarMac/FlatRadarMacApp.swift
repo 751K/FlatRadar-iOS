@@ -95,6 +95,10 @@ struct FlatRadarMacApp: App {
         // `restoreSession()` 也在 .task 里——两者的先后顺序没有保证。
         PlatformEnvironment.configure(.macOS)
 
+        // App Store 截图模式。见 ``ScreenshotMode``——必须在**任何视图挂载之前**
+        // 写这些默认值，条款 sheet 和 onboarding 在第一帧就会判断它们。
+        ScreenshotMode.applyProcessDefaults()
+
         if CommandLine.arguments.contains(Self.sessionReportFlag) {
             Self.reportSessionAndExit()
         }
@@ -432,7 +436,13 @@ private struct RootView: View {
         // 这个 flag 原先是**这个视图的** `@State`，而 `RootView` 是每个窗口一份——
         // ⌘N 开第二个窗口就会再恢复一次会话。移进 ``AppFeed`` 之后无论开几个窗口
         // 都只跑一遍，见 ``AppFeed/restoreSessionOnce(_:)``。
-        .task { await feed.restoreOnce { await auth.restoreSession() } }
+        .task {
+            await feed.restoreOnce { await auth.restoreSession() }
+            // 截图模式的身份要**等恢复跑完再设**。顺序不能反：CI 上钥匙串是空的、
+            // 恢复必然失败，反过来在本地这台机器是登录着的，先设身份会被随后
+            // 恢复回来的会话盖掉，于是 `UI_TEST_SHOW_LOGIN` 那条拍出来是主界面。
+            ScreenshotMode.applyIdentity(auth)
+        }
         // 登录态一变就重新判断一次 SSE 该不该活着（登录进来要连，登出要断）。
         .task(id: auth.isAuthenticated) {
             feed.syncStream(auth: auth)
@@ -524,6 +534,14 @@ private struct WindowSizer: NSViewRepresentable {
         // 下一个 runloop 再动：`updateNSView` 跑的时候视图不一定已经进了窗口。
         DispatchQueue.main.async {
             guard let window = view.window else { return }
+            // 截图模式下尺寸由 ``ScreenshotMode`` 说了算，这里整段让路。
+            //
+            // 不让路的后果很具体：登录屏那条用例会被缩到 900×620，而 900×620
+            // 既不是 16:10 也不在 ASC 收的四种里，拍出来传不上去。
+            guard !ScreenshotMode.isOn else {
+                ScreenshotMode.pin(window)
+                return
+            }
             let current = window.contentLayoutRect.size
             if compact {
                 guard current != Self.signInSize else { return }
