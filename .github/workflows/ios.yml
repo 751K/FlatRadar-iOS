@@ -77,8 +77,24 @@ jobs:
       # 否则等于把覆盖也一起删了。
       #
       # 放在模拟器那步之前：它十几秒就跑完，坏了要秒级知道。
+      #
+      # `--build-system swiftbuild` **不能省**。两套构建系统对资源包的处理不一样：
+      #
+      #   swiftbuild → FlatRadarCoreTests.xctest/Contents/Resources/ 里有
+      #                FlatRadarCore_FlatRadarCore.bundle，`Bundle.module` 找得到
+      #   native     → 资源包只留在 .build/debug/，没进 .xctest，`Bundle.module`
+      #                空手而归
+      #
+      # 于是 `PackageResourcesTests`（语义色 / 五种语言的 .lproj 能不能从
+      # `Bundle.module` 查到）在 native 下 3 条全红、14 个断言全挂。本地 Swift 6.4
+      # 的默认已经是 swiftbuild，runner 上 Xcode 26.6 的默认还是 native——同一条
+      # 命令两个结果，第一次接这步就是这么红的。
+      #
+      # 加上这个参数后本地用 `--build-system native` 能**原样复现**那 14 个失败，
+      # 也就是说这不是"runner 环境玄学"，是默认值不同。资源本身没问题：
+      # 两端 app 的产物里都有那个 bundle。
       - name: Run package tests (FlatRadarCore)
-        run: swift test --package-path FlatRadarCore
+        run: swift test --package-path FlatRadarCore --build-system swiftbuild
 
       # 不写死 "iPhone 16" 之类的名字：GitHub 换镜像时那个型号可能就没了，
       # 而报错是 "no destinations"，看上去像项目坏了。挑选逻辑在

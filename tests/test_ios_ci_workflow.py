@@ -159,6 +159,20 @@ class TestWorkflow:
         assert "swift test" in t, "包里的用例在 CI 上一条都没跑"
         assert "FlatRadarCore" in t
 
+    def test_package_tests_pin_the_build_system(self):
+        """`swift test` 的两套构建系统对资源包处理不同：`native` 不把
+        `FlatRadarCore_FlatRadarCore.bundle` 放进 `.xctest`，于是
+        `PackageResourcesTests` 里"语义色和 .lproj 能不能从 `Bundle.module`
+        查到"3 条全红。
+
+        本地 Swift 6.4 默认已是 `swiftbuild`，runner 上 Xcode 26.6 默认还是
+        `native`——不写死的话，同一条命令在两台机器上两个结果，而且是 CI 红、
+        本地绿这个最难查的方向。
+        """
+        t = self._text()
+        assert "--build-system swiftbuild" in t, (
+            "没锁构建系统：runner 的默认是 native，资源包进不了 .xctest")
+
     def test_does_not_hardcode_a_device_name(self):
         """写死型号的话，runner 镜像一换就报 no destinations。"""
         t = self._text()
