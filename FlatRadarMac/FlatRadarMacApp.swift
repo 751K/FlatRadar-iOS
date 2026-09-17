@@ -532,16 +532,25 @@ private struct WindowSizer: NSViewRepresentable {
 
     func updateNSView(_ view: NSView, context: Context) {
         // 下一个 runloop 再动：`updateNSView` 跑的时候视图不一定已经进了窗口。
+        // 截图模式下尺寸由 ``ScreenshotMode`` 说了算，这里整段让路。
+        //
+        // **要重试，不能只 async 一次。** 只试一次时 `view.window` 常常还是 nil
+        // （尤其是窗口走系统恢复那条路创建的时候），`pin` 于是一次都没跑，恢复
+        // 回来的尺寸就这么留下了。实测连续启动五次：第一次 1440×900（重编译后
+        // 没有恢复状态），之后 868 → 836 → 804 → 772，每次矮一条标题栏。
+        //
+        // 反复复位还有第二个作用：`pin` 之后仍有东西会改尺寸，多按几次能把它按住。
+        if ScreenshotMode.isOn {
+            for delay in [0.0, 0.1, 0.3, 0.6, 1.0, 1.5, 2.5, 4.0] {
+                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                    guard let window = view.window else { return }
+                    ScreenshotMode.pin(window)
+                }
+            }
+            return
+        }
         DispatchQueue.main.async {
             guard let window = view.window else { return }
-            // 截图模式下尺寸由 ``ScreenshotMode`` 说了算，这里整段让路。
-            //
-            // 不让路的后果很具体：登录屏那条用例会被缩到 900×620，而 900×620
-            // 既不是 16:10 也不在 ASC 收的四种里，拍出来传不上去。
-            guard !ScreenshotMode.isOn else {
-                ScreenshotMode.pin(window)
-                return
-            }
             let current = window.contentLayoutRect.size
             if compact {
                 guard current != Self.signInSize else { return }

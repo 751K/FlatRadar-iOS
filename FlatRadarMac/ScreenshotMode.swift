@@ -199,7 +199,22 @@ enum ScreenshotMode {
             return
         }
 
+        // 把尺寸**锁死**，不只是设一次。
+        //
+        // 只 setFrame 是不够的：实测连续启动五次，窗口每次比上一次矮 32 点
+        // （正好一条标题栏）——868 → 836 → 804 → 772 → 740，说明有别的东西在
+        // `pin` 之后又改了它。翻过 UserDefaults 和 `NSQuitAlwaysKeepsWindows`
+        // 都不是，与其继续找是谁，不如让它改不动：
+        //
+        //   - `setFrameAutosaveName("")` 断掉 AppKit 自己的 frame 存取；
+        //   - `minSize == maxSize` 之后任何 resize 都会被夹回这个尺寸。
+        //
+        // 这比"设完就走"重要得多：尺寸错一点，拍出来就不是 ASC 收的那四种之一，
+        // 而失败信息只会说"不是合法值"，看不出是被谁改的。
+        window.setFrameAutosaveName("")
         window.styleMask.remove(.resizable)
+        window.minSize = size
+        window.maxSize = size
         let origin = NSPoint(x: container.midX - size.width / 2,
                              y: container.midY - size.height / 2)
         window.setFrame(NSRect(origin: origin, size: size), display: true)
