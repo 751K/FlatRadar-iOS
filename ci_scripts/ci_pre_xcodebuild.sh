@@ -159,6 +159,33 @@ fi
 # （脚本开头 `set -u`）。第一趟其实已经剥干净了，第二趟纯属白跑——那时 app 早就
 # 构建并签好名了，改源文件毫无作用。所以只认 build-for-testing 这一趟，
 # 而且每个 CI_ 变量都带 `:-` 默认值，不让 set -u 再有机会。
+# ─────────────────────────────────────────────────────────────────────────────
+# 别让构建机锁屏。
+#
+# build 371 六条用例全挂在 `Failed to activate application (current state:
+# Running Background)`。屏幕录像里是**登录锁屏**——"local / Enter Password"。
+# 锁了之后没有可用的 GUI 会话，任何 app 都激活不了，跟被测代码毫无关系。
+#
+# 这不是偶发：build 369 的日志里 Xcode 自己就报过
+#
+#     IDETestOperationsObserverDebug: Failed to suppress screen saver
+#     (SACSetScreenSaverCanRun returned 22)
+#
+# 也就是说 Xcode 内置的那套抑制机制在这台机器上是失效的，得我们自己来。
+#
+# 370 之所以没事，是因为它只跑了三分钟（那一轮 5/6 过，没有 60 秒超时）；
+# 371 跑了十四分钟就撞上了。也就是说**跑得越慢越容易锁**，而跑得慢往往正是因为
+# 有别的失败在超时——于是一个小问题会被锁屏放大成整轮全红，掩盖真正的原因。
+#
+# 两条一起上：
+#   - `defaults` 把屏保空闲时间设成 0（不需要 sudo，当前用户域就够）；
+#   - `caffeinate` 兜底，`-d` 阻止显示器睡眠、`-i` 阻止系统空闲睡眠、`-u` 声明
+#     用户活跃。`nohup` + `&` 让它活过这个脚本；一小时后自己退出，不会赖在机器上。
+echo "› [awake] 关屏保 + caffeinate"
+defaults -currentHost write com.apple.screensaver idleTime -int 0 2>/dev/null || true
+nohup caffeinate -dimsu -t 3600 >/dev/null 2>&1 &
+echo "› [awake]   caffeinate pid=$!"
+
 REPO_PATH="${CI_PRIMARY_REPOSITORY_PATH:-}"
 XCB_ACTION="${CI_XCODEBUILD_ACTION:-}"
 
