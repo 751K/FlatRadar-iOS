@@ -30,10 +30,10 @@ import FlatRadarCore
 /// | Push Notifications | **Notifications** tab |
 /// | Account（导出 / 改密码 / 登出 / 删号 / 访客转正） | **Account** tab |
 /// | Legal / Send Feedback / 版本 | **General** |
-/// | Face ID 登录 | 没做——Touch ID 在 Mac 上是新功能，不是移植 |
-/// | Buy me a coffee | 没做——内购商品要先在 ASC 上对 macOS 开放 |
+/// | Face ID 登录 | **Account** tab（``UnlockSettings``）。Mac 的门是 `.userPresence` 不是 `.biometryCurrentSet`，理由见那边 |
+/// | Buy me a coffee | **Support** tab。内购挂在 app 上不挂平台，ASC 上没有"对 macOS 开放"这个开关，实测真商品已经取得到 |
 /// | Admin 工具 | 没做——DESIGN.md §7.3：网页端已有全套 |
-/// | Rate FlatRadar | 没做——Mac 版还没上 Mac App Store，链接只能指到 iOS 的页面 |
+/// | Rate FlatRadar | **Support** tab。⚠️ 要等 Mac 版上架，链接此刻还解析不到 |
 struct SettingsView: View {
 
     @AppStorage(AppearancePreference.storageKey) private var appearance = AppearancePreference.system.rawValue
@@ -51,6 +51,9 @@ struct SettingsView: View {
             }
             Tab("Filters", systemImage: "line.3.horizontal.decrease.circle") {
                 FilterSettings()
+            }
+            Tab("Support", systemImage: "cup.and.saucer") {
+                SupportSettings()
             }
         }
         .frame(width: SettingsLayout.width)
@@ -142,7 +145,11 @@ private struct GeneralSettings: View {
                 Section {
                     Button("Send Feedback…") { showFeedback = true }
                 } header: {
-                    Text("Support")
+                    // 原来叫 "Support"，和新加的 **Support tab** 撞了：同一个设置
+                    // 窗口里两个东西叫同一个名字，而它们装的是不同的内容——
+                    // 想找反馈的人会去点那个 tab，看到的是打赏和评分。
+                    // 这一段只有一行 `Send Feedback…`，叫 Feedback 本来也更准。
+                    Text("Feedback")
                 } footer: {
                     Text("Suggestions and bug reports go straight to the developer.")
                 }
