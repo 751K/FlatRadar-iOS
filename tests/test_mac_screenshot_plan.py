@@ -267,8 +267,11 @@ def test_mac_launch_arguments_are_dash_prefixed():
         literals += re.findall(r'"([^"]*)"', chunk)
     assert literals, "没解析出任何启动参数字面量"
 
+    # `-KEY value` 是成对的，value 本身当然不带 `-`。把已知的值列出来排除掉，
+    # 剩下的才是"本该是 key 却没带 `-`"的。
+    VALUES = {"1", "YES", "NO"}
     bare = [t for t in literals
-            if not t.startswith("-") and not t.startswith("\\(") and t != "1"]
+            if not t.startswith("-") and not t.startswith("\\(") and t not in VALUES]
     assert not bare, (
         f"这些启动参数没带 `-` 前缀：{bare}。AppKit 会把它们当成要打开的文档，"
         "结果是 app 起来了却一个窗口都没有，而且六条用例的失败信息都只说"

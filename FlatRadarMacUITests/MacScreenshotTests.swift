@@ -99,7 +99,14 @@ final class MacScreenshotTests: XCTestCase {
         // 名字和 `UITestFlags.screenshotMode` 必须一致，由
         // tests/test_mac_screenshot_plan.py 的 test_screenshot_flag_name_matches_core 钉住
         // （UI 测试 target 不链 FlatRadarCore，为一个常量加依赖不值得）。
-        var args = ["-UI_TEST_SCREENSHOT_MODE", "1"]
+        // `-ApplePersistenceIgnoreState YES`：**每次启动都当作没有窗口恢复状态。**
+        //
+        // 不加的话，app 干净退出时保存的窗口状态会被下次启动读回来。这在截图套件
+        // 里是致命的：`XCUIApplication.terminate()` 是干净退出，而只要有一次保存
+        // 下来的状态是"零窗口"，之后每次启动 SwiftUI 都不再创建默认窗口——
+        // build 367/368/369 里 02–05 就是这么连着挂的，每条等满六十秒。
+        var args = ["-ApplePersistenceIgnoreState", "YES",
+                    "-UI_TEST_SCREENSHOT_MODE", "1"]
         for (k, v) in flags.sorted(by: { $0.key < $1.key }) { args += ["-\(k)", v] }
         // 凭据从环境变量取，**不写在代码里**——这个仓库是公开的。
         // 云端由 ci_scripts/ci_post_clone.sh 写进 test plan 的

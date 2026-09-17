@@ -150,7 +150,22 @@ enum ScreenshotMode {
     /// 居中放。`visibleFrame` 已扣掉菜单栏和 Dock，所以窗口不会被它们压住。
     static func pin(_ window: NSWindow) {
         guard isOn else { return }
-        window.isRestorable = false
+        // **不要**在这里设 `isRestorable = false`。
+        //
+        // 原先设了，理由是"别让系统恢复的尺寸盖掉我们钉的那个"。但它带来的后果
+        // 严重得多：窗口被标成不可恢复 → app 干净退出时保存下来的状态是**零窗口**
+        // → 下次启动 AppKit 按"零窗口"恢复，SwiftUI 的 `WindowGroup` 就不再创建
+        // 默认窗口了。
+        //
+        // build 367/368/369 的形态完全一致：00 和 01 过，02 往后每条都卡在
+        // `waitForWindow` 六十秒，`windows=0` 而进程活着。要攒够一次**干净退出**
+        // 才开始坏，所以恰好是前两条能过。
+        //
+        // 本地八次连跑之所以从没复现：那边用 `pkill`（SIGKILL）收尾，app 根本没
+        // 机会保存状态；而 `XCUIApplication.terminate()` 是干净退出，会保存。
+        //
+        // 尺寸不用靠它守——`WindowSizer` 那边有重试 + `minSize == maxSize` 的硬锁，
+        // 而且启动参数里加了 `-ApplePersistenceIgnoreState YES`，压根不会去恢复。
         let screen = window.screen ?? NSScreen.main
 
         // 容器 = 窗口真正能占的那块地方。
