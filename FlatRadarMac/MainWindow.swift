@@ -23,8 +23,6 @@ struct MainWindow: View {
     /// 地图的数据层。**窗口级**，和 `BrowseModel.listings` 同理——
     /// 两个窗口各筛各的，共享一个实例会互相覆盖。
     @State private var mapStore = MapStore()
-    /// 日历的数据层。**窗口级**，和 ``mapStore`` 同理。
-    @State private var calendarStore = CalendarStore()
     /// 统计屏的数据层。**窗口级**：天数是每个窗口自己选的，
     /// 一个窗口看 7 天、另一个看 90 天是合理的用法。
     @State private var statsStore = StatsModel()
@@ -151,8 +149,8 @@ struct MainWindow: View {
         // 让它和 listings、stats 抢启动那一下的带宽不划算。`fetch()` 自己有
         // `guard !isLoading` 去重，来回切屏不会重复发。
         .onChange(of: model.section) { _, section in
-            guard section == .calendar, calendarStore.listings.isEmpty else { return }
-            Task { await calendarStore.fetch() }
+            guard section == .calendar, feed.calendar.listings.isEmpty else { return }
+            Task { await feed.calendar.fetch() }
         }
         // 通知的取数和 SSE 都移到了 ``AppFeed``（上面那个 `loadOnce()`）。
         //
@@ -184,7 +182,7 @@ struct MainWindow: View {
         case .map:
             MapPane(model: model, store: mapStore, windowWidth: windowWidth)
         case .calendar:
-            CalendarPane(model: model, store: calendarStore)
+            CalendarPane(model: model, store: feed.calendar)
         case .alerts:
             AlertsPane(model: model, store: feed.alerts)
         case .stats:

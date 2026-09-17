@@ -1,11 +1,11 @@
 import Foundation
 
-/// 小组件那一格要显示的全部内容，一份值。
+/// 桌面小组件那几格要显示的全部内容，一份值。
 ///
 /// 为什么小组件**不自己去取数**
 /// --------------------------
 /// 扩展是另一个进程，它想自己发请求就得先拿到三样东西：bearer token、
-/// 用户那台服务器的地址、以及「这个数套没套个人筛选」的口径。三样都要往外挪：
+/// 用户那台服务器的地址、以及一整套「这个数怎么算」的口径。三样都要往外挪：
 ///
 /// - token 只能走共享钥匙串组。而这个仓库刚因为 token 落到 `UserDefaults` 里
 ///   吃过一次静默的亏（见 ``KeychainManager`` 顶部那段），多一个进程碰它就多一处
@@ -13,8 +13,8 @@ import Foundation
 /// - 服务器地址在 app 自己的 `UserDefaults` 里（`server_url`）。扩展读到的是**它
 ///   自己那份**，于是自建实例的用户，小组件会去问 flatradar.app——不报错，只是
 ///   显示别人家的数字。
-/// - 口径（`Matching filters` / `Listings`）是 app 那边一串判断的结果，抄一份到
-///   扩展里就是第二个会漂的地方。而 docs/MACOS.md 对这件事只有一句要求：
+/// - 口径是 app 那边一串判断的结果（「这个数套没套个人筛选」「哪些算能抢的」），
+///   抄一份到扩展里就是第二个会漂的地方。而 docs/MACOS.md 对这件事只有一句要求：
 ///   **「文案和口径要一致」**。
 ///
 /// 所以反过来：**app 算完，把结果整个放进共享容器，小组件只负责画。**
@@ -23,7 +23,33 @@ import Foundation
 ///
 /// 放在包里而不是 Mac 那一侧，是因为 docs/NEXT.md 里 iOS 的主屏 / 锁屏小组件是同一
 /// 件事的另一端；两端各写一份结构体和一份措辞，就正好是上面那句要求禁止的事。
+///
+/// 这一份里有什么
+/// -------------
+/// 全部对着 Mac 统计带（``StatsStrip``）来，那是这套界面里回答同一个问题的地方，
+/// 它的设计稿结论是：**打开第一眼要看的是「现在有什么新的」**，所以 `New today`
+/// 是 44pt 的锚点，总房数 / 状态变更 / 匹配数是右边的小字。小组件照搬这个层级——
+/// 小号只放锚点，大号才铺开那三个小数。
 public nonisolated struct WidgetSnapshot: Codable, Sendable, Equatable {
+
+    // MARK: 锚点：今天有什么新的
+
+    /// 今天的新增（`new_24h`）。小号那一格的主角。
+    public var newToday: Int?
+
+    /// 最近 14 天的每日新增，**旧 → 新**，最后一个是今天。
+    ///
+    /// 大号那一格的柱子，以及 `+63%` 那个比较的基准，都从它算
+    /// （``DailyNew``，和统计带共用同一份算法）。
+    public var dailyNew: [Int]
+
+    // MARK: 右边那三个小数（和统计带逐项对应）
+
+    /// 全库房源数。统计带上的 `Total listings / all platforms`。
+    public var totalListings: Int?
+
+    /// 24 小时内的状态变更。统计带上的 `Status changes / last 24h`。
+    public var statusChanges: Int?
 
     /// 当前匹配数。服务端算好的 `total`，`nil` 表示这一次没取到（不是 0）。
     public var matchCount: Int?
@@ -31,52 +57,101 @@ public nonisolated struct WidgetSnapshot: Codable, Sendable, Equatable {
     /// 这个数**套没套**用户的个人筛选。决定标题是 `Matching filters` 还是 `Listings`。
     public var isFiltered: Bool
 
-    /// 后端最近一次扫描的时间戳，**原样存后端给的串**。
-    ///
-    /// 不在这里先算成 "4m ago" 再存：那个相对时间一写进文件就开始过期，而小组件
-    /// 每次渲染都要按当时的时刻重算一遍。存原始时间戳，重算是 ``ServerTime`` 的事。
-    public var lastScrape: String
-
-    /// 今天的新增（`new_24h`）。中号那一格用，小号放不下。
-    public var newToday: Int?
+    // MARK: 提醒
 
     /// 未读提醒。
     public var unreadAlerts: Int
 
     /// 未读那一行要不要出现。
     ///
-    /// 访客没有个人通知流（docs/MACOS.md 风险 6），这个数永远是 0——摆一行
-    /// 常驻的 `Unread 0` 只会让人以为坏了。菜单栏那一格是同样的判断。
+    /// 访客没有个人通知流（docs/MACOS.md 风险 6），这个数永远是 0——摆一个
+    /// 常驻的 `0` 只会让人以为坏了。菜单栏那一格是同样的判断。
     public var showsUnread: Bool
+
+    // MARK: 日历
+
+    /// 从今天起连续若干天的起租情况。日历那一格的全部数据。
+    ///
+    /// 空数组 = 还没取到，日历那一格会说"打开 FlatRadar"。
+    public var moveIns: [MoveInDay]
+
+    // MARK: 时间
+
+    /// 后端最近一次扫描的时间戳，**原样存后端给的串**。
+    ///
+    /// 不在这里先算成 "4m ago" 再存：那个相对时间一写进文件就开始过期，而小组件
+    /// 每次渲染都要按当时的时刻重算一遍。存原始时间戳，重算是 ``ServerTime`` 的事。
+    public var lastScrape: String
 
     /// 这份快照是**什么时候写的**。下面 ``footnote(at:)`` 全靠它。
     public var capturedAt: Date
 
-    public init(matchCount: Int?,
-                isFiltered: Bool,
-                lastScrape: String,
-                newToday: Int?,
-                unreadAlerts: Int,
-                showsUnread: Bool,
+    public init(newToday: Int? = nil,
+                dailyNew: [Int] = [],
+                totalListings: Int? = nil,
+                statusChanges: Int? = nil,
+                matchCount: Int? = nil,
+                isFiltered: Bool = false,
+                unreadAlerts: Int = 0,
+                showsUnread: Bool = false,
+                moveIns: [MoveInDay] = [],
+                lastScrape: String = "",
                 capturedAt: Date) {
+        self.newToday = newToday
+        self.dailyNew = dailyNew
+        self.totalListings = totalListings
+        self.statusChanges = statusChanges
         self.matchCount = matchCount
         self.isFiltered = isFiltered
-        self.lastScrape = lastScrape
-        self.newToday = newToday
         self.unreadAlerts = unreadAlerts
         self.showsUnread = showsUnread
+        self.moveIns = moveIns
+        self.lastScrape = lastScrape
         self.capturedAt = capturedAt
+    }
+
+    /// 解码写得宽容：**缺字段一律退到默认值，不抛错**。
+    ///
+    /// 换版本时磁盘上躺着的是上一版写的 JSON。合成的 `Decodable` 少一个键就整份
+    /// 解不出来，于是升级之后那一格会空着，直到 app 下一次跑起来重写——而"下一次
+    /// 跑起来"可能是几天后。和 ``MonitorStatus`` 那份宽容解码同一个理由：
+    /// 少一个字段的显示，比整格空掉好。
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        newToday      = try? c.decodeIfPresent(Int.self, forKey: .newToday)
+        dailyNew      = (try? c.decodeIfPresent([Int].self, forKey: .dailyNew)) as? [Int] ?? []
+        totalListings = try? c.decodeIfPresent(Int.self, forKey: .totalListings)
+        statusChanges = try? c.decodeIfPresent(Int.self, forKey: .statusChanges)
+        matchCount    = try? c.decodeIfPresent(Int.self, forKey: .matchCount)
+        isFiltered    = (try? c.decodeIfPresent(Bool.self, forKey: .isFiltered)) as? Bool ?? false
+        unreadAlerts  = (try? c.decodeIfPresent(Int.self, forKey: .unreadAlerts)) as? Int ?? 0
+        showsUnread   = (try? c.decodeIfPresent(Bool.self, forKey: .showsUnread)) as? Bool ?? false
+        moveIns       = (try? c.decodeIfPresent([MoveInDay].self, forKey: .moveIns)) as? [MoveInDay] ?? []
+        lastScrape    = (try? c.decodeIfPresent(String.self, forKey: .lastScrape)) as? String ?? ""
+        // 只有这一条不能退默认值：没有采集时间就判断不了新鲜度，
+        // 而"旧了要改口"正是这份数据最要紧的一条规矩。
+        capturedAt    = try c.decode(Date.self, forKey: .capturedAt)
     }
 
     // MARK: - 文案
     //
-    // 这一节一个字符串字面量都没有——全部走 ``StatusWording``，菜单栏那一格读的
-    // 是同一份。docs/MACOS.md 要求的「文案和口径要一致」因此不是一句承诺，
-    // 而是两处调用同一个函数的结果。
+    // 这一节一个字符串字面量都没有——全部走 ``StatusWording``，菜单栏那一格和
+    // 统计带读的是同一份。docs/MACOS.md 要求的「文案和口径要一致」因此不是一句
+    // 承诺，而是几处调用同一个函数的结果。
 
     public var countLabel: String { StatusWording.countLabel(isFiltered: isFiltered) }
 
     public var countText: String { StatusWording.countText(matchCount) }
+
+    public var newTodayText: String { StatusWording.countText(newToday) }
+
+    /// `+63` / `-12`，相对 14 天基准。算法在 ``DailyNew``，和统计带共用。
+    public var changeVsBaseline: Int? {
+        DailyNew.changeVsBaseline(today: newToday, series: dailyNew)
+    }
+
+    /// 序列里第一个有货可抢的日子。日历那一格的头条。
+    public var nextBookable: MoveInDay? { MoveInDay.nextBookable(in: moveIns) }
 
     // MARK: - 旧了怎么办
 
@@ -103,14 +178,14 @@ public nonisolated struct WidgetSnapshot: Codable, Sendable, Equatable {
     /// 那是替后端背了一口它没犯的锅。我们手上真正知道的只有 `capturedAt`，
     /// 所以过期之后就只说这一件知道的事。
     ///
-    /// 数字本身两种状态都照常显示（只是变浅）：匹配总数比扫描时刻稳得多，
+    /// 数字本身两种状态都照常显示（只是变浅）：这些数比扫描时刻稳得多，
     /// 配上「几时取的」仍然是有用的信息，而一格只会说「请打开 app」的小组件
     /// 没有存在的理由。
     public func footnote(at now: Date) -> String {
         if isFresh(at: now), let scanned = scannedAgoText(at: now) {
             return StatusWording.scanned(scanned)
         }
-        return "checked \(ServerTime.relativeTime(since: capturedAt, now: now))"
+        return StatusWording.checked(ServerTime.relativeTime(since: capturedAt, now: now))
     }
 
     /// `4m ago`。和 ``SummaryModel/scannedAgoText`` 同一套判断：空串、`--`、
@@ -152,18 +227,14 @@ public nonisolated struct WidgetSnapshot: Codable, Sendable, Equatable {
     /// ``WidgetBridge/publish(_:)`` 用它决定要不要真去踢一次时间轴。每刷新一次就
     /// 踢一次的话，一个数都没动也会烧掉一次刷新配额，而那个配额是每天有限的。
     public func sameNumbers(as other: WidgetSnapshot) -> Bool {
-        matchCount == other.matchCount
-            && isFiltered == other.isFiltered
-            && lastScrape == other.lastScrape
-            && newToday == other.newToday
-            && unreadAlerts == other.unreadAlerts
-            && showsUnread == other.showsUnread
+        var a = self, b = other
+        a.capturedAt = .distantPast
+        b.capturedAt = .distantPast
+        return a == b
     }
 
     /// 没有任何数据时的样子。小组件在图库里预览、以及还没登录时用它。
     public static func placeholder(at now: Date = Date()) -> WidgetSnapshot {
-        WidgetSnapshot(matchCount: nil, isFiltered: false, lastScrape: "",
-                       newToday: nil, unreadAlerts: 0, showsUnread: false,
-                       capturedAt: now)
+        WidgetSnapshot(capturedAt: now)
     }
 }

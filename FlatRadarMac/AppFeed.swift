@@ -47,6 +47,26 @@ final class AppFeed {
     /// 比自己拼一个 `limit=1` 的请求省事，也复用了已经测过的那条路径。
     private let counter = ListingsStore(pageSize: 1)
 
+    /// 日历数据。**从窗口级提上来的**。
+    ///
+    /// 它本来是 `MainWindow` 的 `@State`，理由和 `mapStore` 一样（窗口级）。
+    /// 提上来有两个理由，都和这一层的定位一致（「只读的展示数据，跟窗口的查询
+    /// 状态无关」——`SummaryModel` 顶上写的就是这句）：
+    ///
+    /// 1. 桌面上那格日历小组件在**一个窗口都没有**的时候也得有数。
+    /// 2. 开两个窗口时原先会拉两遍同一个 `/calendar`。
+    ///
+    /// **选中的是哪一天**仍然在 `BrowseModel.calendarDay` 里，一窗一份——
+    /// 提上来的是数据，不是选择。
+    public let calendar = CalendarStore()
+
+    /// 小组件那格日历往后铺几天。
+    ///
+    /// 28 天 = 四周，正好是大号那一格一行七个、四行铺满的量；中号取前 14 天。
+    /// 存的是连续序列（空的日子也占一格），所以这个数直接决定文件大小——
+    /// 28 个三元组，几百字节。
+    static let moveInDays = 28
+
     var matchCount: Int? { counter.total > 0 ? counter.total : nil }
     var matchIsFiltered: Bool { counter.isFiltered }
 
@@ -150,8 +170,25 @@ final class AppFeed {
         async let stats: Void = summary.load()
         async let feed: Void = alerts.fetch()
         async let count: Void = refreshMatchCount()
-        _ = await (stats, feed, count)
+        async let days: Void = fetchCalendarIfWidgetInstalled()
+        _ = await (stats, feed, count, days)
         publishWidgetSnapshot(auth: auth)
+    }
+
+    /// 只有桌面上真摆着日历那一格时才去拉 `/calendar`。
+    ///
+    /// `MainWindow` 里那条注释是量过的：这个接口回 691 条、211 KB，是四屏里
+    /// 最少打开的一屏，所以刻意没跟着启动一起发。这里**不推翻那个决定**——
+    /// 没摆那一格就一个字节都不多要；摆了的人自己承担这一次请求，
+    /// 那正是他要的那格数据。
+    ///
+    /// `force` 给 ⌘R 和菜单栏的刷新用：那是用户明确要求的一次刷新，
+    /// 该把手上所有数据都过一遍，而 `fetch()` 的 `guard !isLoading` 去重还在。
+    private func fetchCalendarIfWidgetInstalled(force: Bool = false) async {
+        guard await WidgetBridge.isInstalled(kind: WidgetKind.calendar) else { return }
+        if force || calendar.listings.isEmpty {
+            await calendar.fetch()
+        }
     }
 
     func refreshMatchCount() async {
@@ -163,7 +200,8 @@ final class AppFeed {
     func refreshShared(auth: AuthStore) async {
         async let stats: Void = summary.load()
         async let count: Void = refreshMatchCount()
-        _ = await (stats, count)
+        async let days: Void = fetchCalendarIfWidgetInstalled(force: true)
+        _ = await (stats, count, days)
         publishWidgetSnapshot(auth: auth)
     }
 
@@ -178,6 +216,7 @@ final class AppFeed {
         alerts.disconnectStream()
         alerts.clear()
         counter.clear()
+        calendar.clear()
         WidgetBridge.clear()
     }
 
@@ -193,14 +232,20 @@ final class AppFeed {
     /// 跑过之后才有值，而 `loadOnce` 和它谁先跑没有保证。为一个能直接传的参数
     /// 去赌时序不值得。
     func publishWidgetSnapshot(auth: AuthStore) {
+        let now = Date()
         WidgetBridge.publish(WidgetSnapshot(
+            newToday: summary.newToday,
+            dailyNew: summary.series,
+            totalListings: summary.summary?.total,
+            statusChanges: summary.summary?.changes24h,
             matchCount: matchCount,
             isFiltered: matchIsFiltered,
-            lastScrape: summary.summary?.lastScrape ?? "",
-            newToday: summary.newToday,
             unreadAlerts: alerts.unreadCount,
             // 访客没有个人通知流，那个数永远是 0。和菜单栏那一行同一个判断。
             showsUnread: !auth.isGuest,
-            capturedAt: Date()))
+            moveIns: MoveInDay.series(listingsByDay: calendar.listingsByDay,
+                                      from: now, days: Self.moveInDays),
+            lastScrape: summary.summary?.lastScrape ?? "",
+            capturedAt: now))
     }
 }

@@ -43,16 +43,16 @@ struct StatsStrip: View {
 
     private var anchor: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("New today")
+            Text(StatusWording.newToday)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
             HStack(alignment: .firstTextBaseline, spacing: 9) {
-                Text(summary.newToday.map(String.init) ?? "—")
+                Text(StatusWording.countText(summary.newToday))
                     .font(.system(size: 44, weight: .semibold, design: .monospaced))
                     .tracking(-1.4)
                     .monospacedDigit()
                 if let pct = summary.changeVsBaseline {
-                    Text(pct >= 0 ? "+\(pct)%" : "\(pct)%")
+                    Text(StatusWording.percent(pct))
                         .font(.callout.weight(.semibold))
                         .monospacedDigit()
                         // 涨 = 可选的房源更多，用能效最高档那个深绿；跌用次要色，
@@ -62,7 +62,7 @@ struct StatsStrip: View {
             }
             .padding(.top, 2)
             if let base = summary.baselineAverage {
-                Text("vs. 14-day average of \(base)")
+                Text(StatusWording.vsBaseline(base))
                     .font(.subheadline)
                     .foregroundStyle(.tertiary)
                     .padding(.top, 3)
@@ -76,13 +76,15 @@ struct StatsStrip: View {
     /// （实测：库里 828 条，账号的 listing_filter 只匹配 80 条）。标签把口径写在脸上。
     private var metrics: some View {
         HStack(alignment: .top, spacing: 30) {
-            metric("Total listings",
+            metric(StatusWording.totalListings,
                    value: summary.summary?.total,
                    caption: "all platforms")
-            metric("Status changes",
+            metric(StatusWording.statusChanges,
                    value: summary.summary?.changes24h,
                    caption: "last 24h")
-            metric(listings.isFiltered ? "Matching filters" : "Showing",
+            // 原先没套筛选时这里写的是 `Showing`，而菜单栏同一个数写的是
+            // `Listings`——同一台机器上两个名字。统一到 ``StatusWording``。
+            metric(StatusWording.countLabel(isFiltered: listings.isFiltered),
                    value: listings.total > 0 ? listings.total : nil,
                    caption: loadCaption)
         }
@@ -94,7 +96,7 @@ struct StatsStrip: View {
             Text(title)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
-            Text(value.map(String.init) ?? "—")
+            Text(StatusWording.countText(value))
                 .font(.system(.title2, design: .monospaced).weight(.semibold))
                 .monospacedDigit()
                 .padding(.top, 2)

@@ -36,9 +36,16 @@ final class WidgetBridgeTests: XCTestCase {
     }
 
     private func sample(_ captured: Date = Date()) -> WidgetSnapshot {
-        WidgetSnapshot(matchCount: 193, isFiltered: true,
+        WidgetSnapshot(newToday: 12,
+                       dailyNew: [10, 12, 14, 11, 12],
+                       totalListings: 892,
+                       statusChanges: 47,
+                       matchCount: 193,
+                       isFiltered: true,
+                       unreadAlerts: 3,
+                       showsUnread: true,
+                       moveIns: [MoveInDay(day: "2026-09-18", total: 4, bookable: 1)],
                        lastScrape: captured.addingTimeInterval(-240).ISO8601Format(),
-                       newToday: 12, unreadAlerts: 3, showsUnread: true,
                        capturedAt: captured)
     }
 

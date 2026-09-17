@@ -22,6 +22,19 @@ import os
 /// 写成 iOS 那样的话 `containerURL(...)` 直接返回 nil，而且**不报错**：
 /// 小组件只是永远显示空。两端各一份常量，由 `tests/test_widget_wiring.py`
 /// 钉住它和两份 entitlements、和 pbxproj 里的 `DEVELOPMENT_TEAM` 一致。
+/// 每一格小组件的 kind。
+///
+/// 这个串是**桌面上那一格的身份**：改了等于换一格，用户已经摆好的会变空白、
+/// 得手动删了重摆。所以它一旦发出去就不能再动。
+///
+/// 放在包里是因为有两个读者：小组件那边用它注册（`StaticConfiguration(kind:)`），
+/// app 这边用它问系统「这一格装了没有」（``WidgetBridge/isInstalled(kind:)``）。
+/// 两处各写一遍字面量的话，拼错一个字符的症状是"app 永远以为没装"——不报错。
+public nonisolated enum WidgetKind {
+    public static let status = "FlatRadarStatus"
+    public static let calendar = "FlatRadarCalendar"
+}
+
 public nonisolated enum WidgetBridge {
 
     #if os(macOS)
@@ -107,5 +120,27 @@ public nonisolated enum WidgetBridge {
     /// `getCurrentConfigurations`——那是一次异步 IPC，为了省一次空转不值得。
     private static func reloadTimelines() {
         WidgetCenter.shared.reloadAllTimelines()
+    }
+
+    /// 桌面上**现在**摆着这一格没有。
+    ///
+    /// 用来决定要不要为它去取数。日历那一格要的 `/calendar` 实测回 691 条、
+    /// 211 KB，而 `MainWindow` 里那条注释早就写了它是四屏里最少打开的一屏、
+    /// 所以刻意做成按需拉。为了一个多半没人摆的小组件把那个决定推翻掉，
+    /// 是拿所有人的冷启动带宽去换少数人的一格。
+    ///
+    /// 问系统是一次异步 IPC，比那 211 KB 便宜得多。拿不到就当没装：
+    /// 宁可那一格空着（它自己会说"打开 FlatRadar"），也不要凭空多发一个请求。
+    public static func isInstalled(kind: String) async -> Bool {
+        await withCheckedContinuation { continuation in
+            WidgetCenter.shared.getCurrentConfigurations { result in
+                switch result {
+                case .success(let widgets):
+                    continuation.resume(returning: widgets.contains { $0.kind == kind })
+                case .failure:
+                    continuation.resume(returning: false)
+                }
+            }
+        }
     }
 }

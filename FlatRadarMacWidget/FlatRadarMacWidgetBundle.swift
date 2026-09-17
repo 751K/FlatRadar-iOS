@@ -3,11 +3,13 @@ import WidgetKit
 
 /// 桌面小组件的入口。
 ///
-/// 现在只有一格（``StatusWidget``），但仍然写成 `WidgetBundle` 而不是把
-/// `@main` 挂在那一个 widget 上：加第二格时前者只是多一行，后者要改入口的形状。
+/// 两格，回答两个不同的问题：``StatusWidget`` 答「今天有什么新的」，
+/// ``CalendarWidget`` 答「下次什么时候有房」。两格读的是**同一份**共享快照
+/// （``WidgetSnapshot``），所以它们的数字不可能互相矛盾。
 @main
 struct FlatRadarMacWidgetBundle: WidgetBundle {
     var body: some Widget {
         StatusWidget()
+        CalendarWidget()
     }
 }

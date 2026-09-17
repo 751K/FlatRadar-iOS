@@ -56,26 +56,21 @@ final class SummaryModel {
     /// 今天的新增。
     var newToday: Int? { summary?.new24h }
 
+    /// 每日新增的取值序列，旧 → 新，最后一个是今天。
+    ///
+    /// 统计带的曲线、小组件那排柱子、以及下面两个派生数都读它。
+    var series: [Int] { dailyNew.map(\.count) }
+
     /// 除去今天之外的均值——「vs. 14-day average of 19」那个 19。
     ///
-    /// **刻意排除最后一天**：拿今天去和「含今天的均值」比，今天自己会把基准
-    /// 抬上去，涨幅被系统性地压小。样本不足 3 天就不给这个比较，宁可不显示
-    /// 也不显示一个没有意义的百分比。
-    var baselineAverage: Int? {
-        let past = dailyNew.dropLast()
-        guard past.count >= 3 else { return nil }
-        let sum = past.reduce(0) { $0 + $1.count }
-        return Int((Double(sum) / Double(past.count)).rounded())
-    }
+    /// 算法在包里（``DailyNew``），因为小组件也要算同一个数。
+    var baselineAverage: Int? { DailyNew.baselineAverage(series) }
 
-    /// 相对基准的涨跌，例如 `+63`。基准为 0 时返回 nil——除以零得不到有意义的百分比。
-    var changeVsBaseline: Int? {
-        guard let now = newToday, let base = baselineAverage, base > 0 else { return nil }
-        return Int(((Double(now) - Double(base)) / Double(base) * 100).rounded())
-    }
+    /// 相对基准的涨跌，例如 `+63`。
+    var changeVsBaseline: Int? { DailyNew.changeVsBaseline(today: newToday, series: series) }
 
     /// 折线的取值序列。
-    var sparkline: [Double] { dailyNew.map { Double($0.count) } }
+    var sparkline: [Double] { series.map(Double.init) }
 
     /// `scanned 4m ago`。拿不到就返回 nil，由界面省略整段，而不是显示 "unknown"。
     ///

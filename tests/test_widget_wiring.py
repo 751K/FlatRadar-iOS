@@ -176,3 +176,50 @@ def test_小组件声明了自己是哪种扩展():
     """
     info = plistlib.loads(WIDGET_INFO_PLIST.read_bytes())
     assert info["NSExtension"]["NSExtensionPointIdentifier"] == "com.apple.widgetkit-extension"
+
+
+# --------------------------------------------------- kind 是桌面上那一格的身份
+
+WIDGET_DIR = ROOT / "FlatRadarMacWidget"
+KINDS = ROOT / "FlatRadarCore" / "Sources" / "FlatRadarCore" / "Status" / "WidgetBridge.swift"
+
+
+def test_widget_kind_改了等于把用户摆好的那一格弄没():
+    """这两个串是桌面上那一格的**身份**。
+
+    改掉之后，用户已经摆好的那一格会变成空白，得手动删了重摆——而构建是绿的，
+    测试（除了这条）也是绿的。所以把值本身钉死在这里：要改它必须先改这条测试，
+    那一刻就会读到这段话。
+    """
+    source = KINDS.read_text(encoding="utf-8")
+    found = dict(re.findall(r'static let (\w+) = "(FlatRadar\w+)"', source))
+    assert found == {"status": "FlatRadarStatus", "calendar": "FlatRadarCalendar"}, found
+
+
+def test_两格都注册在_bundle_里():
+    """`WidgetBundle` 里漏掉一格的症状是"图库里没有它"——不报错。"""
+    bundle = (WIDGET_DIR / "FlatRadarMacWidgetBundle.swift").read_text(encoding="utf-8")
+    for widget in ["StatusWidget()", "CalendarWidget()"]:
+        assert widget in bundle, f"{widget} 没出现在 WidgetBundle 里"
+
+
+def test_小组件里不许再出现裸的文案字面量():
+    """两格显示的每一句话都必须走 `StatusWording`。
+
+    docs/MACOS.md 只要求一件事：「文案和口径要一致」。收拢的时候当场抓到两处
+    漂移（`StatsStrip` 说 `Showing`、菜单栏说 `Listings`，而注释写的又是第三种
+    说法），所以这里不靠自觉——凡是要显示给人看的英文短语，一律从包里取。
+
+    只扫 `Text("…")`：`configurationDisplayName` / `description` 那两句是
+    小组件图库里的介绍语，只出现在那一个地方，没有第二处会漂。
+    """
+    offenders = []
+    for path in sorted(WIDGET_DIR.glob("*.swift")):
+        for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            for literal in re.findall(r'Text\("([^"\\]+)"\)', line):
+                # 纯插值和标点不算文案。
+                if re.search(r"[A-Za-z]{3}", literal):
+                    offenders.append(f"{path.name}:{lineno} Text(\"{literal}\")")
+    assert not offenders, (
+        "这些地方直接写了要显示的文字，绕开了 StatusWording：\n  "
+        + "\n  ".join(offenders))
