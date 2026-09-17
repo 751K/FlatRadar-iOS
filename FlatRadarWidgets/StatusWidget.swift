@@ -165,24 +165,26 @@ struct StatusLayout: View {
 
     private var large: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // 顶上那一行。
+            // 顶上那一行**只有桌面有**。
             //
-            // **手机上不写 `FlatRadar`**：那一格就贴在自家图标旁边，长按还会显示
-            // app 名字，写一遍是重复。桌面上留着——通知中心那一栏里挤着一排来自
-            // 不同 app 的格子，一个字号 12.5 的字比图标好认。
+            // 手机上整行去掉了：wordmark 是重复（那一格贴在自家图标旁边），
+            // 而 `Scanned 1m ago` 单独占一行在手机上太贵——那一行连同间距要 27pt，
+            // 用来把 `31` 放大一档更值。
             //
-            // 时间那一段两端都留，它是不能省的：底下所有数字都是「截至那一刻」的，
-            // 没有它就没法判断新旧（见 `WidgetSnapshot.footnote(at:)`）。
-            HStack(spacing: 8) {
-                if skin == .mac {
+            // ⚠️ 但**新鲜度不能就这么丢掉**。那一行原来的活是：底下所有数字都是
+            // 「截至那一刻」的，没有它就没法判断新旧。手机上改由**汇总行**接管——
+            // 新鲜时它说 `831 live · 193 matching · 118 this week`，过期时整句换成
+            // `Checked 3h ago`（见 ``summaryLine``）。所以那句话只在需要的时候
+            // 才占位置，平时一行都不花。
+            if skin == .mac {
+                HStack(spacing: 8) {
                     Text("FlatRadar")
                         .font(.system(size: 12.5, weight: .bold))
                         .tracking(-0.2)
                         .foregroundStyle(palette.ink)
                     Spacer(minLength: 4)
+                    LiveFooter(entry: entry, showsCount: false)
                 }
-                LiveFooter(entry: entry, showsCount: false)
-                if skin == .phone { Spacer(minLength: 4) }
             }
 
             HStack(alignment: .lastTextBaseline, spacing: 9) {
@@ -197,7 +199,11 @@ struct StatusLayout: View {
                     if let pct = snapshot?.changeVsBaseline, let base = baseline {
                         Text("\(StatusWording.percent(pct)) \(StatusWording.vsAverage(base))")
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(pct >= 0 ? palette.up : palette.muted)
+                            // 过期时一起压成次要色：这也是一句关于"今天"的断言，
+                            // 旁边那个数字已经变灰了，它还亮着就成了整格里唯一
+                            // 一处看起来仍然新鲜的东西。
+                            .foregroundStyle(!isFresh ? palette.muted
+                                             : (pct >= 0 ? palette.up : palette.muted))
                             .lineLimit(1)
                     }
                 }
@@ -283,9 +289,14 @@ struct StatusLayout: View {
     private var mediumAnchor: CGFloat { skin == .phone ? 42 : 40 }
     private var mediumBars: CGFloat { skin == .phone ? 32 : 34 }
     private var mediumColumn: CGFloat { skin == .phone ? 118 : 120 }
-    private var largeAnchor: CGFloat { skin == .phone ? 56 : 50 }
-    private var largeBars: CGFloat { skin == .phone ? 54 : 42 }
-    private var largeRows: Int { skin == .phone ? 3 : 2 }
+    /// 手机那一档去掉页眉、少放一条房源之后腾出 74pt，全给了这两个数：
+    /// 数字 56→76，柱子 54→80。稿子画的是 56/54，但稿子那一版还带着页眉和三条房源。
+    ///
+    /// 这两个数是**画出来调的**：先给 72/64，底下还空着 40pt——一个底部空一截的
+    /// 小组件看着像没加载完。撑到这一档之后余量剩 20pt 左右，正好是呼吸。
+    private var largeAnchor: CGFloat { skin == .phone ? 76 : 50 }
+    private var largeBars: CGFloat { skin == .phone ? 80 : 42 }
+    private var largeRows: Int { skin == .phone ? 2 : 2 }
 
     // MARK: - 零件
 
@@ -307,7 +318,9 @@ struct StatusLayout: View {
                     .font(.system(size: size >= 46 ? 12 : 11.5, weight: .bold))
                     // 涨用绿、跌用次要色，**不用红**——房源变少不是错误，
                     // 红色会被读成告警。和统计带同一个判断。
-                    .foregroundStyle(pct >= 0 ? palette.up : palette.muted)
+                    // 过期时一律压成次要色，理由同大号那一处。
+                    .foregroundStyle(!isFresh ? palette.muted
+                                     : (pct >= 0 ? palette.up : palette.muted))
             }
         }
     }
@@ -411,19 +424,32 @@ struct StatusLayout: View {
     /// 读的人得先判断那是"没取到"还是"真的是零"。
     @ViewBuilder
     private var summaryLine: some View {
-        if let text = StatusWording.summaryLine([
-            snapshot?.totalListings.map(StatusWording.liveCount),
-            // 没套个人筛选时不说这一段：那时它和 `831 live` 是同一个数。
-            (snapshot?.isFiltered ?? false)
-                ? snapshot?.matchCount.map(StatusWording.matchingCount) : nil,
-            snapshot?.newThisWeek.map(StatusWording.weekCount),
-        ]) {
+        if let text = summaryText {
             Text(text)
                 .font(.system(size: 12))
                 .foregroundStyle(isFresh ? palette.ink : palette.muted)
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
         }
+    }
+
+    /// 过期时**整句换成** `Checked 3h ago`。
+    ///
+    /// 手机那一档没有单独的时间行了（见 ``large``），这一行是唯一能说明"这些数是
+    /// 几时的"的地方。而且过期时那三段本来也都不该说：`831 live` 的字面意思就是
+    /// 「现在在线的有这么多」。和 ``WidgetSnapshot/compactFooter(at:)``
+    /// 是同一条规矩。
+    private var summaryText: String? {
+        guard let snapshot else { return nil }
+        guard snapshot.isFresh(at: entry.date) else {
+            return StatusWording.sentence(snapshot.footnote(at: entry.date))
+        }
+        return StatusWording.summaryLine([
+            snapshot.totalListings.map(StatusWording.liveCount),
+            // 没套个人筛选时不说这一段：那时它和 `831 live` 是同一个数。
+            snapshot.isFiltered ? snapshot.matchCount.map(StatusWording.matchingCount) : nil,
+            snapshot.newThisWeek.map(StatusWording.weekCount),
+        ])
     }
 
     /// macOS 大号底部那条棕色胶囊。设计稿放的是抽签截止，这里放下一个能抢的
