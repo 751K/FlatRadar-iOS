@@ -197,8 +197,15 @@ final class MacScreenshotTests: XCTestCase {
         window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).hover()
         Thread.sleep(forTimeInterval: 0.6)      // 等菜单栏收回去
         let shot = window.screenshot()
-        guard let png = opaquePNG(shot) else {
-            XCTFail("\(step) 压平 alpha 失败")
+        let raw = rawPixelSize(shot)
+        guard let canvas = Self.canvas(fitting: raw) else {
+            XCTFail("\(step) 窗口拍出来 \(Int(raw.width))×\(Int(raw.height))，"
+                    + "比最大的合法尺寸 2880×1800 还大，合不进任何画布。"
+                    + screenReport())
+            return
+        }
+        guard let png = compose(shot, onto: canvas) else {
+            XCTFail("\(step) 合成画布失败")
             return
         }
         let size = pixelSize(png)
@@ -233,7 +240,22 @@ final class MacScreenshotTests: XCTestCase {
         return CGSize(width: rep.pixelsWide, height: rep.pixelsHigh)
     }
 
-    /// 去掉 alpha 通道。
+    /// 把窗口图居中合成到一张**合法尺寸**的不透明画布上。
+    ///
+    /// 为什么要合成而不是让窗口自己就是合法尺寸
+    /// --------------------------------------
+    /// ASC 只收四种像素尺寸，最小的 1280×800 在 2x 屏上等于 1280×800 **点**——
+    /// 而构建机那块屏总共就 1280×800 点，可用区（扣掉菜单栏和 Dock）只有
+    /// 1280×692。也就是说窗口想自己合法，就只能铺满整屏，于是必须去藏菜单栏和
+    /// Dock（或切全屏）。那条路试过四轮：build 359 六条里只有一条拿到窗口、
+    /// 364/367/368 都是第三次启动之后再也开不出窗口。动系统全局状态在一次性
+    /// 构建机上连跑六条就是这个下场。
+    ///
+    /// 合成之后窗口只是个普通窗口，一行系统状态都不用改。屏幕大时窗口正好等于
+    /// 画布（满幅、零偏移、不重采样），屏幕小时是一张带白边的窗口图——两者都是
+    /// 合法尺寸。
+    ///
+    /// 顺带解决 alpha：
     ///
     /// `XCUIScreenshot.pngRepresentation` 出来的 Mac 截图是 RGBA——build 367 那张
     /// 实测 `color type = 6`、`hasAlpha: yes`——而 **ASC 不收带 alpha 的 Mac 截图**。
@@ -242,27 +264,33 @@ final class MacScreenshotTests: XCTestCase {
     /// 云端跑共用同一条路，也不用再引一个 ffmpeg 依赖（试过 `sips`，它的
     /// `--padToHeightWidth` / `--matchTo` 都不去 alpha，出来还是 color type 6）。
     ///
-    /// 底色填白：窗口铺满屏时没有圆角，填什么都看不见；万一哪天窗口小于屏幕、
-    /// 四角透出来，白色也比黑色像一张正常的产品图。
+    /// `XCUIScreenshot.pngRepresentation` 出来的 Mac 截图是 RGBA（build 367 那张
+    /// 实测 `color type = 6`），而 ASC 不收带 alpha 的 Mac 截图。画布本身是
+    /// 不透明的，合完就没有 alpha 了。
+    ///
+    /// 底色填白：和 app 的浅色底一致，留白处看着像一张正常的产品图。
     ///
     /// 用 CoreGraphics + ImageIO 而不是 `NSGraphicsContext`：后者要一个活着的
     /// NSApplication，本地拿命令行工具验同一段逻辑时直接 trap（SIGTRAP，退出码
     /// 133）。CoreGraphics 这条两边都能跑，于是这段逻辑**在本地实测过**——
     /// 拿 build 367 那张真图喂进去，color type 6 → 2。
-    private func opaquePNG(_ shot: XCUIScreenshot) -> Data? {
+    private func compose(_ shot: XCUIScreenshot, onto canvas: CGSize) -> Data? {
         let data = shot.pngRepresentation
         guard let source = CGImageSourceCreateWithData(data as CFData, nil),
               let cg = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
-        let w = cg.width, h = cg.height
+        let cw = Int(canvas.width), ch = Int(canvas.height)
         // `.noneSkipLast` 就是"不要 alpha"，写出来的 PNG 是 color type 2（RGB）。
-        guard let ctx = CGContext(data: nil, width: w, height: h,
+        guard let ctx = CGContext(data: nil, width: cw, height: ch,
                                   bitsPerComponent: 8, bytesPerRow: 0,
                                   space: CGColorSpaceCreateDeviceRGB(),
                                   bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
         else { return nil }
         ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
-        ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
-        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        ctx.fill(CGRect(x: 0, y: 0, width: cw, height: ch))
+        // 居中。窗口正好等于画布时偏移是 0，也就是满幅，没有任何缩放或重采样。
+        let x = (cw - cg.width) / 2
+        let y = (ch - cg.height) / 2
+        ctx.draw(cg, in: CGRect(x: x, y: y, width: cg.width, height: cg.height))
         guard let flattened = ctx.makeImage() else { return nil }
         let buffer = NSMutableData()
         guard let dest = CGImageDestinationCreateWithData(
@@ -270,6 +298,17 @@ final class MacScreenshotTests: XCTestCase {
         CGImageDestinationAddImage(dest, flattened, nil)
         guard CGImageDestinationFinalize(dest) else { return nil }
         return buffer as Data
+    }
+
+    /// 放得下这张窗口图的**最小**合法画布。
+    static func canvas(fitting raw: CGSize) -> CGSize? {
+        accepted.sorted { $0.width < $1.width }
+            .first { $0.width >= raw.width && $0.height >= raw.height }
+    }
+
+    /// 窗口截图原始的像素尺寸（合成之前）。
+    private func rawPixelSize(_ shot: XCUIScreenshot) -> CGSize {
+        pixelSize(shot.pngRepresentation)
     }
 
     /// 失败时附上这台机器的屏幕参数——尺寸不对时第一个要问的就是它。

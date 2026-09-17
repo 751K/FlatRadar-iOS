@@ -19,20 +19,16 @@ import FlatRadarCore
 ///
 /// 尺寸怎么选
 /// ----------
-/// 窗口按**点**定，截图出来的像素 = 点 × 屏幕的 `backingScaleFactor`。而那个系数
-/// 在 Xcode Cloud 的构建机上是 1 还是 2，**我们说了不算**，也没有办法从仓库里查到。
+/// ASC 只收 1280×800 / 1440×900 / 2560×1600 / 2880×1800 这四种像素尺寸。
 ///
-/// 所以不去赌它，改成让两种系数都落在合法值上：
+/// **不要求窗口自己就是其中之一。** 曾经是这么设计的，代价是屏幕放不下时必须去
+/// 动系统状态（全屏、或 `presentationOptions` 藏菜单栏和 Dock），而那在一次性
+/// 构建机上连着跑六条用例时会塌——build 359/364/367/368 全栽在这上面。
 ///
-///     1440×900 ×1 → 1440×900       1440×900 ×2 → 2880×1800
-///     1280×800 ×1 → 1280×800       1280×800 ×2 → 2560×1600
-///
-/// 四个合法尺寸**正好**被这两个点尺寸 × 两种系数覆盖满。挑大的那个，屏幕放不下
-/// 就退到小的；两个都放不下就**全屏**——全屏窗口恰好等于屏幕尺寸，构建机那块
-/// 1280×800@2x 的屏于是给出 2560×1600，同样是合法值。见 ``pin(_:)``。
-///
-/// `MacScreenshotTests` 会把这条断言真的执行一遍——拍完就查像素尺寸在不在
-/// ``acceptedPixelSizes`` 里，不在就红。否则这段推理只是注释。
+/// 现在窗口只管做一个**16:10 的普通窗口**，挑屏幕放得下的最大那个；拍完由
+/// `MacScreenshotTests.snap` 把它居中合成到最小的那张放得下的合法画布上。
+/// 屏幕大就是满幅（1440×900 点 ×2 = 2880×1800，画布正好等于图），屏幕小就带留白。
+/// 两种情况下上传的都是合法尺寸，而且这里一行系统状态都不用改。
 enum ScreenshotMode {
 
     /// 和 iOS 用同一个名字。UI Test 启动时传，真实用户启动不会带。
@@ -49,10 +45,16 @@ enum ScreenshotMode {
         CGSize(width: 1280, height: 800),
     ]
 
-    /// 候选窗口尺寸，**按点**，从大到小。见类型注释里那张换算表。
+    /// 候选窗口尺寸，**按点**，从大到小，全部 16:10。
+    ///
+    /// 注意它们**不需要**自己就是合法的上传尺寸——合法尺寸由 `MacScreenshotTests`
+    /// 那边合成画布时保证。这一点是后来改的，起因见 ``pin(_:)``。
     static let windowSizes: [NSSize] = [
         NSSize(width: 1440, height: 900),
         NSSize(width: 1280, height: 800),
+        NSSize(width: 1152, height: 720),
+        NSSize(width: 1024, height: 640),
+        NSSize(width: 896,  height: 560),
     ]
 
     /// 这块屏放得下的最大那个合法尺寸；一个都放不下就返回 nil（改走全屏）。
@@ -132,30 +134,6 @@ enum ScreenshotMode {
 
     // MARK: - 窗口
 
-    /// 藏掉 Dock 和菜单栏，再问一次放不放得下。
-    ///
-    /// 构建机那块屏 `visibleFrame` 只有 1280×692（Dock 78 + 菜单栏 30），而最小的
-    /// 合法尺寸要 800 点高——窗口化怎么摆都放不下。
-    ///
-    /// **为什么不用全屏。** 试过，build 359：全屏那条路确实给出了
-    /// `frame=(0,0,1280,800)`（正是合法的 2560×1600），但全屏会把窗口挪进一个
-    /// 独立 Space，而每条用例都要 terminate + 重启。那一轮六条里只有一条拿到窗口，
-    /// 其余是 `windows=0`，还有一条直接 `Lost connection to the application`。
-    /// 在一次性构建机上进出 Space 太脆。
-    ///
-    /// `presentationOptions` 达到同样的效果却不碰 Space：两条一起藏之后整块屏都
-    /// 能用，窗口摆在 (0,0) 正好 1280×800。
-    ///
-    /// 按**屏幕 frame** 判而不是改完再读 `visibleFrame`——后者不保证同步更新，
-    /// 读到旧值就又退回"放不下"了。
-    private static func sizeAfterHidingDockAndMenuBar(on screen: NSScreen?) -> NSSize? {
-        guard let frame = screen?.frame.size else { return nil }
-        guard windowSizes.contains(where: { $0.width <= frame.width && $0.height <= frame.height })
-        else { return nil }
-        // `.autoHideMenuBar` 必须和一个 Dock 选项一起给，单独给会被忽略。
-        NSApp.presentationOptions = [.autoHideDock, .autoHideMenuBar]
-        return windowSizes.first { $0.width <= frame.width && $0.height <= frame.height }
-    }
 
     /// 把窗口钉成截图尺寸。
     ///
@@ -184,33 +162,20 @@ enum ScreenshotMode {
         // 已经更新，拿到旧值（构建机上是 1280×692）算出来的 origin.y=24，而窗口有
         // 800 点高——顶上 24 点直接跑到屏幕外面去，截出来既不是完整窗口也不是
         // 合法尺寸。
-        let container: NSRect
-        let size: NSSize
-        if let fit = fittingWindowSize(on: screen) {
-            container = screen?.visibleFrame ?? .zero
-            size = fit
-        } else if let full = sizeAfterHidingDockAndMenuBar(on: screen) {
-            container = screen?.frame ?? .zero
-            size = full
-        } else {
-            // Dock 和菜单栏都藏了还是放不下——这块屏本来就比最小的合法尺寸还小。
-            // 不硬塞：`XCUIElement.screenshot()` 是从整屏截图按 frame 裁的，塞出去
-            // 的部分裁回来是桌面，尺寸也不对。让测试报出来。
-            return
-        }
-
-        // 把尺寸**锁死**，不只是设一次。
+        // 只在 `visibleFrame` 里居中。**不碰菜单栏、Dock、全屏、Space 任何一样。**
         //
-        // 只 setFrame 是不够的：实测连续启动五次，窗口每次比上一次矮 32 点
-        // （正好一条标题栏）——868 → 836 → 804 → 772 → 740，说明有别的东西在
-        // `pin` 之后又改了它。翻过 UserDefaults 和 `NSQuitAlwaysKeepsWindows`
-        // 都不是，与其继续找是谁，不如让它改不动：
+        // 原先这里想让窗口自己就是合法上传尺寸，于是屏幕小的时候要么切全屏
+        // （build 359：六条里只有一条拿到窗口，还有一条 Lost connection），要么
+        // 用 `NSApp.presentationOptions` 藏掉菜单栏和 Dock（build 364/367/368：
+        // 第三次启动之后就再也开不出窗口）。两条路都动了系统的全局状态，而这台
+        // 构建机是一次性的、六条用例连着跑，稍有残留就整轮塌。
         //
-        //   - `setFrameAutosaveName("")` 断掉 AppKit 自己的 frame 存取；
-        //   - `minSize == maxSize` 之后任何 resize 都会被夹回这个尺寸。
-        //
-        // 这比"设完就走"重要得多：尺寸错一点，拍出来就不是 ASC 收的那四种之一，
-        // 而失败信息只会说"不是合法值"，看不出是被谁改的。
+        // 换掉那个前提之后简单多了：窗口就是个普通窗口，**合法尺寸由拍完之后合成
+        // 画布来保证**（见 `MacScreenshotTests.snap`）。屏幕大就拿到 1440×900 的
+        // 满幅窗口，屏幕小就是一张带留白的窗口图——两者都是合法尺寸，而且这段代码
+        // 不再有任何"改了系统状态得记得改回去"的东西。
+        guard let size = fittingWindowSize(on: screen) else { return }
+        let container = screen?.visibleFrame ?? .zero
         window.setFrameAutosaveName("")
         window.styleMask.remove(.resizable)
         window.minSize = size
