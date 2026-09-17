@@ -45,26 +45,51 @@ enum ScreenshotMode {
         CGSize(width: 1280, height: 800),
     ]
 
-    /// 候选窗口尺寸，**按点**，从大到小，全部 16:10。
+    /// 首选窗口尺寸，**按点**，从大到小。屏幕放得下就用它们，拍出来是满幅。
     ///
-    /// 注意它们**不需要**自己就是合法的上传尺寸——合法尺寸由 `MacScreenshotTests`
-    /// 那边合成画布时保证。这一点是后来改的，起因见 ``pin(_:)``。
-    static let windowSizes: [NSSize] = [
+    /// 它们是 16:10 的，正好等于合法画布除以 2x 缩放——于是大屏上窗口图和画布
+    /// 一样大，零留白、零重采样。
+    static let preferredSizes: [NSSize] = [
         NSSize(width: 1440, height: 900),
         NSSize(width: 1280, height: 800),
-        NSSize(width: 1152, height: 720),
-        NSSize(width: 1024, height: 640),
-        NSSize(width: 896,  height: 560),
     ]
 
-    /// 这块屏放得下的最大那个合法尺寸；一个都放不下就返回 nil（改走全屏）。
+    /// 合法画布里最大的那张（像素）。窗口再大就合不进去了。
+    static let largestCanvas = CGSize(width: 2880, height: 1800)
+
+    /// 这个 app 三栏布局的下限，取自 ``FlatRadarMacApp`` 里 `.defaultSize` 的注释：
+    /// 侧栏 196 + 表格九列约 620 + inspector 300 ≈ 1120 点。
     ///
-    /// 用 `visibleFrame` 不用 `frame`：前者已经扣掉菜单栏和 Dock，那才是窗口真
-    /// 能占的地方。放不下**不能**硬塞一个——`XCUIElement.screenshot()` 是从整屏
-    /// 截图里按元素 frame 裁的，窗口被 Dock 压住的部分会把 Dock 一起裁进去。
-    static func fittingWindowSize(on screen: NSScreen?) -> NSSize? {
-        guard let visible = screen?.visibleFrame.size else { return windowSizes[0] }
-        return windowSizes.first { $0.width <= visible.width && $0.height <= visible.height }
+    /// 低于它 inspector 会被窗口右边缘切掉——build 370 的 01-Listings 就是这样，
+    /// 那次窗口只有 1024 点宽。图是合法的、测试也全绿，只有内容是残的。
+    static let minimumUsableWidth: CGFloat = 1120
+
+    /// 在这块屏上用多大的窗口。
+    ///
+    /// 两条路：
+    ///
+    /// 1. **首选尺寸放得下** → 用它，拍出来正好等于画布，满幅无留白（本地那块
+    ///    2560 点宽的屏走这条，1440×900）。
+    /// 2. **放不下** → 用整个可用区，只要它的像素尺寸塞得进最大的画布。
+    ///
+    /// 第 2 条**不要求 16:10**。既然拍完要合成到画布上，窗口的比例就无所谓了，
+    /// 只要塞得下。这一点是 build 370 之后改的：在那之前第 2 条也从 16:10 的
+    /// 候选里挑，于是构建机上挑中 1024×640，比这个 app 三栏布局的下限还窄，
+    /// inspector 被切掉半截。现在同一块屏给出 1280×692——宽度拿满，够用。
+    static func windowSize(on screen: NSScreen?) -> NSSize? {
+        guard let screen else { return nil }
+        let visible = screen.visibleFrame.size
+        if let preferred = preferredSizes.first(where: {
+            $0.width <= visible.width && $0.height <= visible.height
+        }) { return preferred }
+
+        let scale = max(screen.backingScaleFactor, 1)
+        let size = NSSize(width: floor(min(visible.width, largestCanvas.width / scale)),
+                          height: floor(min(visible.height, largestCanvas.height / scale)))
+        // 窄到连三栏都摆不下就别拍了——拍出来是一张内容残缺、尺寸却合法的图，
+        // 下游查不出来。让测试报出来。
+        guard size.width >= minimumUsableWidth, size.height > 0 else { return nil }
+        return size
     }
 
     // MARK: - Launch arguments
@@ -189,14 +214,29 @@ enum ScreenshotMode {
         // 画布来保证**（见 `MacScreenshotTests.snap`）。屏幕大就拿到 1440×900 的
         // 满幅窗口，屏幕小就是一张带留白的窗口图——两者都是合法尺寸，而且这段代码
         // 不再有任何"改了系统状态得记得改回去"的东西。
-        guard let size = fittingWindowSize(on: screen) else { return }
+        guard let size = windowSize(on: screen) else { return }
         let container = screen?.visibleFrame ?? .zero
-        window.setFrameAutosaveName("")
-        window.styleMask.remove(.resizable)
-        window.minSize = size
-        window.maxSize = size
+        // **每一步都先判断再改。**
+        //
+        // `pin` 会被重试八次（见 `WindowSizer`），而在 AppKit 的显示周期里反复改
+        // 窗口属性会抛未捕获异常：build 370 的 03-Calendar 就是这么崩的——
+        // SIGABRT，栈顶是
+        //
+        //     -[NSWindow(NSDisplayCycle) _postWindowNeedsUpdateConstraints]
+        //     -[NSView _informContainerThatSubviewsNeedUpdateConstraints] × N
+        //
+        // 日历那屏布局最重，重试落在布局中途的概率最高，所以是它先中；换一轮
+        // 可能是别的屏。改成幂等之后，第一次之后的七次都是空操作。
+        //
+        // 顺带**去掉了 `styleMask.remove(.resizable)`**。改 styleMask 会让窗口重建
+        // frame view，是这里最容易在布局中途炸的一项，而它本来就是多余的——
+        // `minSize == maxSize` 已经把尺寸锁死了。
         let origin = NSPoint(x: container.midX - size.width / 2,
                              y: container.midY - size.height / 2)
-        window.setFrame(NSRect(origin: origin, size: size), display: true)
+        let target = NSRect(origin: origin, size: size)
+        if window.frameAutosaveName != "" { window.setFrameAutosaveName("") }
+        if window.minSize != size { window.minSize = size }
+        if window.maxSize != size { window.maxSize = size }
+        if window.frame != target { window.setFrame(target, display: true) }
     }
 }
