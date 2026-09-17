@@ -95,6 +95,36 @@ struct StatChip: View {
     }
 }
 
+/// 值是一段**文字**而不是数字的统计格（iOS 大号的 `Next move-in / in 6d`）。
+///
+/// 和 ``StatChip`` 分开而不是给它加个 `String?` 重载：那一个吃 `Int?` 并且统一
+/// 走 ``StatusWording/countText(_:)`` 把 nil 画成 `—`，那条规矩不该为一个特例松掉。
+struct StatChipText: View {
+    let title: String
+    let value: String
+    var dimmed = false
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title)
+                .font(.system(size: 9.5))
+                .foregroundStyle(palette.muted)
+                .lineLimit(1)
+            Text(value)
+                .font(.system(size: 17, weight: .semibold, design: .monospaced))
+                .monospacedDigit()
+                .foregroundStyle(dimmed ? palette.muted : palette.ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(palette.fill, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+    }
+}
+
 /// NEWEST 里的一行。
 ///
 /// 第一条的菱形是红的、其余是灰的——设计稿用这一个像素级的差别标出"最新的那条"，
@@ -224,17 +254,32 @@ nonisolated struct SnapshotProvider: TimelineProvider {
     }
 }
 
-/// 把调色板灌进去，并铺上纸底。三格的外壳是同一个。
+/// 把调色板灌进去，并铺上纸底。
+///
+/// **锁屏那三种不铺**：`accessory*` 由系统统一染色，给它一个不透明的纸底只会
+/// 得到一块和锁屏壁纸格格不入的方块。那几种自己用 `AccessoryWidgetBackground()`。
 struct WidgetSurface<Content: View>: View {
     @Environment(\.colorScheme) private var scheme
+    @Environment(\.widgetFamily) private var family
     @ViewBuilder let content: () -> Content
 
+    private var isAccessory: Bool {
+        #if os(iOS)
+        [.accessoryCircular, .accessoryRectangular, .accessoryInline].contains(family)
+        #else
+        false
+        #endif
+    }
+
     var body: some View {
-        let palette = WidgetPalette.resolve(scheme)
+        let palette = WidgetPalette.resolve(scheme, skin: .current)
         content()
             .environment(\.palette, palette)
+            .environment(\.skin, .current)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            .containerBackground(palette.paper, for: .widget)
+            .containerBackground(for: .widget) {
+                if !isAccessory { palette.paper }
+            }
     }
 }
 
@@ -291,6 +336,7 @@ nonisolated extension WidgetSnapshot {
             dailyNew: [14, 9, 22, 17, 11, 26, 19, 13, 8, 24, 20, 16, 12, 31],
             totalListings: 831,
             statusChanges: 47,
+            newThisWeek: 118,
             matchCount: 193,
             isFiltered: true,
             unreadAlerts: 7,

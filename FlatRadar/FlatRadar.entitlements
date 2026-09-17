@@ -17,6 +17,18 @@
     <key>aps-environment</key>
     <string>development</string>
 
+	<!-- App Group。主屏 / 锁屏小组件（FlatRadarWidget）和这个 app 之间唯一的通道：
+	     app 把算好的数字整份写进这个容器，小组件只读。小组件因此不需要联网、
+	     不需要 token、也不需要知道服务器地址——见 FlatRadarCore 的
+	     `WidgetSnapshot` / `WidgetBridge`。
+
+	     iOS 上组名**不带** team 前缀，macOS 上必须带（那边写的是
+	     `$(TeamIdentifierPrefix)group.…`）。同一个 App Group，两端两种写法。 -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.j.kong.FlatRadar</string>
+	</array>
+
 	<!-- Universal Link。
 	     ``https://flatradar.app/l/<id>`` 这类分享链接，装了 FlatRadar 的人点了
 	     由系统直接交给 app，没装的人在浏览器里看公开落地页。两边都成立，是自定义

@@ -27,7 +27,17 @@ struct UnreadFace: View {
     let entry: SnapshotEntry
     @Environment(\.palette) private var palette
 
+    @Environment(\.skin) private var skin
+
     private var snapshot: WidgetSnapshot? { entry.snapshot }
+
+    /// 设计稿两张卡上写的是两个词（4a `Status changes`、4b `Status`），
+    /// 而那两张稿子的卡都是 170pt——所以那是画的时候的随手，不是空间决定的。
+    /// 这里按**真实**宽度选：iOS 的小号是 170pt，长的放得下；macOS 的只有
+    /// 155pt，实测长的会被截成 `Status chang…`。
+    private var statusTitle: String {
+        skin == .phone ? StatusWording.kindStatusChanges : StatusWording.kindStatusShort
+    }
     private var isFresh: Bool { snapshot?.isFresh(at: entry.date) ?? false }
 
     var body: some View {
@@ -61,7 +71,7 @@ struct UnreadFace: View {
                 }
                 if kinds.statusChanges > 0 {
                     KindRow(symbol: AnyView(Dot(color: palette.status)),
-                            title: StatusWording.kindStatusShort, value: kinds.statusChanges)
+                            title: statusTitle, value: kinds.statusChanges)
                 }
                 if kinds.lottery > 0 {
                     KindRow(symbol: AnyView(Dot(color: palette.lottery)),

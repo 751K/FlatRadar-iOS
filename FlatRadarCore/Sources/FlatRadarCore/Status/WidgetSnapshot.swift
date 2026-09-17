@@ -51,6 +51,13 @@ public nonisolated struct WidgetSnapshot: Codable, Sendable, Equatable {
     /// 24 小时内的状态变更。统计带上的 `Status changes / last 24h`。
     public var statusChanges: Int?
 
+    /// 最近 7 天的新增（`new_7d`）。
+    ///
+    /// iOS 大号那三格里的一格。设计稿 4b 那一格是 `Watching 12`——没有"关注列表"
+    /// 这个数据，而这个是 `/stats/public/summary` 里**本来就有**的一个字段，
+    /// 不用多发任何请求。
+    public var newThisWeek: Int?
+
     /// 当前匹配数。服务端算好的 `total`，`nil` 表示这一次没取到（不是 0）。
     public var matchCount: Int?
 
@@ -96,6 +103,7 @@ public nonisolated struct WidgetSnapshot: Codable, Sendable, Equatable {
                 dailyNew: [Int] = [],
                 totalListings: Int? = nil,
                 statusChanges: Int? = nil,
+                newThisWeek: Int? = nil,
                 matchCount: Int? = nil,
                 isFiltered: Bool = false,
                 unreadAlerts: Int = 0,
@@ -109,6 +117,7 @@ public nonisolated struct WidgetSnapshot: Codable, Sendable, Equatable {
         self.dailyNew = dailyNew
         self.totalListings = totalListings
         self.statusChanges = statusChanges
+        self.newThisWeek = newThisWeek
         self.matchCount = matchCount
         self.isFiltered = isFiltered
         self.unreadAlerts = unreadAlerts
@@ -132,6 +141,7 @@ public nonisolated struct WidgetSnapshot: Codable, Sendable, Equatable {
         dailyNew      = (try? c.decodeIfPresent([Int].self, forKey: .dailyNew)) as? [Int] ?? []
         totalListings = try? c.decodeIfPresent(Int.self, forKey: .totalListings)
         statusChanges = try? c.decodeIfPresent(Int.self, forKey: .statusChanges)
+        newThisWeek   = try? c.decodeIfPresent(Int.self, forKey: .newThisWeek)
         matchCount    = try? c.decodeIfPresent(Int.self, forKey: .matchCount)
         isFiltered    = (try? c.decodeIfPresent(Bool.self, forKey: .isFiltered)) as? Bool ?? false
         unreadAlerts  = (try? c.decodeIfPresent(Int.self, forKey: .unreadAlerts)) as? Int ?? 0

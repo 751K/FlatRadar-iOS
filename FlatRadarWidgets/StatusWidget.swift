@@ -25,13 +25,23 @@ import FlatRadarCore
 /// 相对时间」，只是里面放的是真有的那个日期。
 struct StatusWidget: Widget {
 
+    /// 锁屏那三种只有 iOS 有（设计稿 4c）。macOS 的通知中心没有对应的形态。
+    static var families: [WidgetFamily] {
+        #if os(iOS)
+        [.systemSmall, .systemMedium, .systemLarge,
+         .accessoryCircular, .accessoryRectangular, .accessoryInline]
+        #else
+        [.systemSmall, .systemMedium, .systemLarge]
+        #endif
+    }
+
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: WidgetKind.status, provider: SnapshotProvider()) { entry in
             WidgetSurface { StatusFace(entry: entry) }
         }
         .configurationDisplayName("What's new")
         .description("New listings today, the newest three, and how the last two weeks went.")
-        .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+        .supportedFamilies(Self.families)
     }
 }
 
@@ -52,6 +62,7 @@ struct StatusLayout: View {
     let entry: SnapshotEntry
     let family: WidgetFamily
     @Environment(\.palette) private var palette
+    @Environment(\.skin) private var skin
 
     private var snapshot: WidgetSnapshot? { entry.snapshot }
     private var isFresh: Bool { snapshot?.isFresh(at: entry.date) ?? false }
@@ -60,6 +71,13 @@ struct StatusLayout: View {
         switch family {
         case .systemLarge:  large
         case .systemMedium: medium
+        #if os(iOS)
+        // 锁屏那三种由系统染色，走另一套画法（``AccessoryFaces``），
+        // 不读色板——理由见那个文件顶部。
+        case .accessoryCircular:    AccessoryFaces.Circular(entry: entry)
+        case .accessoryRectangular: AccessoryFaces.Rectangular(entry: entry)
+        case .accessoryInline:      AccessoryFaces.Inline(entry: entry)
+        #endif
         default:            small
         }
     }
@@ -75,8 +93,20 @@ struct StatusLayout: View {
                 unreadPill
             }
             Spacer(minLength: 4)
+            if skin == .phone {
+            // 4b 的小号：`avg 19 · 831 live` 贴在数字底下，末尾**没有**那行
+            // 带绿点的脚注——整格到柱子为止。
+            anchor(size: 48)
+            Text(compactBaseline(at: entry.date))
+                .font(.system(size: 11))
+                .foregroundStyle(palette.muted)
+                .lineLimit(1)
+                .padding(.top, 4)
+            Spacer(minLength: 4)
+            bars(height: 28)
+            } else {
             anchor(size: 46)
-            // 小号有地方写全这句，中号只放得下 `avg 19 · 831 live`。
+            // 4a 的小号写得全，因为它底下那行是脚注不是这句。
             if let base = baseline {
                 Text(StatusWording.vsBaseline(base))
                     .font(.system(size: 10.5))
@@ -87,6 +117,7 @@ struct StatusLayout: View {
             Spacer(minLength: 4)
             bars(height: 26)
             LiveFooter(entry: entry).padding(.top, 9)
+            }
         }
     }
 
@@ -97,27 +128,33 @@ struct StatusLayout: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(spacing: 6) {
                     Diamond(color: palette.accent)
-                    SectionLabel(text: StatusWording.newToday)
+                    // 4b 中号把标题缩成 `TODAY`，4a 是 `NEW TODAY`。
+                    // 两张稿子都出自同一份内容层级，这一处是稿子上的原话。
+                    SectionLabel(text: mediumTitle)
                 }
-                anchor(size: 40).padding(.top, 6)
-                Text(compactBaseline)
+                anchor(size: mediumAnchor).padding(.top, 6)
+                Text(compactBaseline(at: entry.date))
                     .font(.system(size: 10))
                     .foregroundStyle(palette.muted)
                     .lineLimit(1)
                     .padding(.top, 3)
                 Spacer(minLength: 6)
-                bars(height: 34)
+                bars(height: mediumBars)
             }
-            .frame(width: 120)
+            .frame(width: mediumColumn)
 
             VStack(alignment: .leading, spacing: 0) {
-                HStack(spacing: 6) {
-                    SectionLabel(text: StatusWording.newest)
-                    Spacer(minLength: 4)
-                    unreadPill
+                // 中号同理：没有房源就不画那个段标题。这一档的右半边整个就是
+                // 那一段，标题孤零零挂着更明显。
+                if !(snapshot?.newest.isEmpty ?? true) {
+                    HStack(spacing: 6) {
+                        SectionLabel(text: StatusWording.newest)
+                        Spacer(minLength: 4)
+                        unreadPill
+                    }
+                    .padding(.bottom, 7)
+                    newestRows(longSubtitle: false, limit: 3)
                 }
-                .padding(.bottom, 7)
-                newestRows(longSubtitle: false, limit: 3)
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -138,12 +175,12 @@ struct StatusLayout: View {
             }
 
             HStack(alignment: .lastTextBaseline, spacing: 9) {
-                // 设计稿这里是 54pt。那张稿子的大号是 360×376，而 macOS 真正的
-                // 大号是 **329×345**（HIG 的尺寸表）——矮了 31pt。整屏按同一个
-                // 比例收了一档，而不是砍掉某一段内容：内容层级是设计稿的主张，
-                // 尺寸是系统给的，该让的是后者。
+                // 设计稿两张都是 54/56pt。**iOS 用得起，macOS 用不起**：
+                // iOS 的 systemLarge 是 364×382，而 macOS 的是 329×345
+                // （两张 HIG 尺寸表），矮了 37pt。所以 Mac 那档整屏收了一档，
+                // 而不是砍掉某一段内容——内容层级是设计稿的主张，尺寸是系统给的。
                 DisplayNumber(text: snapshot?.newTodayText ?? StatusWording.countText(nil),
-                              size: 50, dimmed: !isFresh)
+                              size: largeAnchor, dimmed: !isFresh)
                 VStack(alignment: .leading, spacing: 3) {
                     SectionLabel(text: StatusWording.newToday)
                     if let pct = snapshot?.changeVsBaseline, let base = baseline {
@@ -154,16 +191,23 @@ struct StatusLayout: View {
                     }
                 }
                 Spacer(minLength: 0)
+                // 4b 大号把未读做成数字右边一个红胶囊，而不是三格统计里的一格。
+                if skin == .phone, let snapshot,
+                   snapshot.showsUnread, snapshot.unreadAlerts > 0 {
+                    UnreadPill(count: snapshot.unreadAlerts, label: StatusWording.unreadLower)
+                }
             }
             .padding(.top, 12)
 
-            bars(height: 42, spacing: 4, radius: 2).padding(.top, 12)
+            bars(height: largeBars, spacing: 4, radius: 2).padding(.top, 12)
             axis.padding(.top, 4)
 
             HStack(spacing: 6) {
                 StatChip(title: StatusWording.liveNow,
                          value: snapshot?.totalListings, dimmed: !isFresh)
-                if snapshot?.showsUnread ?? false {
+                // 4a 把未读放在三格里；4b 把它做成了数字右边的胶囊，
+                // 所以手机那一端这儿不再重复一遍。
+                if skin == .mac, snapshot?.showsUnread ?? false {
                     StatChip(title: StatusWording.unread,
                              value: snapshot?.unreadAlerts, tinted: true, dimmed: !isFresh)
                 }
@@ -180,16 +224,54 @@ struct StatusLayout: View {
                     StatChip(title: StatusWording.statusChanges,
                              value: snapshot?.statusChanges, dimmed: !isFresh)
                 }
+                if skin == .phone {
+                // 4b 那三格是 `Live now / Watching / Closing`，**后两个都没有数据**：
+                // 没有"关注列表"这个概念，抽签截止时刻在 openapi 里
+                // （`deadline` / `closes` / `draw_at`）各出现 0 次。
+                //
+                // 换成 `New this week`——`/stats/public/summary` 里本来就有的
+                // `new_7d`，不用多发请求，而且和左边那格是同一类问题
+                // （"现在有多少" / "这一周来了多少"）。
+                StatChip(title: StatusWording.newThisWeek,
+                         value: snapshot?.newThisWeek, dimmed: !isFresh)
+                }
             }
             .padding(.top, 12)
 
-            SectionLabel(text: StatusWording.newest).padding(.top, 12).padding(.leading, 2)
-            newestRows(longSubtitle: true, limit: 2).padding(.top, 6)
+            // 一条房源都没有时**连标题一起不画**。渲染空态那一版时看到的是一个
+            // 孤零零的 `NEWEST` 底下什么都没有——那读起来像加载失败，
+            // 而实际是还没有数据。
+            if !(snapshot?.newest.isEmpty ?? true) {
+                SectionLabel(text: StatusWording.newest).padding(.top, 12).padding(.leading, 2)
+                newestRows(longSubtitle: true, limit: largeRows).padding(.top, 6)
+            }
 
             Spacer(minLength: 8)
-            nextMoveInChip
+            // 4a 把「下一个能抢的日子」放在整格底部一条棕胶囊里；
+            // 4b 那一端没有这条（它那三格里已经有第三个数了）。
+            if skin == .mac { nextMoveInBar }
         }
     }
+
+    // MARK: - 两端差在哪
+    //
+    // 差别全在这儿，别处只引用这些常量。两张稿子（4a macOS / 4b iOS）画的是同一套
+    // 内容层级，尺寸不同是因为**系统给的画布不同**：
+    //
+    // |  | systemSmall | systemMedium | systemLarge |
+    // |---|---|---|---|
+    // | macOS | 155×155 | 329×155 | 329×**345** |
+    // | iOS   | 170×170 | 364×170 | 364×**382** |
+    //
+    // 大号差 37pt，所以 Mac 那档只排得下两条房源、数字也小一档；iOS 排得下三条。
+
+    private var mediumTitle: String { skin == .phone ? StatusWording.today : StatusWording.newToday }
+    private var mediumAnchor: CGFloat { skin == .phone ? 42 : 40 }
+    private var mediumBars: CGFloat { skin == .phone ? 32 : 34 }
+    private var mediumColumn: CGFloat { skin == .phone ? 118 : 120 }
+    private var largeAnchor: CGFloat { skin == .phone ? 56 : 50 }
+    private var largeBars: CGFloat { skin == .phone ? 54 : 42 }
+    private var largeRows: Int { skin == .phone ? 3 : 2 }
 
     // MARK: - 零件
 
@@ -218,11 +300,22 @@ struct StatusLayout: View {
 
     private var baseline: Int? { snapshot.flatMap { DailyNew.baselineAverage($0.dailyNew) } }
 
-    /// 中号左栏那一行：`avg 19 · 831 live`。窄，所以两句都缩写。
-    private var compactBaseline: String {
+    /// `avg 19 · 831 live`。中号左栏和 iOS 小号都用它——窄，所以两句都缩写。
+    ///
+    /// **过期时整句换成 `Checked 3h ago`。** iOS 的小号按设计稿没有那行带绿点的
+    /// 脚注，这一行就是那一格唯一说得出"这是什么时候的数"的地方；照直说
+    /// `831 live` 等于替后端打包票。理由和 ``WidgetSnapshot/compactFooter(at:)``
+    /// 是同一条。
+    private func compactBaseline(at now: Date) -> String {
+        guard let snapshot, snapshot.isFresh(at: now) else {
+            return StatusWording.sentence(
+                entry.snapshot.map { StatusWording.checked(
+                    ServerTime.relativeTime(since: $0.capturedAt, now: now)) }
+                ?? StatusWording.openApp)
+        }
         var parts: [String] = []
         if let base = baseline { parts.append(StatusWording.avgShort(base)) }
-        if let live = snapshot?.totalListings { parts.append(StatusWording.liveCount(live)) }
+        if let live = snapshot.totalListings { parts.append(StatusWording.liveCount(live)) }
         return parts.joined(separator: " · ")
     }
 
@@ -286,10 +379,10 @@ struct StatusLayout: View {
         }
     }
 
-    /// 底部那条棕色胶囊。设计稿放的是抽签截止，这里放下一个能抢的日子——
-    /// 理由见类型注释。没有日历数据时整条不画，而不是画一条空的。
+    /// macOS 大号底部那条棕色胶囊。设计稿放的是抽签截止，这里放下一个能抢的
+    /// 日子——理由见类型注释。没有日历数据时整条不画，而不是画一条空的。
     @ViewBuilder
-    private var nextMoveInChip: some View {
+    private var nextMoveInBar: some View {
         if let next = snapshot?.nextBookable, let date = next.date {
             HStack(spacing: 8) {
                 Dot(color: palette.lottery, size: 7)

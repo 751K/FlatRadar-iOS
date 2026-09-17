@@ -42,7 +42,10 @@ _DEPLOYMENT = re.compile(r"IPHONEOS_DEPLOYMENT_TARGET = ([^;]+);")
 
 # project 级 Debug/Release + FlatRadarTests × 2 + FlatRadarUITests × 2。
 # app target 刻意不在其中——它继承 project 级的值。
-EXPECTED_CONFIG_COUNT = 6
+# 2026-09-17 从 6 到 8：iOS 的小组件 extension（FlatRadarWidget）自己带一份——
+# 它不能继承 project 级那个值，因为那一份被 macOS 的几个 target 覆盖着，
+# 而 extension 的最低版本必须和宿主 app 对得上。
+EXPECTED_CONFIG_COUNT = 8
 
 # 徽章：https://img.shields.io/badge/iOS-18.0%2B-000000?...
 _README_BADGE = re.compile(r"img\.shields\.io/badge/iOS-(\d+\.\d+)%2B")
@@ -67,7 +70,7 @@ def test_all_six_configurations_are_covered():
     found = _targets()
     assert len(found) == EXPECTED_CONFIG_COUNT, (
         f"IPHONEOS_DEPLOYMENT_TARGET 出现 {len(found)} 次，预期 "
-        f"{EXPECTED_CONFIG_COUNT} 次（project 级 + 两个测试 target，各 "
+        f"{EXPECTED_CONFIG_COUNT} 次（project 级 + 两个测试 target + iOS 小组件，各 "
         "Debug/Release）。如果是 app target 新长出了自己的值，请把它删掉——"
         "它继承 project 级就够了，多一处就多一个能跑偏的地方。加减 target 时"
         "请一并更新这条测试。")

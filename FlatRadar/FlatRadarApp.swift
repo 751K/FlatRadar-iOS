@@ -94,6 +94,13 @@ struct FlatRadarApp: App {
                     // 6. StoreKit 2 交易监听 + 加载咖啡产品
                     coffeeStore.listenForTransactions()
                     await coffeeStore.loadProducts()
+                    // 7. 主屏 / 锁屏小组件那几格的数据。
+                    //
+                    //    放在最后：它读的是上面那些 store 的现状，早跑一步只会
+                    //    写出一份空的。那条 14 天序列是它自己多拉的一样东西
+                    //    （公开接口、十几个整数），见 `WidgetPublisher`。
+                    await WidgetPublisher.refreshSeries()
+                    publishWidgetSnapshot()
                 }
                 // Deep link 入口 1：用户点击 push 通知 →
                 // PushDelegate 已 post 这个事件
@@ -116,9 +123,21 @@ struct FlatRadarApp: App {
                     guard let url = activity.webpageURL else { return }
                     handleUniversalLink(url)
                 }
+                // 小组件那几格跟着这几个数走。
+                //
+                // 写一次很便宜：没有网络，攒个结构体加一次原子写文件，而且
+                // `WidgetBridge.publish` 只在数字真变了时才踢时间轴。所以宁可
+                // 多挂几个点，也不要让桌面上那一格停在几小时前——它旧了会
+                // 自己改口（见 `WidgetSnapshot.footnote(at:)`），但能新就该新。
+                .onChange(of: notificationsStore.unreadCount) { publishWidgetSnapshot() }
+                .onChange(of: dashboardStore.summary?.lastScrape) { publishWidgetSnapshot() }
+                .onChange(of: listingsStore.listings.count) { publishWidgetSnapshot() }
                 // SSE 实时通知：登录 + 前台时连，登出 / 后台时断
                 .onChange(of: scenePhase) { _, newPhase in
                     syncStreamState(scenePhase: newPhase)
+                    // 切后台那一刻写一次：用户刚离开 app，接下来看到的就是
+                    // 桌面上那一格。
+                    if newPhase == .background { publishWidgetSnapshot() }
                     // 「用过几天」在这里记。放前台切换而不是 App 启动：用户
                     // 常常不退 App，只是切出去再切回来——只在冷启动记的话，
                     // 连用一周可能只算一天。
@@ -160,9 +179,21 @@ struct FlatRadarApp: App {
                         calendarStore.clear()
                         dashboardStore.clear()
                         meFilterStore.clear()
+                        // 3. 清掉主屏 / 锁屏那几格。匹配数和未读是账户数据，
+                        //    窗口里清干净而桌面上还挂着上一个账号的数字，
+                        //    等于这条判据没做完——而且它比 app 里更显眼。
+                        WidgetPublisher.clear()
                     }
                 }
         }
+    }
+
+    /// 见 ``WidgetPublisher``。store 都攥在这一层，所以调用点也在这儿。
+    private func publishWidgetSnapshot() {
+        WidgetPublisher.publish(auth: authStore,
+                                dashboard: dashboardStore,
+                                listings: listingsStore,
+                                notifications: notificationsStore)
     }
 
     /// 把 UserDefaults 的字符串映射到 SwiftUI ColorScheme?。

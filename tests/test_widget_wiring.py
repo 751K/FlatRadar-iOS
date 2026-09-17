@@ -27,6 +27,8 @@ ROOT = Path(__file__).resolve().parent.parent
 PBXPROJ = ROOT / "FlatRadar.xcodeproj" / "project.pbxproj"
 APP_ENTITLEMENTS = ROOT / "FlatRadarMac" / "FlatRadarMac.entitlements"
 WIDGET_ENTITLEMENTS = ROOT / "FlatRadarMacWidget" / "FlatRadarMacWidget.entitlements"
+IOS_WIDGET_ENTITLEMENTS = ROOT / "FlatRadarWidget" / "FlatRadarWidget.entitlements"
+IOS_APP_ENTITLEMENTS = ROOT / "FlatRadar" / "FlatRadar.entitlements"
 BRIDGE = ROOT / "FlatRadarCore" / "Sources" / "FlatRadarCore" / "Status" / "WidgetBridge.swift"
 WIDGET_INFO_PLIST = ROOT / "FlatRadarMacWidget-Info.plist"
 
@@ -86,6 +88,32 @@ def test_macOS_上组名必须带_team_前缀():
         f"{swift_app_group()} 没有以 {prefix} 开头。")
 
 
+def swift_app_group_ios() -> str:
+    """`WidgetBridge.appGroup` 的 iOS 分支（`#else` 那一半）。"""
+    source = BRIDGE.read_text(encoding="utf-8")
+    ios_branch = source.split("#else", 1)[1].split("#endif", 1)[0]
+    found = re.findall(r'appGroup = "([^"]+)"', ios_branch)
+    assert len(found) == 1, f"WidgetBridge 的 iOS 分支里解析出 {found}，正则该修了"
+    return found[0]
+
+
+def test_iOS_两端声明的组名一模一样():
+    """iOS 的 app 和它的小组件必须声明同一个组，而且**不带** team 前缀。
+
+    macOS 那边必须带（`$(TeamIdentifierPrefix)`），iOS 这边不能带——同一个
+    App Group 在两端两种写法，这是 Apple 的规矩，不是笔误。写混了不会报错，
+    只会让容器 URL 指向一个不存在的地方。
+    """
+    app = plistlib.loads(IOS_APP_ENTITLEMENTS.read_bytes()).get(GROUPS_KEY, [])
+    widget = plistlib.loads(IOS_WIDGET_ENTITLEMENTS.read_bytes()).get(GROUPS_KEY, [])
+    assert app == widget != [], f"app 声明 {app}，小组件声明 {widget}"
+    assert swift_app_group_ios() in app, (
+        f"WidgetBridge 的 iOS 分支是 {swift_app_group_ios()}，"
+        f"而 entitlements 里是 {app}。")
+    assert not any(g.startswith(development_team()) for g in app), (
+        f"iOS 的组名带上了 team 前缀：{app}。那是 macOS 的写法。")
+
+
 # ---------------------------------------------------- appex 得真的进到 app 里
 
 def test_小组件被嵌进了_Mac_app():
@@ -97,13 +125,13 @@ def test_小组件被嵌进了_Mac_app():
     source = pbxproj()
     assert "FlatRadarMacWidget.appex in Embed Foundation Extensions" in source, \
         "appex 没出现在任何 Copy Files 阶段里"
-    embed = re.search(
-        r"isa = PBXCopyFilesBuildPhase;.*?dstSubfolderSpec = (\d+);.*?"
-        r"FlatRadarMacWidget\.appex in Embed Foundation Extensions",
-        source, re.S)
-    assert embed, "找不到那条 Embed 阶段，正则或工程结构变了"
-    assert embed.group(1) == "13", \
-        f"dstSubfolderSpec = {embed.group(1)}，预期 13（Contents/PlugIns）"
+    assert "FlatRadarWidget.appex in Embed Foundation Extensions" in source, \
+        "iOS 那个 appex 没出现在任何 Copy Files 阶段里"
+    specs = re.findall(
+        r"isa = PBXCopyFilesBuildPhase;[^}]*?dstSubfolderSpec = (\d+);", source)
+    assert len(specs) == 2, f"预期两条 Embed 阶段（两端各一），实际 {len(specs)}"
+    assert set(specs) == {"13"}, \
+        f"dstSubfolderSpec = {specs}，预期都是 13（PlugIns）"
 
 
 def test_小组件的_bundle_id_挂在_app_底下():
@@ -113,9 +141,9 @@ def test_小组件的_bundle_id_挂在_app_底下():
     """
     ids = set(re.findall(r"PRODUCT_BUNDLE_IDENTIFIER = ([\w.]+);", pbxproj()))
     host = "com.j.kong.FlatRadar"
-    widget = [i for i in ids if i.startswith(host + ".") and "Widget" in i]
-    assert widget == [f"{host}.MacWidget"], \
-        f"小组件的 bundle id 是 {widget}，预期 ['{host}.MacWidget']"
+    widget = sorted(i for i in ids if i.startswith(host + ".") and "Widget" in i)
+    assert widget == [f"{host}.MacWidget", f"{host}.Widget"], \
+        f"小组件的 bundle id 是 {widget}，预期两端各一个"
 
 
 # ------------------------------------------------- 不给的那几条权限也要守住
@@ -130,16 +158,24 @@ def test_小组件不许联网也不许碰钥匙串():
 
     真要改成联网取数，那是个需要重新论证的决定，不该是顺手加一行 entitlement。
     """
-    declared = plistlib.loads(WIDGET_ENTITLEMENTS.read_bytes())
+    for path in [WIDGET_ENTITLEMENTS, IOS_WIDGET_ENTITLEMENTS]:
+        _assert_no_extra_capabilities(path)
+
+
+def _assert_no_extra_capabilities(path: Path) -> None:
+    declared = plistlib.loads(path.read_bytes())
     for key in ["com.apple.security.network.client",
                 "com.apple.security.network.server",
                 "keychain-access-groups",
                 "com.apple.security.files.user-selected.read-write"]:
         assert key not in declared, (
-            f"小组件的 entitlements 里出现了 {key}。见 WidgetSnapshot 顶部："
+            f"{path.name} 里出现了 {key}。见 WidgetSnapshot 顶部："
             "这一格不联网是有意的，不是还没做。")
-    assert declared.get("com.apple.security.app-sandbox") is True, \
-        "小组件必须在沙盒里"
+    # macOS 的 extension 要**显式**声明沙盒；iOS 的 app extension 天然在沙盒里，
+    # 那个键在 iOS 上不存在，所以只对 Mac 那份断言。
+    if "Mac" in path.name:
+        assert declared.get("com.apple.security.app-sandbox") is True, \
+            f"{path.name}：macOS 的小组件必须显式声明沙盒"
 
 
 # ------------------------------------------- Info.plist 不能待在同步目录里
@@ -180,7 +216,10 @@ def test_小组件声明了自己是哪种扩展():
 
 # --------------------------------------------------- kind 是桌面上那一格的身份
 
+# 界面是两端共用的一份；两个 extension target 各自只有入口和 entitlements。
+SHARED_UI_DIR = ROOT / "FlatRadarWidgets"
 WIDGET_DIR = ROOT / "FlatRadarMacWidget"
+IOS_WIDGET_DIR = ROOT / "FlatRadarWidget"
 KINDS = ROOT / "FlatRadarCore" / "Sources" / "FlatRadarCore" / "Status" / "WidgetBridge.swift"
 
 
@@ -200,9 +239,13 @@ def test_widget_kind_改了等于把用户摆好的那一格弄没():
 
 def test_两格都注册在_bundle_里():
     """`WidgetBundle` 里漏掉一格的症状是"图库里没有它"——不报错。"""
-    bundle = (WIDGET_DIR / "FlatRadarMacWidgetBundle.swift").read_text(encoding="utf-8")
+    mac = (WIDGET_DIR / "FlatRadarMacWidgetBundle.swift").read_text(encoding="utf-8")
     for widget in ["StatusWidget()", "UnreadWidget()", "CalendarWidget()"]:
-        assert widget in bundle, f"{widget} 没出现在 WidgetBundle 里"
+        assert widget in mac, f"{widget} 没出现在 Mac 的 WidgetBundle 里"
+    # iOS 那边**没有**日历那一格：设计稿的 iOS 部分只有两格。
+    ios = (IOS_WIDGET_DIR / "FlatRadarWidgetBundle.swift").read_text(encoding="utf-8")
+    for widget in ["StatusWidget()", "UnreadWidget()"]:
+        assert widget in ios, f"{widget} 没出现在 iOS 的 WidgetBundle 里"
 
 
 def test_小组件里不许再出现裸的文案字面量():
@@ -218,7 +261,7 @@ def test_小组件里不许再出现裸的文案字面量():
     # 品牌名不是文案，没有第二种写法可漂。设计稿大号那一格的页眉就是它。
     ALLOWED = {"FlatRadar"}
     offenders = []
-    for path in sorted(WIDGET_DIR.glob("*.swift")):
+    for path in sorted(SHARED_UI_DIR.glob("*.swift")):
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             for literal in re.findall(r'Text\("([^"\\]+)"\)', line):
                 # 纯插值和标点不算文案。

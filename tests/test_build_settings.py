@@ -41,17 +41,19 @@ PBXPROJ = Path(__file__).resolve().parent.parent / "FlatRadar.xcodeproj" / "proj
 _SWIFT_VERSION = re.compile(r"SWIFT_VERSION = ([^;]+);")
 _DEFAULT_ISOLATION = re.compile(r"SWIFT_DEFAULT_ACTOR_ISOLATION = ([^;]+);")
 
-# 7 个 target（FlatRadar / FlatRadarMac / FlatRadarMacWidget / FlatRadarMacTests /
-# FlatRadarMacUITests / FlatRadarTests / FlatRadarUITests）× Debug/Release。
+# 8 个 target（FlatRadar / FlatRadarMac / FlatRadarMacWidget / FlatRadarWidget /
+# FlatRadarMacTests / FlatRadarMacUITests / FlatRadarTests / FlatRadarUITests）
+# × Debug/Release。
 #
 # 2026-09-09 从 6 改到 8 再到 10：先加 macOS target，再加它的测试目标
 # （docs/MACOS.md Phase 1）。
 # 2026-09-17 到 12：加 FlatRadarMacUITests（Mac 端 App Store 截图自动化）。
 # 2026-09-17 到 14：加 FlatRadarMacWidget（桌面小组件）。
+# 2026-09-17 到 16：加 FlatRadarWidget（iOS 主屏 / 锁屏小组件）。
 # 注意 Core 的语言模式**不在这里**——它迁进本地 SwiftPM 包之后由
 # `FlatRadarCore/Package.swift` 的 `.swiftLanguageMode(.v6)` 管，
 # 见下面 test_core_package_pins_language_mode_and_isolation。
-EXPECTED_CONFIG_COUNT = 14
+EXPECTED_CONFIG_COUNT = 16
 
 
 def _source() -> str:
@@ -73,7 +75,7 @@ def test_all_configurations_are_covered():
     versions = _SWIFT_VERSION.findall(_source())
     assert len(versions) == EXPECTED_CONFIG_COUNT, (
         f"SWIFT_VERSION 出现 {len(versions)} 次，预期 {EXPECTED_CONFIG_COUNT} 次"
-        "（7 个 target × Debug/Release）。加减 target 时请一并更新这条测试，"
+        "（8 个 target × Debug/Release）。加减 target 时请一并更新这条测试，"
         "顺便确认新 target 也是 6.0。")
 
 

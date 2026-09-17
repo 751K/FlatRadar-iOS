@@ -490,6 +490,8 @@ docs/DESIGN.md §6 对此也有一条：大数字卡和横滑 chip 排是手机�
 | `UnreadWidget`（Unread） | 小 | 有多少我还没看 |
 | `CalendarWidget`（Move-ins） | 中 / 大 | 下次什么时候有房 |
 
+**iOS 那一端（4b / 4c）也做了**，见下面单独一节。
+
 第三格不在设计稿里，是上一轮「是不是还可以做地图 base 的？或者日历 base 的？」的
 答案；**排版跟着设计稿走**，三格摆在一起才是一套东西。为什么是日历不是地图：日历
 是纯数字，画出来不要图片（地图得先有瓦片，而这个扩展不联网，只能由 app 渲染成 PNG
@@ -602,6 +604,66 @@ docs/DESIGN.md §6 对此也有一条：大数字卡和横滑 chip 排是手机�
 **深色只有一半是稿子上的。** 4b 那张深色 UNREAD 卡给了底 / 字 / 次要 / 红 / 蓝 / 棕
 六个值，绿、绿点和几个填充色是按同一个位移推的——`WidgetPalette.dark` 的注释里
 逐项写明了哪些是稿子上有的、哪些是推的，免得下次有人把推出来的当成规范。
+
+### iOS 小组件（2026-09-17）
+
+设计稿 4b（主屏 小 170 / 中 364 / 大 364×382）和 4c（锁屏 圆形 / 矩形 / 内联）。
+新 target `FlatRadarWidget`，嵌进 `FlatRadar.app`。
+
+**界面和 Mac 是同一份代码。** `FlatRadarWidgets/` 这个目录被两个 extension target
+同时同步，各自只留一个入口文件和一份 entitlements。两张设计稿画的本来就是同一套
+内容层级，各写一份的话下一次改配色要改两遍，而漏掉一遍不会有任何东西报错。
+
+⚠️ **两端差异做成值，不是 `#if os(iOS)`**
+
+这是这一节最该记住的一条。`#if` 是编译期的：在 macOS 上跑渲染脚本时，iOS 那几个
+分支根本不进编译，于是「iOS 的小号排得下吗」这个问题**问不出来**。上一轮已经因为
+同样的原因吃过一次亏——`widgetFamily` 是只读环境值，尺寸档不当参数传就画不出小号，
+而第一次画出来就抓到两个只有看才看得见的毛病。
+
+所以差异走 `WidgetSkin`（`.mac` / `.phone`，默认按当前平台取，渲染脚本可以指定
+另一端）。锁屏那三种是唯一的例外，它们用的 `AccessoryWidgetBackground` 是 iOS
+独有的 API——那几种在 macOS 上没有对应形态，留 `#if` 不影响验证。
+
+**差在哪**（全在一处，别处只引用那几个常量）：
+
+| | systemSmall | systemMedium | systemLarge |
+|---|---|---|---|
+| macOS | 155×155 | 329×155 | 329×**345** |
+| iOS | 170×170 | 364×170 | 364×**382** |
+
+大号差 37pt，所以 Mac 只排得下两条房源、数字也小一档，iOS 排得下三条。另外纸底
+两端不同（Mac `#FBFAF7`，iOS `#F3F0E8`——后者就是 `Theme.pitchBackground`，
+app 图标里窗户的填充色，iOS 的小组件贴着主屏图标，用同一个暖底）；中号标题
+iOS 缩成 `TODAY`；未读在 4a 是三格统计里的一格，在 4b 是大数字右边一个红胶囊。
+
+**iOS 大号那三格里有两格没有数据**：4b 写的是 `Live now / Watching / Closing`，
+而「关注列表」这个概念不存在、抽签截止时刻在 openapi 里（`deadline` / `closes` /
+`draw_at`）各出现 0 次。换成 `Matching filters` 和 `New this week`——后者是
+`/stats/public/summary` 里本来就有的 `new_7d`，不用多发任何请求。
+
+**iOS 小号按稿子没有那行带绿点的脚注**（它到柱子为止），所以「这是什么时候的数」
+只剩数字底下那一行 `avg 16 · 831 live`。那一行因此也要会改口：过期时整句换成
+`Checked 3h ago`，数字和红柱子一起变灰。不然那一格会拿一个三小时前的 `831 live`
+充当现在。
+
+**匹配数两端取自不同接口，这是有意的**：Mac 走 `/listings` 的 `total`（和菜单栏、
+统计带同一个数），iOS 走 `/me/summary` 的 `matched_total`（和 Dashboard 上那张
+「Your matches」卡同一个数）。小组件要先和**它旁边那个 app** 一致；两端那两个数
+本来就不是同一个口径，这一点在两端统一之前不该由小组件来抹平。
+
+**App Group 两端两种写法**：iOS 是 `group.com.j.kong.FlatRadar`，macOS 必须带 team
+前缀（`HGXZB3UC25.group.…`）。写混了不报错，只是容器 URL 指向一个不存在的地方。
+`tests/test_widget_wiring.py` 两端各钉一条。
+
+接进 iOS 时 App ID 上没有 App Groups 能力，`xcodebuild -allowProvisioningUpdates`
+自己去注册了组并更新了两个描述文件（`com.j.kong.FlatRadar` 和
+`com.j.kong.FlatRadar.Widget`）。
+
+**锁屏那三种（4c）没有渲染验证**：`AccessoryWidgetBackground` 只有 iOS 有，
+macOS 上的渲染脚本画不出来，而锁屏挂件也没法用脚本截图。它们的内容层级和主屏
+那几档同源（圆形只放锚点、矩形加未读和最新一条、内联一句话），但**排版只在真机
+锁屏上验得了**，这一条必须说出来，不能当成验过。
 
 ### Phase 5 · 上架（可以无限期推迟）
 

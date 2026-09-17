@@ -49,7 +49,29 @@ public nonisolated enum StatusWording {
     /// 全库，不是这个账号的。标签把口径写在脸上——实测库里 828 条而账号只匹配 80 条。
     public static let totalListings = "Total listings"
     public static let statusChanges = "Status changes"
+    /// `new_7d`。iOS 大号第二格。
+    public static let newThisWeek = "New this week"
     public static let unread = "Unread"
+
+    /// 4b 大号那个红胶囊里跟在数字后面的词：`7 unread`。跟在数字后面，所以小写。
+    public static let unreadLower = "unread"
+
+    // MARK: - 锁屏挂件（设计稿 4c）
+
+    /// 圆形挂件里压在数字底下那三个字母。锁屏那一格只有 62pt 见方，
+    /// `NEW TODAY` 放不下，稿子上写的就是 `NEW`。
+    public static let newShort = "new"
+    /// 矩形挂件第一行里跟在数字后面的词：`31 new · 7 unread`。
+    public static let newLower = "new"
+
+    /// 内联挂件那一行：`FlatRadar · 31 new today`。
+    ///
+    /// 拿不到数时不写 `FlatRadar · — new today`——那读起来像个坏掉的模板。
+    /// 退回只说名字，让系统那一行安静地待着。
+    public static func inlineSummary(_ newToday: Int?) -> String {
+        guard let newToday else { return "FlatRadar" }
+        return "FlatRadar · \(newToday) new today"
+    }
 
     // MARK: - 小组件那几段的标题
     //

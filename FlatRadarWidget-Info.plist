@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	    扩展点的声明。这一条**只能**写在 Info.plist 里：它是字典套字典，
+	    `INFOPLIST_KEY_*` 那套 build setting 表达不了嵌套。
+
+	    放在工程根而不是 FlatRadarWidget/ 里：那个目录是
+	    `PBXFileSystemSynchronizedRootGroup`，扔进去的文件自动成为 target 资源，
+	    Xcode 会直接警告 Copy Bundle Resources 里有 Info.plist。
+	    和 Mac 那份（FlatRadarMacWidget-Info.plist）同一个道理。
+	-->
+	<key>NSExtension</key>
+	<dict>
+		<key>NSExtensionPointIdentifier</key>
+		<string>com.apple.widgetkit-extension</string>
+	</dict>
+</dict>
+</plist>

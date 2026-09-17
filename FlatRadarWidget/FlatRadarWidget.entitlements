@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- 和宿主 app 共用的容器，小组件的数据唯一的来源。
+
+	     iOS 上组名**不带** team 前缀，macOS 上必须带——同一个 App Group 在两端
+	     写法不同，理由和常量见 FlatRadarCore 的 `WidgetBridge`。
+
+	     这里没有 app-sandbox 那一条：iOS 的 app extension 本来就在沙盒里，
+	     那是 macOS 才要显式声明的。 -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>group.com.j.kong.FlatRadar</string>
+	</array>
+
+	<!--
+	    这里**没有**的两条，和 Mac 那份一样是有意不给的：
+
+	    - `keychain-access-groups`：这一格不联网，就不需要 bearer token。
+	      token 多一个进程碰得到，就多一处要一起对的地方。
+	    - 网络：数字全部由宿主 app 算好写进共享容器，见 `WidgetSnapshot` 顶部。
+	-->
+</dict>
+</plist>

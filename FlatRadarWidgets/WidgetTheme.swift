@@ -18,9 +18,45 @@ import SwiftUI
 /// 崩过」「Mac 这边目前没崩到，纯属运气」。小组件渲染跑在扩展进程的另一套时序上，
 /// 不想再赌一次。这里改成**显式按 `colorScheme` 取一份**：视图从环境里读明暗，
 /// 拿到一个纯值结构体，没有闭包、没有隔离问题。
+/// 这一格画成哪一端的样子。
+///
+/// 为什么不是 `#if os(iOS)`
+/// ----------------------
+/// 因为**看不见**。`#if` 是编译期的：在 macOS 上跑渲染脚本时，iOS 那几个分支
+/// 根本不进编译，于是"iOS 的小号排得下吗"这个问题问不出来。这一轮已经因为同样的
+/// 原因吃过一次亏——`widgetFamily` 是只读环境值，尺寸档不当参数传就画不出小号，
+/// 而第一次画出来就抓到两个只有看才看得见的毛病。
+///
+/// 所以两端差异做成**值**：默认按当前平台取，渲染脚本可以显式指定另一端。
+/// 锁屏那三种是例外，它们用的 `AccessoryWidgetBackground` 是 iOS 独有的 API，
+/// 只能留 `#if`——那几种在 macOS 上没有对应形态，也就无所谓渲染。
+enum WidgetSkin: Sendable {
+    case mac
+    case phone
+
+    static var current: WidgetSkin {
+        #if os(iOS)
+        .phone
+        #else
+        .mac
+        #endif
+    }
+}
+
+private struct SkinKey: EnvironmentKey {
+    static let defaultValue = WidgetSkin.current
+}
+
+extension EnvironmentValues {
+    var skin: WidgetSkin {
+        get { self[SkinKey.self] }
+        set { self[SkinKey.self] = newValue }
+    }
+}
+
 struct WidgetPalette {
 
-    let paper: Color        // 卡片底
+    var paper: Color        // 卡片底（两端不同，见 ``resolve(_:skin:)``）
     let ink: Color          // 主文字
     let muted: Color        // 次要文字
     let accent: Color       // 红：新上架 / 未读
@@ -38,11 +74,21 @@ struct WidgetPalette {
     /// 非首行那个菱形的颜色。
     let pinIdle: Color
 
-    static func resolve(_ scheme: ColorScheme) -> WidgetPalette {
-        scheme == .dark ? .dark : .light
+    static func resolve(_ scheme: ColorScheme, skin: WidgetSkin = .current) -> WidgetPalette {
+        guard scheme != .dark else { return .dark }
+        var light = Self.light
+        light.paper = skin == .phone ? Color(hex: 0xF3F0E8) : Color(hex: 0xFBFAF7)
+        return light
     }
 
-    /// 浅色。取自设计稿 4a（macOS 通知中心那一栏），逐个 hex 照搬。
+    /// 浅色。取自设计稿,逐个 hex 照搬。
+    ///
+    /// 只有纸底两端不同（见 ``resolve(_:skin:)``）：4a（macOS）是 `#FBFAF7`，
+    /// 4b（iOS）是 `#F3F0E8`。
+    /// 后者不是随手挑的——它就是 `Theme.pitchBackground`，也就是 app 图标里
+    /// 窗户的填充色（`2-windows.svg`）。iOS 的小组件贴着主屏图标，
+    /// 用同一个暖底；macOS 的贴在通知中心那一栏里，纸白一档更干净。
+    /// 浅色那份的纸底在 ``resolve(_:skin:)`` 里按端覆盖，这里只是个占位。
     static let light = WidgetPalette(
         paper:   Color(hex: 0xFBFAF7),
         ink:     Color(hex: 0x1B2B38),
