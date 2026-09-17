@@ -89,4 +89,95 @@ for runtime, devices in data.get('devices', {}).items():
   xcrun simctl shutdown "$udid" 2>/dev/null || true
 done
 
+# ─────────────────────────────────────────────────────────────────────────────
+# macOS 测试构建：把**需要描述文件授权**的 entitlement 剥掉。
+#
+# 为什么必须剥
+# ------------
+# Xcode Cloud 的 TEST action **一律 ad-hoc 签名**，日志里是
+#
+#     Signing Identity: "Sign to Run Locally"
+#     /usr/bin/codesign --force --sign - --entitlements ... FlatRadarMac.app
+#
+# `--sign -` 没有描述文件，签出来的包 `TeamIdentifier=not set`。而这三个
+# entitlement 只能由描述文件授权：
+#
+#     com.apple.developer.aps-environment      APNs
+#     com.apple.developer.associated-domains   Universal Link
+#     keychain-access-groups                   application-identifier（data protection 钥匙串）
+#
+# 带着它们又没有描述文件，macOS 直接拒绝 spawn。build 380 的六条用例全挂在
+# `app.launch()` 上，报的是：
+#
+#     Could not launch "FlatRadarMac". Runningboard has returned error 5.
+#     Domain: RBSRequestErrorDomain Code: 5 / Launchd job spawn failed
+#
+# 错误信息里一个字都没提签名或 entitlement，所以这里写清楚，省得下次再查一遍。
+# （归档那条路不受影响：`Mac Build` 用的是真描述文件，走的也不是这个分支。）
+#
+# 剥掉之后截图还成不成立
+# ----------------------
+# 成立。三项在截图里都用不到：
+#
+#   - APNs：`PushStore` 第 167 行见到 `UI_TEST_SCREENSHOT_MODE` 就直接 return，
+#     截图模式本来就不注册推送，也正因此不会弹权限框毁图。
+#   - Universal Link：截图不点链接。
+#   - 钥匙串：`AuthStore.persist(token:)` 把保存失败 catch 掉了，只置
+#     `sessionSavedToKeychain = false`。登录靠的是内存里的 `client.setToken` +
+#     `getMe()`，不经钥匙串。而且每条用例都冷启动重新登录，本来就不需要跨启动
+#     恢复会话。
+#
+# 为什么按 action 而不是按 workflow 名
+# -----------------------------------
+# 名字会被人改，`build-for-testing` 不会——归档永远不是这个 action。变量取不到
+# 时**不剥**（归档保持完整 entitlement 是更安全的那一侧），并把实际值打出来，
+# 让下一轮日志自己说明为什么没走进来。
+#
+# 只动 FlatRadarMac 那一份。iOS 截图那条 workflow 的 action 同样是
+# build-for-testing，但它不构建 Mac app，改这个文件对它没有任何影响；iOS 的
+# entitlement 一个字都不能动——模拟器上那套现在是好的。
+# ─────────────────────────────────────────────────────────────────────────────
+
+MAC_ENTITLEMENTS="$CI_PRIMARY_REPOSITORY_PATH/FlatRadarMac/FlatRadarMac.entitlements"
+XCB_ACTION="${CI_XCODEBUILD_ACTION:-}"
+
+echo "› [entitlements] CI_XCODEBUILD_ACTION='${XCB_ACTION}' CI_PRODUCT_PLATFORM='${CI_PRODUCT_PLATFORM:-}'"
+
+case "$XCB_ACTION" in
+  *test*)
+    if [ ! -f "$MAC_ENTITLEMENTS" ]; then
+      echo "› [entitlements] 找不到 $MAC_ENTITLEMENTS"
+      exit 1
+    fi
+    python3 - "$MAC_ENTITLEMENTS" <<'PYEOF'
+import plistlib, sys
+
+# 和 tests/test_mac_screenshot_plan.py 里的 RESTRICTED 是同一份清单。
+# 加了新的受限 entitlement 而忘了加到这里，那条测试会红。
+RESTRICTED = [
+    "com.apple.developer.aps-environment",
+    "com.apple.developer.associated-domains",
+    "keychain-access-groups",
+]
+
+path = sys.argv[1]
+with open(path, "rb") as f:
+    ent = plistlib.load(f)
+
+removed = [k for k in RESTRICTED if k in ent]
+for k in removed:
+    del ent[k]
+
+with open(path, "wb") as f:
+    plistlib.dump(ent, f)
+
+print("› [entitlements] 已剥离：%s" % (", ".join(removed) or "（无）"))
+print("› [entitlements] 保留：%s" % ", ".join(sorted(ent)))
+PYEOF
+    ;;
+  *)
+    echo "› [entitlements] 非测试构建，保留完整 entitlements"
+    ;;
+esac
+
 exit 0

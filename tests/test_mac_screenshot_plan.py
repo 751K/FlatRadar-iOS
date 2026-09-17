@@ -29,6 +29,7 @@
 from __future__ import annotations
 
 import json
+import plistlib
 import re
 from pathlib import Path
 
@@ -161,3 +162,43 @@ def test_single_configuration_until_mac_is_localized(plan):
     assert names == ["en-US"], (
         f"Mac 截图 plan 现在有 {names}。多语言要等 FlatRadarMac 真的有字符串目录"
         "之后再加，否则跑出来是几套一样的英文图。")
+
+
+def test_ci_strips_exactly_the_profile_bound_entitlements():
+    """新加了「需要描述文件」的 entitlement，得同时加进 CI 的剥离清单。
+
+    Xcode Cloud 的 TEST action 一律 ad-hoc 签名（`codesign --sign -`，
+    `TeamIdentifier=not set`）。这类 entitlement 只能由描述文件授权，带着它们
+    又没有描述文件，macOS 会拒绝 spawn：
+
+        Could not launch "FlatRadarMac". Runningboard has returned error 5.
+        Domain: RBSRequestErrorDomain Code: 5 / Launchd job spawn failed
+
+    错误信息里一个字都没提签名或 entitlement——build 350 六条用例全挂在这上面，
+    查到根因花的时间远超写这条测试。所以把它钉住：漏一项，下一轮云端就整轮红，
+    而且报的还是那句看不出原因的 RunningBoard。
+
+    判据用前缀而不是硬清单：`com.apple.developer.*` 全都要描述文件，
+    `keychain-access-groups` 是靠它换 `application-identifier` 的那一个。
+    `com.apple.security.*`（沙盒那一族）ad-hoc 签名自己就能授，不在此列。
+    """
+    ent_path = ROOT / "FlatRadarMac" / "FlatRadarMac.entitlements"
+    assert ent_path.is_file(), f"{ent_path} 不存在"
+    with ent_path.open("rb") as f:
+        ent = plistlib.load(f)
+
+    needs_profile = {
+        k for k in ent
+        if k.startswith("com.apple.developer.") or k == "keychain-access-groups"
+    }
+
+    script = (ROOT / "ci_scripts" / "ci_pre_xcodebuild.sh").read_text(encoding="utf-8")
+    block = re.search(r"RESTRICTED = \[(.*?)\]", script, flags=re.S)
+    assert block, "ci_pre_xcodebuild.sh 里找不到 RESTRICTED 清单——脚本结构变了"
+    stripped = set(re.findall(r'"([^"]+)"', block.group(1)))
+
+    assert needs_profile == stripped, (
+        f"entitlements 里需要描述文件的是 {sorted(needs_profile)}，"
+        f"而 CI 剥离的是 {sorted(stripped)}。"
+        f"少剥的（{sorted(needs_profile - stripped)}）会让 Mac 截图整轮挂在"
+        f" app.launch()；多剥的（{sorted(stripped - needs_profile)}）是清单没跟着删。")
