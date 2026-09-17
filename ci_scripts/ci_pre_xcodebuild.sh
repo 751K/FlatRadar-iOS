@@ -159,8 +159,116 @@ fi
 # （脚本开头 `set -u`）。第一趟其实已经剥干净了，第二趟纯属白跑——那时 app 早就
 # 构建并签好名了，改源文件毫无作用。所以只认 build-for-testing 这一趟，
 # 而且每个 CI_ 变量都带 `:-` 默认值，不让 set -u 再有机会。
+# ─────────────────────────────────────────────────────────────────────────────
+# 别让构建机锁屏。
+#
+# build 371 六条用例全挂在 `Failed to activate application (current state:
+# Running Background)`。屏幕录像里是**登录锁屏**——"local / Enter Password"。
+# 锁了之后没有可用的 GUI 会话，任何 app 都激活不了，跟被测代码毫无关系。
+#
+# 这不是偶发：build 369 的日志里 Xcode 自己就报过
+#
+#     IDETestOperationsObserverDebug: Failed to suppress screen saver
+#     (SACSetScreenSaverCanRun returned 22)
+#
+# 也就是说 Xcode 内置的那套抑制机制在这台机器上是失效的，得我们自己来。
+#
+# 370 之所以没事，是因为它只跑了三分钟（那一轮 5/6 过，没有 60 秒超时）；
+# 371 跑了十四分钟就撞上了。也就是说**跑得越慢越容易锁**，而跑得慢往往正是因为
+# 有别的失败在超时——于是一个小问题会被锁屏放大成整轮全红，掩盖真正的原因。
+#
+# 两条一起上：
+#   - `defaults` 把屏保空闲时间设成 0（不需要 sudo，当前用户域就够）；
+#   - `caffeinate` 兜底，`-d` 阻止显示器睡眠、`-i` 阻止系统空闲睡眠、`-u` 声明
+#     用户活跃。`nohup` + `&` 让它活过这个脚本；一小时后自己退出，不会赖在机器上。
+echo "› [awake] 防锁屏"
+
+# 先报告上一次留下的还活着没有——这一条是诊断，不是摆设。
+#
+# build 375 的日志里 caffeinate 明明起来了（pid=3795），屏幕照样锁了，录像里是
+# "local / Enter Password"。所以问题不是"没启动"，而是**启动了没活下来**：
+# `nohup` 挡得住 SIGHUP，挡不住 Xcode Cloud 在脚本退出时清理整个进程组。
+#
+# 下一轮看这一行就知道改法成没成。
+if pgrep -x caffeinate > /dev/null 2>&1; then
+  echo "› [awake]   已有 caffeinate 在跑：$(pgrep -x caffeinate | tr '\n' ' ')"
+else
+  echo "› [awake]   没有存活的 caffeinate"
+fi
+
+defaults -currentHost write com.apple.screensaver idleTime -int 0 2>/dev/null || true
+defaults write com.apple.screensaver askForPassword -int 0 2>/dev/null || true
+
+# 交给 launchd 托管，而不是当这个脚本的子进程。
+#
+# `launchctl submit` 把它注册成一个 launchd 作业，进程组被清理时不受影响。
+# 先 remove 一次，免得第二趟因为同名作业已存在而失败。
+launchctl remove flatradar.keepawake 2>/dev/null || true
+if launchctl submit -l flatradar.keepawake -- /usr/bin/caffeinate -dimsu -t 5400 2>/dev/null; then
+  echo "› [awake]   launchctl submit 成功"
+else
+  echo "› [awake]   launchctl submit 失败，退回 nohup（可能活不过脚本）"
+  nohup caffeinate -dimsu -t 5400 >/dev/null 2>&1 &
+fi
+
+# 再补一刀：直接把屏保引擎停掉。锁屏是 loginwindow 干的，killall 让它重置计时。
+killall ScreenSaverEngine 2>/dev/null || true
+
 REPO_PATH="${CI_PRIMARY_REPOSITORY_PATH:-}"
 XCB_ACTION="${CI_XCODEBUILD_ACTION:-}"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 把构建机的分辨率调大。
+#
+# 这台 `VirtualMac2,1` 默认 1280×800 点，而 ASC 最小的合法截图尺寸在 2x 下
+# **正好**也是 1280×800 点——菜单栏 30 + Dock 78 占掉之后窗口只剩 1280×692，
+# 差出来的 108 点在合成时补成白边（build 372 那六张图上下各 108 像素的白边就是它）。
+#
+# 屏幕够大的话窗口就能拿到首选的 1440×900 点，合成时画布正好等于图，零留白、
+# 零重采样——本地那块 2560 点宽的屏正是这样。
+#
+# 工具默认只列模式、不改任何东西（在开发机上误改分辨率很讨厌），这里显式给
+# `--apply`。挑不到够大的模式就保持现状，只把模式表打进日志，下一轮据此再判断。
+# 整段失败都不影响构建。
+# 分两趟：`build-for-testing` 时编译，两趟都执行。
+#
+# 必须这样，因为 `CI_PRIMARY_REPOSITORY_PATH` **只在第一趟有定义**（build 353
+# 就是栽在这上面），而 app 真正运行、分辨率真正需要生效的是**第二趟**
+# （test-without-building）。所以第一趟把工具编译到 /tmp 留着——两趟跑在同一台
+# 机器上，第二趟直接用那个二进制。
+# 藏 Dock。
+#
+# 白边是菜单栏 30 点 + Dock 78 点占掉、窗口拿不到的那部分（build 372 的图上下各
+# 108 像素）。分辨率那条路走不通（见 mac-display-mode.swift 里的实测结论），
+# 能收的就是 Dock 这 78 点：可用高度 692 → 约 766，白边从 108 缩到约 34 像素。
+#
+# `autohide-delay` 设很大，免得指针恰好扫过屏幕底边时 Dock 探头进画面——截图那
+# 一刻指针已经被 hover 到窗口中央了，但多一道保险不费什么。
+#
+# 菜单栏那 30 点不碰：`_HIHideMenuBar` 要重新登录才生效，在一次性构建机上不可靠。
+if [ "${CI_PRODUCT_PLATFORM:-}" = "macOS" ]; then
+  echo "› [dock] 隐藏 Dock"
+  defaults write com.apple.dock autohide -bool true 2>/dev/null || true
+  defaults write com.apple.dock autohide-delay -float 1000 2>/dev/null || true
+  killall Dock 2>/dev/null || true
+fi
+
+DISPLAY_BIN=/tmp/mac-display-mode
+if [ "${CI_PRODUCT_PLATFORM:-}" = "macOS" ]; then
+  if [ ! -x "$DISPLAY_BIN" ] && [ -n "$REPO_PATH" ]; then
+    DISPLAY_TOOL="$REPO_PATH/tools/screenshots/mac-display-mode.swift"
+    if [ -f "$DISPLAY_TOOL" ]; then
+      echo "› [display] 编译分辨率工具"
+      xcrun --sdk macosx swiftc -O "$DISPLAY_TOOL" -o "$DISPLAY_BIN" 2>&1 \
+        || echo "› [display] 编译失败（不影响构建）"
+    fi
+  fi
+  if [ -x "$DISPLAY_BIN" ]; then
+    "$DISPLAY_BIN" --apply || true
+  else
+    echo "› [display] 没有可用的分辨率工具，保持现状"
+  fi
+fi
 
 echo "› [entitlements] CI_XCODEBUILD_ACTION='${XCB_ACTION}' CI_PRODUCT_PLATFORM='${CI_PRODUCT_PLATFORM:-}'"
 

@@ -20,6 +20,8 @@
 //
 
 import AppKit
+import ImageIO
+import UniformTypeIdentifiers
 import XCTest
 
 @MainActor
@@ -32,9 +34,22 @@ final class MacScreenshotTests: XCTestCase {
     }
 
     override func tearDown() {
-        // 每条用例都要**冷启动**。不关的话 `app.launch()` 拿到的可能是上一条
-        // 留下的窗口，连同上一条设的 section——名字对、尺寸对、内容是上一屏。
+        // 每条用例都要**冷启动**。
+        //
+        // 不只是"别带着上一条的 section"——更要命的是进程**没死透**：macOS 的 app
+        // 关掉最后一个窗口默认不退出，下一条的 `launch()` 于是拿到一个没有窗口的
+        // 现存实例，干等 60 秒。build 367 的 02–05 就是这么挂的。
+        //
+        // 治本在 App 那边（`applicationShouldTerminateAfterLastWindowClosed`），
+        // 这里等一下并把结果记进日志：真出问题时能一眼看出是不是它。
         app.terminate()
+        let deadline = Date().addingTimeInterval(10)
+        while app.state != .notRunning, Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.2)
+        }
+        if app.state != .notRunning {
+            XCTContext.runActivity(named: "⚠️ terminate 之后进程仍未退出（state=\(app.state.rawValue)）") { _ in }
+        }
     }
 
     // MARK: - Captures
@@ -84,7 +99,14 @@ final class MacScreenshotTests: XCTestCase {
         // 名字和 `UITestFlags.screenshotMode` 必须一致，由
         // tests/test_mac_screenshot_plan.py 的 test_screenshot_flag_name_matches_core 钉住
         // （UI 测试 target 不链 FlatRadarCore，为一个常量加依赖不值得）。
-        var args = ["-UI_TEST_SCREENSHOT_MODE", "1"]
+        // `-ApplePersistenceIgnoreState YES`：**每次启动都当作没有窗口恢复状态。**
+        //
+        // 不加的话，app 干净退出时保存的窗口状态会被下次启动读回来。这在截图套件
+        // 里是致命的：`XCUIApplication.terminate()` 是干净退出，而只要有一次保存
+        // 下来的状态是"零窗口"，之后每次启动 SwiftUI 都不再创建默认窗口——
+        // build 367/368/369 里 02–05 就是这么连着挂的，每条等满六十秒。
+        var args = ["-ApplePersistenceIgnoreState", "YES",
+                    "-UI_TEST_SCREENSHOT_MODE", "1"]
         for (k, v) in flags.sorted(by: { $0.key < $1.key }) { args += ["-\(k)", v] }
         // 凭据从环境变量取，**不写在代码里**——这个仓库是公开的。
         // 云端由 ci_scripts/ci_post_clone.sh 写进 test plan 的
@@ -168,14 +190,38 @@ final class MacScreenshotTests: XCTestCase {
     /// 拍窗口，存成附件，并**当场验尺寸**。
     private func snap(_ window: XCUIElement, named step: String) {
         waitForStableFrame(window)
+        // **把指针移到窗口中央再拍。**
+        //
+        // 窗口铺满整屏时（构建机那块 1280×800 的屏只能这样），菜单栏是画在窗口
+        // **上面**的，而 `XCUIElement.screenshot()` 是从整屏截图里按 frame 裁的
+        // ——于是菜单栏连同那个真实时钟一起进画面。build 367 的 00-SignIn 顶上
+        // 就写着 `Thu Sep 17 11:37 AM`。
+        //
+        // App 那边已经设了 `.autoHideMenuBar`，但**指针停在屏幕顶边会把它唤回来**，
+        // 而录像里光标正躺在左上角 (0,0)。移开就不会。
+        //
+        // 用 hover 不用 click：这几屏里点下去会改选中态、开详情窗口。
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).hover()
+        Thread.sleep(forTimeInterval: 0.6)      // 等菜单栏收回去
         let shot = window.screenshot()
-        let size = pixelSize(shot)
+        let raw = rawPixelSize(shot)
+        guard let canvas = Self.canvas(fitting: raw) else {
+            XCTFail("\(step) 窗口拍出来 \(Int(raw.width))×\(Int(raw.height))，"
+                    + "比最大的合法尺寸 2880×1800 还大，合不进任何画布。"
+                    + screenReport())
+            return
+        }
+        guard let png = compose(shot, onto: canvas) else {
+            XCTFail("\(step) 合成画布失败")
+            return
+        }
+        let size = pixelSize(png)
         XCTAssertTrue(Self.accepted.contains(size),
                       "\(step) 拍出来是 \(Int(size.width))×\(Int(size.height))，"
                       + "不是 ASC 收的四种之一 \(Self.accepted.map { "\(Int($0.width))×\(Int($0.height))" })。"
                       + "多半是构建机的屏幕放不下 1440×900 点，或者窗口没被钉住。"
                       + "\(screenReport())")
-        let attachment = XCTAttachment(screenshot: shot)
+        let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
         // 名字里不带语言：语言由 test plan 的 configuration 决定，附件的
         // configurationName 已经带着它，提取脚本按那个分桶。
         attachment.name = step
@@ -196,9 +242,80 @@ final class MacScreenshotTests: XCTestCase {
     /// 逻辑尺寸，Retina 下和像素差一个 `backingScaleFactor`。要查 ASC 的尺寸就
     /// 必须问底层位图，否则在 2x 屏上量出来永远是 1440×900，而实际上传的是
     /// 2880×1800，这条断言就成了摆设。
-    private func pixelSize(_ shot: XCUIScreenshot) -> CGSize {
-        guard let rep = NSBitmapImageRep(data: shot.pngRepresentation) else { return .zero }
+    private func pixelSize(_ png: Data) -> CGSize {
+        guard let rep = NSBitmapImageRep(data: png) else { return .zero }
         return CGSize(width: rep.pixelsWide, height: rep.pixelsHigh)
+    }
+
+    /// 把窗口图居中合成到一张**合法尺寸**的不透明画布上。
+    ///
+    /// 为什么要合成而不是让窗口自己就是合法尺寸
+    /// --------------------------------------
+    /// ASC 只收四种像素尺寸，最小的 1280×800 在 2x 屏上等于 1280×800 **点**——
+    /// 而构建机那块屏总共就 1280×800 点，可用区（扣掉菜单栏和 Dock）只有
+    /// 1280×692。也就是说窗口想自己合法，就只能铺满整屏，于是必须去藏菜单栏和
+    /// Dock（或切全屏）。那条路试过四轮：build 359 六条里只有一条拿到窗口、
+    /// 364/367/368 都是第三次启动之后再也开不出窗口。动系统全局状态在一次性
+    /// 构建机上连跑六条就是这个下场。
+    ///
+    /// 合成之后窗口只是个普通窗口，一行系统状态都不用改。屏幕大时窗口正好等于
+    /// 画布（满幅、零偏移、不重采样），屏幕小时是一张带白边的窗口图——两者都是
+    /// 合法尺寸。
+    ///
+    /// 顺带解决 alpha：
+    ///
+    /// `XCUIScreenshot.pngRepresentation` 出来的 Mac 截图是 RGBA——build 367 那张
+    /// 实测 `color type = 6`、`hasAlpha: yes`——而 **ASC 不收带 alpha 的 Mac 截图**。
+    ///
+    /// 压在这里而不是下游加一道工序：这样"从产出的那一刻起"就是合规的，本地跑和
+    /// 云端跑共用同一条路，也不用再引一个 ffmpeg 依赖（试过 `sips`，它的
+    /// `--padToHeightWidth` / `--matchTo` 都不去 alpha，出来还是 color type 6）。
+    ///
+    /// `XCUIScreenshot.pngRepresentation` 出来的 Mac 截图是 RGBA（build 367 那张
+    /// 实测 `color type = 6`），而 ASC 不收带 alpha 的 Mac 截图。画布本身是
+    /// 不透明的，合完就没有 alpha 了。
+    ///
+    /// 底色填白：和 app 的浅色底一致，留白处看着像一张正常的产品图。
+    ///
+    /// 用 CoreGraphics + ImageIO 而不是 `NSGraphicsContext`：后者要一个活着的
+    /// NSApplication，本地拿命令行工具验同一段逻辑时直接 trap（SIGTRAP，退出码
+    /// 133）。CoreGraphics 这条两边都能跑，于是这段逻辑**在本地实测过**——
+    /// 拿 build 367 那张真图喂进去，color type 6 → 2。
+    private func compose(_ shot: XCUIScreenshot, onto canvas: CGSize) -> Data? {
+        let data = shot.pngRepresentation
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let cg = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+        let cw = Int(canvas.width), ch = Int(canvas.height)
+        // `.noneSkipLast` 就是"不要 alpha"，写出来的 PNG 是 color type 2（RGB）。
+        guard let ctx = CGContext(data: nil, width: cw, height: ch,
+                                  bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
+        else { return nil }
+        ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: cw, height: ch))
+        // 居中。窗口正好等于画布时偏移是 0，也就是满幅，没有任何缩放或重采样。
+        let x = (cw - cg.width) / 2
+        let y = (ch - cg.height) / 2
+        ctx.draw(cg, in: CGRect(x: x, y: y, width: cg.width, height: cg.height))
+        guard let flattened = ctx.makeImage() else { return nil }
+        let buffer = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(
+            buffer, UTType.png.identifier as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(dest, flattened, nil)
+        guard CGImageDestinationFinalize(dest) else { return nil }
+        return buffer as Data
+    }
+
+    /// 放得下这张窗口图的**最小**合法画布。
+    static func canvas(fitting raw: CGSize) -> CGSize? {
+        accepted.sorted { $0.width < $1.width }
+            .first { $0.width >= raw.width && $0.height >= raw.height }
+    }
+
+    /// 窗口截图原始的像素尺寸（合成之前）。
+    private func rawPixelSize(_ shot: XCUIScreenshot) -> CGSize {
+        pixelSize(shot.pngRepresentation)
     }
 
     /// 失败时附上这台机器的屏幕参数——尺寸不对时第一个要问的就是它。
@@ -214,7 +331,8 @@ final class MacScreenshotTests: XCTestCase {
     /// 要找的东西一个字都没印到；而 ASC 的 issues 接口本来就把失败信息截在三千
     /// 字符左右，"多打一点"这条路是堵死的。所以只印侧栏那几行 + 窗口尺寸。
     private func inventory() -> String {
-        var lines = ["windows=\(app.windows.count)"]
+        var lines = ["windows=\(app.windows.count) app.state=\(app.state.rawValue)"
+                     + "（1=notRunning 2=runningNotForeground 3=runningForeground 4=runningBackground）"]
         for w in app.windows.allElementsBoundByIndex.prefix(3) {
             lines.append("  [window] frame=\(w.frame) title=\(w.title.debugDescription)")
         }
