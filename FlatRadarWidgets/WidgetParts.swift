@@ -254,10 +254,20 @@ nonisolated struct SnapshotProvider: TimelineProvider {
     }
 }
 
-/// 把调色板灌进去，并铺上纸底。
+/// 把调色板灌进去，并铺底。
 ///
-/// **锁屏那三种不铺**：`accessory*` 由系统统一染色，给它一个不透明的纸底只会
-/// 得到一块和锁屏壁纸格格不入的方块。那几种自己用 `AccessoryWidgetBackground()`。
+/// **深色下不自己刷底，交给系统。**
+/// 设计稿 4b 那张深色卡给的底是 `#16212B`——一个偏蓝的深色。放在稿子里好看，
+/// 真摆到桌面上就露馅了：旁边的日历、天气那几格是系统材质（中性近黑、半透、
+/// 透着壁纸），我这几格是一块实心的蓝灰，一眼看出是外人。
+///
+/// 所以深色走 `.fill.tertiary`——那就是系统给小组件的那层材质，和旁边那些格子
+/// **按构造**一致，壁纸换了也跟着变。浅色仍然用稿子那个暖纸底：浅色下系统材质
+/// 是近白，和 `#FBFAF7` / `#F3F0E8` 本来就贴得很近，而那点暖是 app 图标里
+/// 窗户的颜色，值得留着。
+///
+/// 锁屏那三种谁都不铺：`accessory*` 由系统统一染色，给它一个不透明的底只会
+/// 得到一块和壁纸格格不入的方块。那几种自己用 `AccessoryWidgetBackground()`。
 struct WidgetSurface<Content: View>: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.widgetFamily) private var family
@@ -278,7 +288,13 @@ struct WidgetSurface<Content: View>: View {
             .environment(\.skin, .current)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .containerBackground(for: .widget) {
-                if !isAccessory { palette.paper }
+                if isAccessory {
+                    Color.clear
+                } else if scheme == .dark {
+                    Rectangle().fill(.fill.tertiary)
+                } else {
+                    palette.paper
+                }
             }
     }
 }
