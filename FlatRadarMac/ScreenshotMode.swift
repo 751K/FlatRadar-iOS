@@ -132,6 +132,31 @@ enum ScreenshotMode {
 
     // MARK: - 窗口
 
+    /// 藏掉 Dock 和菜单栏，再问一次放不放得下。
+    ///
+    /// 构建机那块屏 `visibleFrame` 只有 1280×692（Dock 78 + 菜单栏 30），而最小的
+    /// 合法尺寸要 800 点高——窗口化怎么摆都放不下。
+    ///
+    /// **为什么不用全屏。** 试过，build 359：全屏那条路确实给出了
+    /// `frame=(0,0,1280,800)`（正是合法的 2560×1600），但全屏会把窗口挪进一个
+    /// 独立 Space，而每条用例都要 terminate + 重启。那一轮六条里只有一条拿到窗口，
+    /// 其余是 `windows=0`，还有一条直接 `Lost connection to the application`。
+    /// 在一次性构建机上进出 Space 太脆。
+    ///
+    /// `presentationOptions` 达到同样的效果却不碰 Space：两条一起藏之后整块屏都
+    /// 能用，窗口摆在 (0,0) 正好 1280×800。
+    ///
+    /// 按**屏幕 frame** 判而不是改完再读 `visibleFrame`——后者不保证同步更新，
+    /// 读到旧值就又退回"放不下"了。
+    private static func sizeAfterHidingDockAndMenuBar(on screen: NSScreen?) -> NSSize? {
+        guard let frame = screen?.frame.size else { return nil }
+        guard windowSizes.contains(where: { $0.width <= frame.width && $0.height <= frame.height })
+        else { return nil }
+        // `.autoHideMenuBar` 必须和一个 Dock 选项一起给，单独给会被忽略。
+        NSApp.presentationOptions = [.autoHideDock, .autoHideMenuBar]
+        return windowSizes.first { $0.width <= frame.width && $0.height <= frame.height }
+    }
+
     /// 把窗口钉成截图尺寸。
     ///
     /// 三件事都要做，少一件都会漏尺寸：
@@ -149,29 +174,34 @@ enum ScreenshotMode {
         guard isOn else { return }
         window.isRestorable = false
         let screen = window.screen ?? NSScreen.main
-        guard let size = fittingWindowSize(on: screen) else {
-            // 窗口化放不下任何一个合法尺寸 → 全屏。
-            //
-            // Xcode Cloud 的构建机实测就是这种屏：
-            //
-            //     frame=(0,0,1280,800)  visible=(0,78,1280,692)  scale=2.0
-            //                                      ↑Dock 78    ↑菜单栏 30
-            //
-            // 最小的合法尺寸 1280×800 需要 800 点高，而能用的只有 692。藏 Dock
-            // 也只能到 770，还差菜单栏那 30 点，而 `_HIHideMenuBar` 要重新登录
-            // 才生效——在一次性的构建机上不可靠。
-            //
-            // 全屏则**恰好等于屏幕尺寸**：1280×800 点 ×2 = 2560×1600 像素，正是
-            // 一个合法值。而且它不依赖 Dock / 菜单栏的任何设置，换一台构建机
-            // 照样成立。
-            if !window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil) }
+
+        // 容器 = 窗口真正能占的那块地方。
+        //
+        // 放得下就用 `visibleFrame`（已扣掉菜单栏和 Dock），居中摆，看着像一张
+        // 正常的 Mac 截图。放不下就藏掉 Dock 和菜单栏，容器随之变成**整块屏**。
+        //
+        // 这两步必须配套：藏完还按 `visibleFrame` 居中的话，`visibleFrame` 不保证
+        // 已经更新，拿到旧值（构建机上是 1280×692）算出来的 origin.y=24，而窗口有
+        // 800 点高——顶上 24 点直接跑到屏幕外面去，截出来既不是完整窗口也不是
+        // 合法尺寸。
+        let container: NSRect
+        let size: NSSize
+        if let fit = fittingWindowSize(on: screen) {
+            container = screen?.visibleFrame ?? .zero
+            size = fit
+        } else if let full = sizeAfterHidingDockAndMenuBar(on: screen) {
+            container = screen?.frame ?? .zero
+            size = full
+        } else {
+            // Dock 和菜单栏都藏了还是放不下——这块屏本来就比最小的合法尺寸还小。
+            // 不硬塞：`XCUIElement.screenshot()` 是从整屏截图按 frame 裁的，塞出去
+            // 的部分裁回来是桌面，尺寸也不对。让测试报出来。
             return
         }
-        // 全屏状态下改 styleMask / setFrame 都会打架，所以这两行只走窗口化这条路。
+
         window.styleMask.remove(.resizable)
-        let visible = screen?.visibleFrame ?? .zero
-        let origin = NSPoint(x: visible.midX - size.width / 2,
-                             y: visible.midY - size.height / 2)
+        let origin = NSPoint(x: container.midX - size.width / 2,
+                             y: container.midY - size.height / 2)
         window.setFrame(NSRect(origin: origin, size: size), display: true)
     }
 }

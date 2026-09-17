@@ -60,7 +60,7 @@ final class MacScreenshotTests: XCTestCase {
     private func capture(_ section: String, _ name: String) throws {
         launch(flags: ["UI_TEST_SECTION": section])
         let window = waitForWindow()
-        assertSelected(section)
+        assertShowing(section)
         settle(section)
         snap(window, named: name)
     }
@@ -111,26 +111,20 @@ final class MacScreenshotTests: XCTestCase {
         return window
     }
 
-    /// 侧栏里选中的确实是这一屏。
+    /// 现在显示的确实是这一屏。
     ///
-    /// 「测试通过」和「拍对了」是两回事：`UI_TEST_SECTION` 要是没落位，
-    /// 截图会照拍不误，拍出一张名字对、尺寸对、内容是 Listings 的图，
-    /// 下游只查张数和像素，查不出来。iOS 那边吃过这个亏（05-Notifications
-    /// 拍成了 Dashboard），这里不再留这个口子。
+    /// 「测试通过」和「拍对了」是两回事：`UI_TEST_SECTION` 要是没落位，截图会
+    /// 照拍不误，拍出一张名字对、尺寸对、内容是 Listings 的图，下游只查张数和
+    /// 像素，查不出来。iOS 那边吃过这个亏（05-Notifications 拍成了 Dashboard）。
     ///
-    /// 侧栏文案是**英文硬写**的（`SidebarSection.label` 是个 `String` 变量，
-    /// `Text(_:)` 那个重载不做本地化，而且 FlatRadarMac 这个 target 根本没有
-    /// 字符串目录）。所以按标题找是安全的——这一点和 iOS 正好相反，那边的
-    /// tab 标题是翻译过的，按标题找在非英文语言下全线失败。
-    /// 哪天 Mac 端做了本地化，这里要跟着改成 accessibilityIdentifier。
-    private func assertSelected(_ section: String) {
-        let label = section.prefix(1).uppercased() + section.dropFirst()
-        let row = app.outlines.firstMatch.descendants(matching: .any)
-            .matching(NSPredicate(format: "label == %@", label)).firstMatch
-        XCTAssertTrue(row.waitForExistence(timeout: 30),
-                      "侧栏里找不到「\(label)」这一行。\n" + inventory())
-        XCTAssertTrue(row.isSelected,
-                      "选中的不是「\(label)」——UI_TEST_SECTION 没落位，"
+    /// 验的是**内容区**的 identifier，不是侧栏那一行的选中态。两个理由：
+    /// 侧栏行的 AX label 在 macOS 上是空的（build 359 实测六行全是 ""），按文案
+    /// 根本找不到；而且「哪一行高亮」只是间接证据，内容区才是拍进图里的那个东西。
+    private func assertShowing(_ section: String) {
+        let pane = app.descendants(matching: .any)
+            .matching(identifier: "pane-\(section)").firstMatch
+        XCTAssertTrue(pane.waitForExistence(timeout: 30),
+                      "内容区不是「\(section)」——UI_TEST_SECTION 没落位，"
                       + "而截图会照拍不误。\n" + inventory())
     }
 
@@ -224,13 +218,9 @@ final class MacScreenshotTests: XCTestCase {
         for w in app.windows.allElementsBoundByIndex.prefix(3) {
             lines.append("  [window] frame=\(w.frame) title=\(w.title.debugDescription)")
         }
-        let outline = app.outlines.firstMatch
-        if outline.exists {
-            for row in outline.descendants(matching: .staticText).allElementsBoundByIndex.prefix(12) {
-                lines.append("  [sidebar] \(row.label.debugDescription) sel=\(row.isSelected)")
-            }
-        } else {
-            lines.append("  (没有 outline——侧栏未挂载)")
+        for id in ["listings", "map", "calendar", "alerts", "stats"] {
+            let pane = app.descendants(matching: .any).matching(identifier: "pane-\(id)").firstMatch
+            if pane.exists { lines.append("  [pane] 当前显示：\(id)") }
         }
         lines.append(screenReport())
         return lines.joined(separator: "\n")

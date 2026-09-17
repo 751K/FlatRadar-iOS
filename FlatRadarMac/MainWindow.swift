@@ -158,6 +158,18 @@ struct MainWindow: View {
 
     @ViewBuilder
     private var content: some View {
+        paneBody
+            // 截图自动化靠它确认「现在显示的是哪一屏」。
+            //
+            // 不验侧栏那一行的选中态：macOS 上那些行的 AX label 是**空的**
+            // （build 359 实测，六行全是 ""），按文案根本找不到；而且就算找到了，
+            // 「哪一行高亮」也只是间接证据。这里直接给内容区打标，验的就是判据
+            // 本身——拍下来的这一屏到底是不是它该是的那一屏。
+            .accessibilityIdentifier("pane-\(model.section.rawValue)")
+    }
+
+    @ViewBuilder
+    private var paneBody: some View {
         switch model.section {
         case .listings:
             ListingsPane(model: model, summary: feed.summary)

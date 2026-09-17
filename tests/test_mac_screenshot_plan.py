@@ -288,3 +288,24 @@ def test_screenshot_flag_name_matches_core():
     assert m, "UITestFlags 里没找到 screenshotMode 常量"
     assert f'"-{m.group(1)}"' in TESTS.read_text(encoding="utf-8"), (
         f"MacScreenshotTests 里没有 \"-{m.group(1)}\"——和 Core 的常量对不上了")
+
+
+def test_pane_identifier_prefix_matches_between_app_and_tests():
+    """内容区 identifier 的前缀，App 和测试两边必须一致。
+
+    App 那边是 `"pane-\\(model.section.rawValue)"`，测试那边是
+    `"pane-\\(section)"`，两个字符串各写一份。改了一边忘了另一边的后果是静默的：
+    `assertShowing` 永远找不到元素，六条用例全红在「内容区不是 X」上，而真正的
+    原因是前缀对不上，不是界面错了——这两种失败的改法完全不同。
+
+    section 名本身由 test_sections_match_the_enum 管，这里只管前缀。
+    """
+    app_src = (ROOT / "FlatRadarMac" / "MainWindow.swift").read_text(encoding="utf-8")
+    m = re.search(r'\.accessibilityIdentifier\("([a-z-]+)\\\(model\.section\.rawValue\)"\)', app_src)
+    assert m, "MainWindow 里没找到内容区的 accessibilityIdentifier——结构变了"
+    prefix = m.group(1)
+
+    test_src = TESTS.read_text(encoding="utf-8")
+    assert f'"{prefix}\\(section)"' in test_src, (
+        f"App 用的前缀是 {prefix!r}，但 MacScreenshotTests 里没有对应的 "
+        f'"{prefix}\\(section)"——两边对不上，assertShowing 会永远找不到元素。')
