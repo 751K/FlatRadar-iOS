@@ -20,6 +20,8 @@
 //
 
 import AppKit
+import ImageIO
+import UniformTypeIdentifiers
 import XCTest
 
 @MainActor
@@ -32,9 +34,22 @@ final class MacScreenshotTests: XCTestCase {
     }
 
     override func tearDown() {
-        // 每条用例都要**冷启动**。不关的话 `app.launch()` 拿到的可能是上一条
-        // 留下的窗口，连同上一条设的 section——名字对、尺寸对、内容是上一屏。
+        // 每条用例都要**冷启动**。
+        //
+        // 不只是"别带着上一条的 section"——更要命的是进程**没死透**：macOS 的 app
+        // 关掉最后一个窗口默认不退出，下一条的 `launch()` 于是拿到一个没有窗口的
+        // 现存实例，干等 60 秒。build 367 的 02–05 就是这么挂的。
+        //
+        // 治本在 App 那边（`applicationShouldTerminateAfterLastWindowClosed`），
+        // 这里等一下并把结果记进日志：真出问题时能一眼看出是不是它。
         app.terminate()
+        let deadline = Date().addingTimeInterval(10)
+        while app.state != .notRunning, Date() < deadline {
+            Thread.sleep(forTimeInterval: 0.2)
+        }
+        if app.state != .notRunning {
+            XCTContext.runActivity(named: "⚠️ terminate 之后进程仍未退出（state=\(app.state.rawValue)）") { _ in }
+        }
     }
 
     // MARK: - Captures
@@ -168,14 +183,31 @@ final class MacScreenshotTests: XCTestCase {
     /// 拍窗口，存成附件，并**当场验尺寸**。
     private func snap(_ window: XCUIElement, named step: String) {
         waitForStableFrame(window)
+        // **把指针移到窗口中央再拍。**
+        //
+        // 窗口铺满整屏时（构建机那块 1280×800 的屏只能这样），菜单栏是画在窗口
+        // **上面**的，而 `XCUIElement.screenshot()` 是从整屏截图里按 frame 裁的
+        // ——于是菜单栏连同那个真实时钟一起进画面。build 367 的 00-SignIn 顶上
+        // 就写着 `Thu Sep 17 11:37 AM`。
+        //
+        // App 那边已经设了 `.autoHideMenuBar`，但**指针停在屏幕顶边会把它唤回来**，
+        // 而录像里光标正躺在左上角 (0,0)。移开就不会。
+        //
+        // 用 hover 不用 click：这几屏里点下去会改选中态、开详情窗口。
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).hover()
+        Thread.sleep(forTimeInterval: 0.6)      // 等菜单栏收回去
         let shot = window.screenshot()
-        let size = pixelSize(shot)
+        guard let png = opaquePNG(shot) else {
+            XCTFail("\(step) 压平 alpha 失败")
+            return
+        }
+        let size = pixelSize(png)
         XCTAssertTrue(Self.accepted.contains(size),
                       "\(step) 拍出来是 \(Int(size.width))×\(Int(size.height))，"
                       + "不是 ASC 收的四种之一 \(Self.accepted.map { "\(Int($0.width))×\(Int($0.height))" })。"
                       + "多半是构建机的屏幕放不下 1440×900 点，或者窗口没被钉住。"
                       + "\(screenReport())")
-        let attachment = XCTAttachment(screenshot: shot)
+        let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
         // 名字里不带语言：语言由 test plan 的 configuration 决定，附件的
         // configurationName 已经带着它，提取脚本按那个分桶。
         attachment.name = step
@@ -196,9 +228,48 @@ final class MacScreenshotTests: XCTestCase {
     /// 逻辑尺寸，Retina 下和像素差一个 `backingScaleFactor`。要查 ASC 的尺寸就
     /// 必须问底层位图，否则在 2x 屏上量出来永远是 1440×900，而实际上传的是
     /// 2880×1800，这条断言就成了摆设。
-    private func pixelSize(_ shot: XCUIScreenshot) -> CGSize {
-        guard let rep = NSBitmapImageRep(data: shot.pngRepresentation) else { return .zero }
+    private func pixelSize(_ png: Data) -> CGSize {
+        guard let rep = NSBitmapImageRep(data: png) else { return .zero }
         return CGSize(width: rep.pixelsWide, height: rep.pixelsHigh)
+    }
+
+    /// 去掉 alpha 通道。
+    ///
+    /// `XCUIScreenshot.pngRepresentation` 出来的 Mac 截图是 RGBA——build 367 那张
+    /// 实测 `color type = 6`、`hasAlpha: yes`——而 **ASC 不收带 alpha 的 Mac 截图**。
+    ///
+    /// 压在这里而不是下游加一道工序：这样"从产出的那一刻起"就是合规的，本地跑和
+    /// 云端跑共用同一条路，也不用再引一个 ffmpeg 依赖（试过 `sips`，它的
+    /// `--padToHeightWidth` / `--matchTo` 都不去 alpha，出来还是 color type 6）。
+    ///
+    /// 底色填白：窗口铺满屏时没有圆角，填什么都看不见；万一哪天窗口小于屏幕、
+    /// 四角透出来，白色也比黑色像一张正常的产品图。
+    ///
+    /// 用 CoreGraphics + ImageIO 而不是 `NSGraphicsContext`：后者要一个活着的
+    /// NSApplication，本地拿命令行工具验同一段逻辑时直接 trap（SIGTRAP，退出码
+    /// 133）。CoreGraphics 这条两边都能跑，于是这段逻辑**在本地实测过**——
+    /// 拿 build 367 那张真图喂进去，color type 6 → 2。
+    private func opaquePNG(_ shot: XCUIScreenshot) -> Data? {
+        let data = shot.pngRepresentation
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              let cg = CGImageSourceCreateImageAtIndex(source, 0, nil) else { return nil }
+        let w = cg.width, h = cg.height
+        // `.noneSkipLast` 就是"不要 alpha"，写出来的 PNG 是 color type 2（RGB）。
+        guard let ctx = CGContext(data: nil, width: w, height: h,
+                                  bitsPerComponent: 8, bytesPerRow: 0,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue)
+        else { return nil }
+        ctx.setFillColor(CGColor(red: 1, green: 1, blue: 1, alpha: 1))
+        ctx.fill(CGRect(x: 0, y: 0, width: w, height: h))
+        ctx.draw(cg, in: CGRect(x: 0, y: 0, width: w, height: h))
+        guard let flattened = ctx.makeImage() else { return nil }
+        let buffer = NSMutableData()
+        guard let dest = CGImageDestinationCreateWithData(
+            buffer, UTType.png.identifier as CFString, 1, nil) else { return nil }
+        CGImageDestinationAddImage(dest, flattened, nil)
+        guard CGImageDestinationFinalize(dest) else { return nil }
+        return buffer as Data
     }
 
     /// 失败时附上这台机器的屏幕参数——尺寸不对时第一个要问的就是它。
@@ -214,7 +285,8 @@ final class MacScreenshotTests: XCTestCase {
     /// 要找的东西一个字都没印到；而 ASC 的 issues 接口本来就把失败信息截在三千
     /// 字符左右，"多打一点"这条路是堵死的。所以只印侧栏那几行 + 窗口尺寸。
     private func inventory() -> String {
-        var lines = ["windows=\(app.windows.count)"]
+        var lines = ["windows=\(app.windows.count) app.state=\(app.state.rawValue)"
+                     + "（1=notRunning 2=runningNotForeground 3=runningForeground 4=runningBackground）"]
         for w in app.windows.allElementsBoundByIndex.prefix(3) {
             lines.append("  [window] frame=\(w.frame) title=\(w.title.debugDescription)")
         }

@@ -24,6 +24,33 @@ import FlatRadarCore
 final class MacPushDelegate: NSObject, NSApplicationDelegate,
                              UNUserNotificationCenterDelegate, PushPlatformBridge {
 
+    // MARK: - 截图自动化
+
+    /// 截图模式下**关掉最后一个窗口就退出**。
+    ///
+    /// macOS 的默认行为是不退出，这对真实用户是对的（⌘W 关窗口、⌘Q 才退出），
+    /// 但它是截图套件里那个"跑着跑着就没窗口了"的根源：
+    ///
+    /// build 367 的六条用例里 00 和 01 过了、02–05 全挂在 `windows=0`。失败那几条
+    /// 的屏幕录像是一张空桌面配一条 FlatRadarMac 菜单栏——**进程是活的，只是没有
+    /// 窗口**。`XCUIApplication.terminate()` 之后进程若没真的死，下一条用例的
+    /// `launch()` 拿到的就是这个没有窗口的现存实例，于是 60 秒等不到窗口。
+    ///
+    /// 只在截图模式下改，不动真实用户那边的行为。
+    func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
+        UITestFlags.isScreenshotMode
+    }
+
+    /// 被激活时没有窗口，就开一个。
+    ///
+    /// 上面那条是治本，这条是兜底：万一进程还是活到了下一条用例，激活它至少能
+    /// 让 `WindowGroup` 补出一个窗口，而不是干等 60 秒。返回 true 就是让 AppKit
+    /// 走它自己的"重开窗口"流程。
+    func applicationShouldHandleReopen(_ sender: NSApplication,
+                                       hasVisibleWindows flag: Bool) -> Bool {
+        true
+    }
+
     // MARK: - PushPlatformBridge
 
     var onDeviceToken: ((Data) -> Void)?

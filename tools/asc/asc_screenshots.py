@@ -192,7 +192,28 @@ class PreflightError(Exception):
     """上传前的本地体检没过。此时**一张旧图都还没删**。"""
 
 
-def preflight(paths: list[pathlib.Path], cap: int = SET_CAPACITY) -> None:
+
+# Mac 截图的硬性规格。iOS 那边尺寸由设备决定、必然合法，Mac 是运行时状态，
+# 所以最后这道门要查。
+# https://developer.apple.com/help/app-store-connect/reference/screenshot-specifications/
+MAC_DISPLAY_TYPE = "APP_DESKTOP"
+MAC_SIZES = {(2880, 1800), (2560, 1600), (1440, 900), (1280, 800)}
+
+
+def _png_header(data: bytes) -> tuple[int, int, int]:
+    """(宽, 高, color type)。只读 IHDR，不引第三方库。
+
+    PNG 布局：8 字节签名 + 4 字节块长 + 4 字节 "IHDR" + 数据。
+    数据里宽 16..19、高 20..23、位深 24、**color type 25**。
+    color type 含 alpha 的是 4（灰+A）和 6（RGB+A）。
+    """
+    width = int.from_bytes(data[16:20], "big")
+    height = int.from_bytes(data[20:24], "big")
+    return width, height, data[25]
+
+
+def preflight(paths: list[pathlib.Path], cap: int = SET_CAPACITY,
+              display_type: str | None = None) -> None:
     """删任何东西之前，先确认这批文件真的传得上去。
 
     这个顺序是「先删后传」唯一的安全阀。删完再发现某张图是 0 字节、或者这一
@@ -220,6 +241,25 @@ def preflight(paths: list[pathlib.Path], cap: int = SET_CAPACITY) -> None:
             bad.append(f"{p.name}: 0 字节")
         elif p.read_bytes()[:8] != b"\x89PNG\r\n\x1a\n":
             bad.append(f"{p.name}: 不是 PNG")
+        elif display_type == MAC_DISPLAY_TYPE:
+            # Mac 这两条 iOS 不需要查，所以按 display type 分开。
+            #
+            # **alpha**：`XCUIScreenshot.pngRepresentation` 出来的 Mac 截图带
+            # alpha 通道（实测 build 367 的 00-SignIn，`hasAlpha: yes`），而 ASC
+            # 不收。源头在 tools/screenshots/run-mac.sh 里压平了，这里是最后一道
+            # 门——手工放进来的图同样过不去。
+            #
+            # **尺寸**：窗口多大是运行时状态。测试里已经断言过一次，但那道断言
+            # 只管云端那条路。
+            w, h, color_type = _png_header(p.read_bytes()[:26])
+            if color_type in (4, 6):
+                bad.append(f"{p.name}: 带 alpha 通道（color type {color_type}），ASC 不收。"
+                           "正常路径上不该出现——MacScreenshotTests.opaquePNG 在产出"
+                           "那一刻就压平了。这张多半是手工放进来的："
+                           f"ffmpeg -i {p.name} -pix_fmt rgb24 flat.png")
+            elif (w, h) not in MAC_SIZES:
+                bad.append(f"{p.name}: {w}×{h} 不是 ASC 收的四种之一 "
+                           f"{sorted(MAC_SIZES, reverse=True)}")
     if bad:
         raise PreflightError("这些文件有问题，未删除任何旧截图：\n  "
                              + "\n  ".join(bad))
@@ -228,7 +268,7 @@ def preflight(paths: list[pathlib.Path], cap: int = SET_CAPACITY) -> None:
 def cmd_upload(cfg, args):
     pngs = sorted(Path(args.dir).glob("*.png"))
     try:
-        preflight(pngs)
+        preflight(pngs, display_type=args.display_type)
     except PreflightError as e:
         print(f"上传前检查未通过：{e}", file=sys.stderr)
         raise SystemExit(1)
