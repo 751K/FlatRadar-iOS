@@ -208,6 +208,23 @@ XCB_ACTION="${CI_XCODEBUILD_ACTION:-}"
 # 就是栽在这上面），而 app 真正运行、分辨率真正需要生效的是**第二趟**
 # （test-without-building）。所以第一趟把工具编译到 /tmp 留着——两趟跑在同一台
 # 机器上，第二趟直接用那个二进制。
+# 藏 Dock。
+#
+# 白边是菜单栏 30 点 + Dock 78 点占掉、窗口拿不到的那部分（build 372 的图上下各
+# 108 像素）。分辨率那条路走不通（见 mac-display-mode.swift 里的实测结论），
+# 能收的就是 Dock 这 78 点：可用高度 692 → 约 766，白边从 108 缩到约 34 像素。
+#
+# `autohide-delay` 设很大，免得指针恰好扫过屏幕底边时 Dock 探头进画面——截图那
+# 一刻指针已经被 hover 到窗口中央了，但多一道保险不费什么。
+#
+# 菜单栏那 30 点不碰：`_HIHideMenuBar` 要重新登录才生效，在一次性构建机上不可靠。
+if [ "${CI_PRODUCT_PLATFORM:-}" = "macOS" ]; then
+  echo "› [dock] 隐藏 Dock"
+  defaults write com.apple.dock autohide -bool true 2>/dev/null || true
+  defaults write com.apple.dock autohide-delay -float 1000 2>/dev/null || true
+  killall Dock 2>/dev/null || true
+fi
+
 DISPLAY_BIN=/tmp/mac-display-mode
 if [ "${CI_PRODUCT_PLATFORM:-}" = "macOS" ]; then
   if [ ! -x "$DISPLAY_BIN" ] && [ -n "$REPO_PATH" ]; then
