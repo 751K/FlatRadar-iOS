@@ -206,6 +206,8 @@ struct SignInPane: View {
         }
         .padding(.top, 18)
 
+        unlockButton
+
         // 设计稿这里写的是「Signs you in, or creates an account if the username
         // is new」。改掉了：客户端判断不出用户名是不是新的，见类型注释。
         Text("No account yet? Continue, then choose Create account.")
@@ -326,6 +328,39 @@ struct SignInPane: View {
             .textFieldStyle(.roundedBorder)
             .controlSize(.large)
         }
+    }
+
+    /// 用 Touch ID / 开机密码直接登录。
+    ///
+    /// 只在**这台 Mac 上真的存过凭据**时出现（`hasStoredCredentials` 读的是
+    /// UserDefaults 里的角色标记，**不查钥匙串**——查一条受保护的条目本身就
+    /// 可能弹出系统认证框，那会变成"打开登录页就被问一次密码"）。
+    ///
+    /// 解锁失败或用户取消时什么都不做，不报错：取消是正常操作，弹一条
+    /// "认证失败"只会让人以为出了问题。密码框还在上面，照常输就是。
+    @ViewBuilder
+    private var unlockButton: some View {
+        if BiometricAuthService.isAvailable, BiometricAuthService.hasStoredCredentials {
+            Button {
+                Task { await unlockAndSignIn() }
+            } label: {
+                Label("Sign in with \(BiometricAuthService.unlockMethodName)",
+                      systemImage: "touchid")
+                    .frame(maxWidth: .infinity)
+            }
+            .controlSize(.large)
+            .disabled(auth.isLoading)
+            .padding(.top, 10)
+        }
+    }
+
+    private func unlockAndSignIn() async {
+        let reason = "Sign in to FlatRadar"
+        guard let cred = await BiometricAuthService.authenticateAndLoad(reason: reason) else {
+            return   // 取消 / 失败：静默，密码框还在
+        }
+        await auth.loginAsUser(name: cred.username, password: cred.password,
+                               ttlDays: staySignedIn ? 90 : 1)
     }
 
     private func primaryButton(_ title: String, enabled: Bool,

@@ -111,6 +111,9 @@ struct AccountSettings: View {
             Button("Sign Out…") { showSignOutConfirm = true }
         }
 
+        // 机器不支持生物识别 / 不是普通用户时它自己整段不画。
+        UnlockSettings()
+
         Section {
             Button {
                 Task { await export() }
