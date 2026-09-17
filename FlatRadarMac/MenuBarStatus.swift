@@ -91,7 +91,9 @@ struct MenuBarStatusView: View {
         guard let ago = feed.summary.scannedAgoText else {
             return StatusWording.scanTimeUnavailable
         }
-        return StatusWording.scanned(ago)
+        // 单独成一行，首字母提上去。侧栏那处是 `7 platforms · scanned 4m ago`，
+        // 跟在别的东西后面，所以那里不套。
+        return StatusWording.sentence(StatusWording.scanned(ago))
     }
 
     // MARK: - 中间

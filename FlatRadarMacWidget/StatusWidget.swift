@@ -117,7 +117,7 @@ struct StatusLayout: View {
                     unreadPill
                 }
                 .padding(.bottom, 7)
-                newestRows(longSubtitle: false)
+                newestRows(longSubtitle: false, limit: 3)
                 Spacer(minLength: 0)
             }
             .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -143,7 +143,7 @@ struct StatusLayout: View {
                 // 比例收了一档，而不是砍掉某一段内容：内容层级是设计稿的主张，
                 // 尺寸是系统给的，该让的是后者。
                 DisplayNumber(text: snapshot?.newTodayText ?? StatusWording.countText(nil),
-                              size: 46, dimmed: !isFresh)
+                              size: 50, dimmed: !isFresh)
                 VStack(alignment: .leading, spacing: 3) {
                     SectionLabel(text: StatusWording.newToday)
                     if let pct = snapshot?.changeVsBaseline, let base = baseline {
@@ -155,9 +155,9 @@ struct StatusLayout: View {
                 }
                 Spacer(minLength: 0)
             }
-            .padding(.top, 10)
+            .padding(.top, 12)
 
-            bars(height: 36, spacing: 4, radius: 2).padding(.top, 10)
+            bars(height: 42, spacing: 4, radius: 2).padding(.top, 12)
             axis.padding(.top, 4)
 
             HStack(spacing: 6) {
@@ -181,10 +181,10 @@ struct StatusLayout: View {
                              value: snapshot?.statusChanges, dimmed: !isFresh)
                 }
             }
-            .padding(.top, 10)
+            .padding(.top, 12)
 
-            SectionLabel(text: StatusWording.newest).padding(.top, 10).padding(.leading, 2)
-            newestRows(longSubtitle: true).padding(.top, 5)
+            SectionLabel(text: StatusWording.newest).padding(.top, 12).padding(.leading, 2)
+            newestRows(longSubtitle: true, limit: 2).padding(.top, 6)
 
             Spacer(minLength: 8)
             nextMoveInChip
@@ -257,9 +257,22 @@ struct StatusLayout: View {
         }
     }
 
+    /// NEWEST 那一段。
+    ///
+    /// **大号只放两条，中号放三条**——看起来反了，但不是：
+    ///
+    /// 中号整个右半边就是这一段，三条把它填满，那一格说的就是"最近发生了什么"。
+    /// 大号要在同一块高度里排下页眉、大数字、14 天柱子、三格统计、这一段、
+    /// 底部那条胶囊——**六段东西**，而 macOS 的大号只有 345pt，比设计稿那张
+    /// 360×376 矮 31pt。三条塞得进去，但整屏每一段都只能贴着彼此，
+    /// 挤得没有呼吸。少一条房源换来的 36pt 全部还给了间距和三处尺寸
+    /// （大数字 46→50、柱高 36→42、段间距 10→12、行高 30→33）。
+    ///
+    /// 少的是**同一种**信息的第三条，不是少一类信息；而大号比中号多的是
+    /// 柱子、统计和下一个可入住日——它给的仍然更多，只是不在这一段上。
     @ViewBuilder
-    private func newestRows(longSubtitle: Bool) -> some View {
-        let rows = snapshot?.newest ?? []
+    private func newestRows(longSubtitle: Bool, limit: Int) -> some View {
+        let rows = Array((snapshot?.newest ?? []).prefix(limit))
         if rows.isEmpty {
             // 一条都没有时不画空槽。设计稿那三行是有内容才成立的。
             EmptyView()

@@ -229,7 +229,9 @@ struct SidebarView: View {
             parts.append(sources == 1 ? "1 platform" : "\(sources) platforms")
         }
         if let ago = summary.scannedAgoText {
-            parts.append("scanned \(ago)")
+            // 走共用的那一份（原先这里是第四处裸字面量）。这里**不**套
+            // `sentence(_:)`：它跟在 `7 platforms · ` 后面。
+            parts.append(StatusWording.scanned(ago))
         }
         return parts.joined(separator: " · ")
     }

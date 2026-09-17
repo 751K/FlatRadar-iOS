@@ -145,7 +145,24 @@ public nonisolated enum StatusWording {
     // MARK: - 时间
 
     /// `scanned 4m ago`。参数是 ``ServerTime/relativeTime(_:now:)`` 的结果。
+    ///
+    /// **存小写。** 这句话有两种用法：单独成行（菜单栏、小组件那几格），
+    /// 和跟在别的东西后面（侧栏是 `7 platforms · scanned 4m ago`）。后者要是
+    /// 大写，就成了一句话中间冒出个大写的 `· Scanned 4m ago`。
+    ///
+    /// 所以大小写是**排版**，由 ``sentence(_:)`` 在单独成行的地方套上——和段标题
+    /// 那个 `.textCase(.uppercase)` 是同一类事。为这个存两份字符串才是错的：
+    /// 这一轮已经因为「同一句话两个写法」抓到过三处漂移了。
     public static func scanned(_ ago: String) -> String { "scanned \(ago)" }
+
+    /// 单独成行时把首字母提上去。
+    ///
+    /// 只动第一个字符，不碰其余——`.capitalized` 会把 `831 live · 4m ago`
+    /// 变成 `831 Live · 4m Ago`。
+    public static func sentence(_ text: String) -> String {
+        guard let first = text.first else { return text }
+        return first.uppercased() + text.dropFirst()
+    }
 
     /// `checked 3h ago`。**数据过期之后**改说这一句，见
     /// ``WidgetSnapshot/footnote(at:)``——那时候我们只知道自己是几时取的，

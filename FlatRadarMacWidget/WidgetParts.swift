@@ -88,7 +88,7 @@ struct StatChip: View {
                 .minimumScaleFactor(0.6)
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 7)
+        .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(tinted ? palette.accent.opacity(0.10) : palette.fill,
                     in: RoundedRectangle(cornerRadius: 9, style: .continuous))
@@ -135,9 +135,9 @@ struct ListingRow: View {
             }
         }
         .padding(.horizontal, 8)
-        // 设计稿是 33/34。收到 30 的理由和大号那个 46pt 数字一样：
-        // macOS 的大号只有 345pt 高，比稿子矮 31pt。
-        .frame(height: 30)
+        // 设计稿是 33/34。一度收到 30 是为了在 345pt 的大号里排下三条，
+        // 现在大号只放两条，回到稿子的数。
+        .frame(height: 33)
         .background(index % 2 == 0 ? palette.rowA : palette.rowB,
                     in: RoundedRectangle(cornerRadius: 7, style: .continuous))
     }
@@ -164,10 +164,11 @@ struct LiveFooter: View {
 
     private var isFresh: Bool { entry.snapshot?.isFresh(at: entry.date) ?? false }
 
+    /// 单独成一行，所以首字母提上去（见 ``StatusWording/sentence(_:)``）。
     private var text: String {
         guard let snapshot = entry.snapshot else { return StatusWording.openApp }
-        return showsCount ? snapshot.compactFooter(at: entry.date)
-                          : snapshot.footnote(at: entry.date)
+        return StatusWording.sentence(showsCount ? snapshot.compactFooter(at: entry.date)
+                                                 : snapshot.footnote(at: entry.date))
     }
 
     var body: some View {

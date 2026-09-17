@@ -405,6 +405,25 @@ final class WidgetDesignTests: XCTestCase {
         XCTAssertTrue(UnreadBreakdown.none.isEmpty)
     }
 
+    /// 首字母大写是**排版**，不是第二份文案。
+    ///
+    /// 同一句话有两种用法：单独成行（菜单栏、小组件）要大写，跟在别的东西后面
+    /// （侧栏的 `7 platforms · scanned 4m ago`）要小写。存两份字符串就是又一处
+    /// 会漂的地方——这一轮已经因为「同一句话两个写法」抓到三处了。
+    func test_首字母大写只动第一个字符() {
+        XCTAssertEqual(StatusWording.sentence(StatusWording.scanned("4m ago")), "Scanned 4m ago")
+        XCTAssertEqual(StatusWording.sentence(StatusWording.checked("3h ago")), "Checked 3h ago")
+        // `.capitalized` 会把这句变成 `831 Live · 4m Ago`。
+        XCTAssertEqual(StatusWording.sentence("831 live · 4m ago"), "831 live · 4m ago")
+        XCTAssertEqual(StatusWording.sentence(""), "")
+    }
+
+    /// 底下那份仍然是小写的——侧栏要把它接在 `7 platforms · ` 后面。
+    func test_源文案保持小写() {
+        XCTAssertEqual(StatusWording.scanned("4m ago"), "scanned 4m ago")
+        XCTAssertEqual(StatusWording.checked("3h ago"), "checked 3h ago")
+    }
+
     /// 旧版本写的 JSON 里没有这两个新字段，照样要读得出来。
     func test_新字段缺席也解得出来() throws {
         let old = """
