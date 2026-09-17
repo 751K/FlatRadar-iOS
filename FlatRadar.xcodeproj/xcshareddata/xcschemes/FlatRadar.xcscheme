@@ -30,11 +30,11 @@
       shouldUseLaunchSchemeArgsEnv = "YES">
       <TestPlans>
          <TestPlanReference
-            reference = "container:FlatRadar/FlatRadar.xctestplan"
+            reference = "container:TestPlans/FlatRadar.xctestplan"
             default = "YES">
          </TestPlanReference>
          <TestPlanReference
-            reference = "container:FlatRadar/Screenshots.xctestplan">
+            reference = "container:TestPlans/Screenshots.xctestplan">
          </TestPlanReference>
       </TestPlans>
    </TestAction>

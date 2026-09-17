@@ -34,7 +34,22 @@ set -eu
 #
 # 脚本的工作目录是 ci_scripts 自己，所以路径走 CI_PRIMARY_REPOSITORY_PATH，
 # 它指向克隆下来的仓库根。
-PLAN="$CI_PRIMARY_REPOSITORY_PATH/FlatRadar/Screenshots.xctestplan"
+#
+# plan 必须放在仓库根的 TestPlans/，不能放回 FlatRadar/
+# ----------------------------------------------------
+# `FlatRadar/` 是 PBXFileSystemSynchronizedRootGroup——扔进去的文件会自动成为
+# app target 的资源，跟着 .app 一起打包上架。而本脚本往截图 plan 里写的是
+# **明文凭据**。两件事撞在一起，就是凭据随 App Store 包发出去。
+#
+# 这不是假想：2.2.0 的 App Store 导出包里实测有
+# `Payload/FlatRadar.app/Screenshots.xctestplan`。当时侥幸没出事，只因为
+# 「iOS Build」这条 workflow 没配 UI_TEST_* 环境变量，脚本原样跳过了注入——
+# 也就是说，离泄漏只差在网页上勾一个变量。
+#
+# TestPlans/ 不在任何同步目录里，也没有任何 pbxproj 条目，只被 scheme 用
+# `container:TestPlans/...` 引用，所以不会进 .app。
+# tests/test_testplan_location.py 把这条钉住。
+PLAN="$CI_PRIMARY_REPOSITORY_PATH/TestPlans/Screenshots.xctestplan"
 
 if [ ! -f "$PLAN" ]; then
     echo "找不到 test plan：$PLAN"
