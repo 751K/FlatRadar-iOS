@@ -244,12 +244,26 @@ struct FlatRadarMacApp: App {
                 .environment(review)
         }
 
-        // 菜单栏常驻。**默认关**，由设置页那个开关打开（见 ``MenuBarResidency``）。
+        // 菜单栏常驻。**默认开**（见 ``MenuBarResidency/defaultOn``）。
         //
         // 开关直接决定这个场景在不在 `body` 里：SwiftUI 会据此加上 / 摘掉菜单栏
         // 那一格，不需要自己管 `NSStatusItem`。同一个开关还喂给 ``AppFeed``，
         // 因为风险 6 说常驻之后「没有内容窗口也可维持连接」——图标在不在，
         // 和流断不断，是同一个决定。
+        //
+        // ⚠️ `isInserted:` 收的是 **Binding**，SwiftUI 会**往回写**：用户把那一格
+        // 从菜单栏拖出去，它就把 false 写进 `@AppStorage`。所以一旦这个键落了盘，
+        // 改上面那个默认值对**已经跑过旧版本的机器**没有作用——存着的值优先。
+        // 实测就是这样：默认改成 true、装上、起来，菜单栏仍然没有那一格；
+        // 用 `-menuBarResident YES`（NSArgumentDomain 优先级最高）起一次就出来了。
+        // 新默认值只对**没有这个键**的安装生效。
+        //
+        // 那一趟强制启动同时也是**修法**：往回写这条路径会把 true 落盘，
+        // 之后正常启动也带着那一格。所以一台受影响的机器只要
+        //
+        //     open -a FlatRadarMac --args -menuBarResident YES
+        //
+        // 起一次就够了，等价于在设置页点一下那个开关。
         MenuBarExtra(isInserted: $menuBarResident) {
             MenuBarStatusView(feed: feed, auth: auth)
         } label: {
