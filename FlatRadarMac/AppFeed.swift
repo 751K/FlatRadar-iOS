@@ -205,18 +205,18 @@ final class AppFeed {
     ///
     /// `force` 给 ⌘R 和菜单栏的刷新用：那是用户明确要求的一次刷新，
     /// 该把手上所有数据都过一遍，而 `fetch()` 的 `guard !isLoading` 去重还在。
-    private func fetchCalendarIfWidgetInstalled(force: Bool = false) async {
-        // 菜单栏常驻也算「摆出来了」。
+    ///
+    /// `forPanel` 是菜单栏面板发起的那一次刷新。面板底部那条横幅要日历数据，
+    /// 所以它自己就是理由，不看有没有摆日历小组件。
+    private func fetchCalendarIfWidgetInstalled(force: Bool = false,
+                                               forPanel: Bool = false) async {
+        // ⚠️ 判据是「**面板被打开了**」，不是「菜单栏常驻开着」。
         //
-        // 面板底部那条横幅（下一个能抢的入住日）和日历那一格读的是同一份数据，
-        // 判据因此是同一条：**有没有一个一直在显示它的东西**。开了常驻的人每次
-        // 打开面板都在看那条横幅，那一次请求正是他要的；没开的人一个字节都不多要，
-        // 上面那个决定不变。
-        //
-        // 写成两段而不是 `menuBarResident || await …`：`await` 不能出现在 `||`
-        // 右边（那是个 autoclosure）。顺带短路——常驻开着就不必再去问
-        // `WidgetCenter` 一遍。
-        if !menuBarResident {
+        // 常驻现在默认开（见 ``MenuBarResidency/defaultOn``），拿它当判据就等于
+        // 每次启动都发这个 211 KB 的请求——上面那个"没摆就一个字节都不多要"的
+        // 决定会被默认值悄悄推翻。而菜单栏上那个**图标**并不显示入住日，只有点开
+        // 的面板才显示，所以该付这次请求的时刻就是点开那一下。
+        if !forPanel {
             guard await WidgetBridge.isInstalled(kind: WidgetKind.calendar) else { return }
         }
         if force || calendar.listings.isEmpty {
@@ -229,11 +229,14 @@ final class AppFeed {
         await recent.fetch()
     }
 
-    /// 菜单栏的刷新，以及窗口里 ⌘R 的连带刷新。
-    func refreshShared(auth: AuthStore) async {
+    /// 菜单栏面板的刷新，以及窗口里 ⌘R 的连带刷新。
+    ///
+    /// `forPanel` 只有面板那条路会传 true，它比 ⌘R 多要一份日历——面板底部有
+    /// 那条「下一个能抢的入住日」，窗口里没有。
+    func refreshShared(auth: AuthStore, forPanel: Bool = false) async {
         async let stats: Void = summary.load()
         async let count: Void = refreshMatchCount()
-        async let days: Void = fetchCalendarIfWidgetInstalled(force: true)
+        async let days: Void = fetchCalendarIfWidgetInstalled(force: true, forPanel: forPanel)
         _ = await (stats, count, days)
         publishWidgetSnapshot(auth: auth)
     }

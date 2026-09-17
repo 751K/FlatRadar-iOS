@@ -10,12 +10,23 @@ import FlatRadarCore
 nonisolated enum MenuBarResidency {
     static let storageKey = "menuBarResident"
 
-    /// 默认**不开**。
+    /// 默认**开**。
     ///
-    /// 菜单栏图标是用户的地盘，不是应用可以默认占的。而且开着它就等于
-    /// 「没有窗口也维持 SSE」（风险 6），那是一个明确的后台资源承诺，
-    /// 该由用户自己按下，不该是安装后就有。
-    static let defaultOn = false
+    /// 原先是关的，理由写在这儿：「菜单栏图标是用户的地盘，不是应用可以默认占的」。
+    /// 那条理由是**对着上一版的面板**说的——那时候点开只有三行字（一个匹配数、
+    /// 一句扫描时间），占一格菜单栏换不来什么，让用户自己去设置页开才合理。
+    ///
+    /// 现在那一格是设计稿 t5 那整块：今日新增 + 趋势 + 当前筛选 + 五条可点的最新
+    /// 房源。这个 app 的用途就是"不打开它也知道有没有新房"，而这是**唯一**在
+    /// 没有窗口时还能提供它的形态。默认关等于默认把主要用途藏在设置页第二个开关
+    /// 后面。
+    ///
+    /// ⚠️ 代价没有变，只是换了谁来承担：开着就等于「没有内容窗口也维持 SSE」
+    /// （风险 6）。也就是说**装完就有一条常驻的后台连接**，而不再是用户自己按下的。
+    /// 关掉它的地方还在原处（设置 → General），关掉之后流也跟着断——
+    /// ``AppFeed/wantsStream(authenticated:isGuest:contentWindows:menuBarResident:)``
+    /// 那条规则一个字都没动。
+    static let defaultOn = true
 }
 
 // MARK: - 面板要画的那份数据
@@ -502,7 +513,7 @@ struct MenuBarStatusView: View {
     private func refresh() async {
         guard !refreshing else { return }
         refreshing = true
-        await feed.refreshShared(auth: auth)
+        await feed.refreshShared(auth: auth, forPanel: true)
         refreshing = false
     }
 }

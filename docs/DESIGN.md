@@ -368,7 +368,7 @@ iOS 端的九处界面里，有三处在 Mac 上不该以「页面」的形式�
 | 6 | **Calendar** | 内容区，共享 inspector | ✅ 已做 | `CalendarStore` | 全部自绘（`CalendarMonth`），`UICalendarView` 在 macOS 不存在 |
 | 7 | **设置** | `Settings {}` 独立场景，两个入口：⌘, 和侧栏底部 | ✅ 已做 | `MeFilterStore`、`AuthStore`、`PushStore` | 分 tab：General / Account / Notifications / Filters |
 | 8 | **登录** | 独立窗口 | ✅ 已做 | `AuthStore` | 登录 / 注册 / 游客三个入口。**Touch ID 没接**——Mac 有硬件，`BiometricAuthService` 也在包里 |
-| 9 | **菜单栏常驻** | `MenuBarExtra` | ✅ 已做（Phase 4） | `AppFeed`（统计 + 匹配数） | 匹配数 + 上次扫描 + 未读数；**默认关**，开关在设置页 |
+| 9 | **菜单栏常驻** | `MenuBarExtra` | ✅ 已做（Phase 4，面板照设计稿 t5 重做） | `AppFeed`（统计 + 最新 + 日历） | 今日新增 + 趋势 + 筛选 + 五条可点房源 + 下一个入住日；**默认开**，开关在设置页。开着 = 没窗口也维持 SSE |
 | 10 | **Stats** | 内容区，共享 inspector | ✅ 已做 | `/stats/public/charts`、`ChartPresentation` | 十二张图一屏铺开、不做钻取；选中一张右栏出明细。语义是「过去 N 天**新上架**的那批」，不是库存 |
 
 **状态列 2026-09-16 对过一遍。** 之前 4/5/6 标的是 ⬜ Phase 3、9 标的是 ⬜ Phase 4，
