@@ -202,6 +202,19 @@ enum Theme {
     static func statusColor(_ status: ListingStatus) -> Color {
         status == .other ? .statusOccupied : status.color
     }
+
+    // MARK: - 未读
+
+    /// 未读计数那枚胶囊、以及菜单栏图标旁边那颗点。
+    ///
+    /// 设计稿 t5 给的 `#AD3E39` / `#E2706B`。为什么不用系统红：这个红要和
+    /// Reserved 的蓝、五个状态色、七个平台色同屏，系统红 `#FF3B30` 的饱和度在
+    /// 这一屏里最高，会把整块面板的视线拉到一个**只有两位数**的地方去。
+    /// 砖红压了饱和度，在一排中性灰里仍然是唯一的暖色，够用了。
+    ///
+    /// 深色下不是把同一个值提亮那么简单：`#AD3E39` 在深底上偏褐，读不出"红"。
+    /// `#E2706B` 是稿子自己给的深色值。
+    static let unread = Color(light: 0xAD3E39, dark: 0xE2706B)
 }
 
 // MARK: - 十六进制

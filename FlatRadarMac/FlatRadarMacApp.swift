@@ -253,7 +253,7 @@ struct FlatRadarMacApp: App {
         MenuBarExtra(isInserted: $menuBarResident) {
             MenuBarStatusView(feed: feed, auth: auth)
         } label: {
-            MenuBarStatusLabel(feed: feed)
+            MenuBarStatusLabel(feed: feed, auth: auth)
         }
         .menuBarExtraStyle(.window)
     }

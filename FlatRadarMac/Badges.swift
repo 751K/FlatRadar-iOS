@@ -13,6 +13,31 @@ import FlatRadarCore
 /// 但那要连着尺寸体系一起想（同一个组件在两端要有两套尺寸），属于单独一件事。
 /// 现在两份的**颜色和缩写都来自包里的 `Platform`**，会漂移的只有内边距。
 
+// MARK: - 状态标记
+
+/// 一颗立起来的方块。菜单栏面板的房源行、以及菜单栏图标旁边那颗未读点。
+///
+/// 为什么这两处不用 ``StatusPill`` 里那个圆点
+/// ---------------------------------------
+/// 胶囊那个圆点**旁边有字**（`● Book`），形状不需要自己承担区分的活。面板那一行
+/// 只有 6pt 的标记，没有文字跟着——在一排系统菜单栏图标（全是圆的）和一列房源
+/// 里，菱形是唯一一眼能认出"这是 FlatRadar 在说状态"的形状。桌面小组件的
+/// NEWEST 行出于同一个理由也是菱形，三处是同一个决定。
+///
+/// 用 `Path` 而不是 `.rotationEffect(.degrees(45))`：旋转改的是渲染，布局框还是
+/// 原来那个正方形，6pt 的方块转完对角线是 8.5pt，会顶到相邻元素。
+struct Diamond: Shape {
+    nonisolated func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.midY))
+        path.closeSubpath()
+        return path
+    }
+}
+
 // MARK: - 状态胶囊
 
 /// 圆点 + 文字 + 同色淡底。全 App 同一个配方，见 docs/DESIGN.md §3.3。

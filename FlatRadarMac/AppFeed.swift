@@ -46,13 +46,27 @@ final class AppFeed {
     /// 算好的 `total`（以及「这个数是不是套了你的个人筛选」），比自己拼一个
     /// `limit=1` 的请求省事，也复用了已经测过的那条路径。
     ///
-    /// `pageSize` 从 1 提到 3，是因为设计稿里小组件中号 / 大号有一段 NEWEST
-    /// 三行。**不是多发一个请求**：同一条 `/listings` 顺手多带回两条，
-    /// 而它默认就按 `-first_seen` 排（写进契约的），第一页前三条正好是最新三条。
+    /// `pageSize` 从 1 提到 5，是因为设计稿里小组件中号 / 大号和菜单栏面板
+    /// 都有一段 NEWEST 列表。**不是多发一个请求**：同一条 `/listings` 顺手多带回
+    /// 几条，而它默认就按 `-first_seen` 排（写进契约的），第一页就是最新那几条。
     private let recent = ListingsStore(pageSize: AppFeed.newestCount)
 
-    /// 小组件 NEWEST 那一段放几条。设计稿画的是三条。
-    static let newestCount = 3
+    /// NEWEST 那一段最多放几条。
+    ///
+    /// 5 是**菜单栏面板**的量（设计稿 t5）；小组件那几档自己再 `prefix` 到 3 / 2。
+    /// 取两者的最大值存一份，而不是各拉各的：同一个列表在同一台机器上的两个地方
+    /// 显示成不同的内容，是最难解释的那种不一致。
+    static let newestCount = 5
+
+    /// 落给小组件的那几条。见 ``newestForWidget``。
+    static let widgetNewestCount = 3
+
+    /// 菜单栏面板那一段可点的列表。
+    ///
+    /// 直接给 ``Listing``（不是小组件那份压扁的 `WidgetListing`）：面板和 app
+    /// 在同一个进程里，点一行要开详情窗口，需要 id 之外的东西。压扁那份是为了
+    /// 过共享容器那道 JSON，这里没有那道门。
+    var recentListings: [Listing] { recent.listings }
 
     /// 日历数据。**从窗口级提上来的**。
     ///
@@ -192,7 +206,19 @@ final class AppFeed {
     /// `force` 给 ⌘R 和菜单栏的刷新用：那是用户明确要求的一次刷新，
     /// 该把手上所有数据都过一遍，而 `fetch()` 的 `guard !isLoading` 去重还在。
     private func fetchCalendarIfWidgetInstalled(force: Bool = false) async {
-        guard await WidgetBridge.isInstalled(kind: WidgetKind.calendar) else { return }
+        // 菜单栏常驻也算「摆出来了」。
+        //
+        // 面板底部那条横幅（下一个能抢的入住日）和日历那一格读的是同一份数据，
+        // 判据因此是同一条：**有没有一个一直在显示它的东西**。开了常驻的人每次
+        // 打开面板都在看那条横幅，那一次请求正是他要的；没开的人一个字节都不多要，
+        // 上面那个决定不变。
+        //
+        // 写成两段而不是 `menuBarResident || await …`：`await` 不能出现在 `||`
+        // 右边（那是个 autoclosure）。顺带短路——常驻开着就不必再去问
+        // `WidgetCenter` 一遍。
+        if !menuBarResident {
+            guard await WidgetBridge.isInstalled(kind: WidgetKind.calendar) else { return }
+        }
         if force || calendar.listings.isEmpty {
             await calendar.fetch()
         }
@@ -263,7 +289,10 @@ final class AppFeed {
     /// 只搬画得出来的五个字段，不搬整个 `Listing`——那玩意带 features /
     /// featureMap / 坐标，几百字节一条，而共享容器那份 JSON 每次刷新都整份重写。
     private var newestForWidget: [WidgetListing] {
-        recent.listings.prefix(Self.newestCount).map { listing in
+        // 3 而不是 ``newestCount``（5）。那 5 条是菜单栏面板要的，小组件最多画 3 行
+        // （Mac 大号 3、手机大号 2）。多带的两条要整份重写进共享容器，每次刷新
+        // 都付一遍这个字节数，而没有任何一档会画出来。
+        recent.listings.prefix(Self.widgetNewestCount).map { listing in
             WidgetListing(id: listing.id,
                           name: listing.name,
                           city: listing.city,

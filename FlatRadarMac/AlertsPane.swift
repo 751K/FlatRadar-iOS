@@ -420,11 +420,29 @@ private struct AlertRowView: View {
 
 // MARK: - 24 小时柱状图
 
-/// 12 根柱子，旧 → 新。没有坐标轴、没有网格——和 ``Sparkline`` 同一条规则
+/// 若干根柱子，旧 → 新。没有坐标轴、没有网格——和 ``Sparkline`` 同一条规则
 /// （t2「去线留白」），颜色也和它同一个 token（``Theme/chart``）。
+///
+/// 两个读者：Alerts 那张 24 小时图（12 根，46pt 高），和菜单栏面板那排每日新增
+/// （14 根，32pt 高）。面板那处原先自己写了一份，画出来最后一根是**纯黑**
+/// （它用的是 ``Theme/ink``）——在一排灰柱里像一个洞，深色下反过来是一块白。
+/// 这张图该长什么样这件事，这个文件里已经有答案了，不该再有第二份。
 struct BucketChart: View {
 
     let values: [Int]
+
+    /// 柱子的满高。调用点自己决定，因为这两处的容器高度差了 14pt。
+    var height: CGFloat = 46
+
+    /// 柱头的圆角。`nil` = 胶囊（圆角等于半宽）。
+    ///
+    /// 为什么要给出去而不是一律胶囊
+    /// --------------------------
+    /// 胶囊的圆角跟着**宽度**走。Alerts 那张图 12 根柱子摊在一整行里，每根够宽，
+    /// 胶囊读出来是"圆头的柱子"；菜单栏面板 14 根挤在 130pt 里，每根只有 6pt 宽，
+    /// 同一个 `Capsule()` 画出来是**一排药丸**——柱状图的形状语义没了，看着像一行
+    /// 小图标。渲染出来才发现的，小组件那一轮栽过一模一样的一次。
+    var cornerRadius: CGFloat?
 
     var body: some View {
         let peak = max(values.max() ?? 0, 1)
@@ -442,12 +460,17 @@ struct BucketChart: View {
                 //
                 // 全零的桶也画 2pt 的底，否则安静的时段会变成一段空白，
                 // 读起来像"没有数据"而不是"没有通知"。
-                Capsule()
+                barShape
                     .fill(index == values.count - 1 ? Theme.chart : Theme.chart.opacity(0.55))
-                    .frame(height: max(2, 46 * CGFloat(value) / CGFloat(peak)))
+                    .frame(height: max(2, height * CGFloat(value) / CGFloat(peak)))
             }
         }
         .frame(maxWidth: .infinity, alignment: .bottom)
         .accessibilityHidden(true)
+    }
+
+    private var barShape: AnyShape {
+        guard let cornerRadius else { return AnyShape(Capsule()) }
+        return AnyShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
     }
 }
