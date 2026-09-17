@@ -78,7 +78,13 @@ enum ScreenshotMode {
     /// inspector 被切掉半截。现在同一块屏给出 1280×692——宽度拿满，够用。
     static func windowSize(on screen: NSScreen?) -> NSSize? {
         guard let screen else { return nil }
-        let visible = screen.visibleFrame.size
+        // 藏了菜单栏就按**整块屏**算，不按 `visibleFrame`。
+        //
+        // `presentationOptions` 生效之后 `visibleFrame` 不保证立刻更新，读到旧值
+        // 就又把那 30 点让出去了——白边正是这么来的。按 `frame` 算是确定的。
+        let visible = NSApp.presentationOptions.contains(.autoHideMenuBar)
+            ? screen.frame.size
+            : screen.visibleFrame.size
         if let preferred = preferredSizes.first(where: {
             $0.width <= visible.width && $0.height <= visible.height
         }) { return preferred }
@@ -160,6 +166,35 @@ enum ScreenshotMode {
     // MARK: - 窗口
 
 
+    /// 藏掉菜单栏，**整个进程只设一次**。
+    ///
+    /// 为什么值得重新加回来
+    /// ------------------
+    /// 不藏的话可用区是 1280×770 点（Dock 已由 ci_pre_xcodebuild 的 defaults 藏掉，
+    /// 剩菜单栏 30 点），窗口拿不满 1280×800，合成时上下各补 30 像素白边——
+    /// 那种图不能直接上架。
+    ///
+    /// 这个 API 我曾经加过又删掉（build 364–369），当时判定它是"六条只过两条"的
+    /// 元凶。**那个判定是错的**：369 已经把它删干净了，结果还是 2/6；真凶是窗口
+    /// 恢复状态（`isRestorable = false` 让干净退出存下"零窗口"），370 修掉之后
+    /// 直接跳到 5/6。所以它一直是被冤枉的。
+    ///
+    /// 这次加回来有两处不同：
+    ///
+    /// - **只设一次**。当初它跟着 `pin` 被重试八次，而在显示周期里反复改窗口/应用
+    ///   状态正是 370 那个 `_postWindowNeedsUpdateConstraints` 崩溃的成因。
+    /// - **要求 app 已经激活**。`presentationOptions` 在非活动状态下设会抛异常。
+    ///   没激活就跳过，交给下一次重试——重试本来就有八次。
+    ///
+    /// `.autoHideMenuBar` 必须和一个 Dock 选项一起给，单独给会被忽略。
+    private static var didHideMenuBar = false
+
+    static func hideMenuBarOnce() {
+        guard !didHideMenuBar, NSApp.isActive else { return }
+        NSApp.presentationOptions = [.autoHideDock, .autoHideMenuBar]
+        didHideMenuBar = true
+    }
+
     /// 把窗口钉成截图尺寸。
     ///
     /// 三件事都要做，少一件都会漏尺寸：
@@ -191,6 +226,7 @@ enum ScreenshotMode {
         //
         // 尺寸不用靠它守——`WindowSizer` 那边有重试 + `minSize == maxSize` 的硬锁，
         // 而且启动参数里加了 `-ApplePersistenceIgnoreState YES`，压根不会去恢复。
+        hideMenuBarOnce()
         let screen = window.screen ?? NSScreen.main
 
         // 容器 = 窗口真正能占的那块地方。
@@ -215,7 +251,10 @@ enum ScreenshotMode {
         // 满幅窗口，屏幕小就是一张带留白的窗口图——两者都是合法尺寸，而且这段代码
         // 不再有任何"改了系统状态得记得改回去"的东西。
         guard let size = windowSize(on: screen) else { return }
-        let container = screen?.visibleFrame ?? .zero
+        // 摆放的参照系要和 `windowSize` 用的那个一致，否则窗口会被推出屏幕。
+        let container = NSApp.presentationOptions.contains(.autoHideMenuBar)
+            ? (screen?.frame ?? .zero)
+            : (screen?.visibleFrame ?? .zero)
         // **每一步都先判断再改。**
         //
         // `pin` 会被重试八次（见 `WindowSizer`），而在 AppKit 的显示周期里反复改
