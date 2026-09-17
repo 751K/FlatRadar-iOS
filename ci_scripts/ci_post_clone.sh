@@ -1,5 +1,5 @@
 #!/bin/sh
-# Xcode Cloud：把凭据注入截图用的 test plan。
+# Xcode Cloud：把凭据注入截图用的 test plan（iOS 一份、Mac 一份）。
 #
 # 为什么要绕这一道
 # ----------------
@@ -34,18 +34,33 @@ set -eu
 #
 # 脚本的工作目录是 ci_scripts 自己，所以路径走 CI_PRIMARY_REPOSITORY_PATH，
 # 它指向克隆下来的仓库根。
-PLAN="$CI_PRIMARY_REPOSITORY_PATH/FlatRadar/Screenshots.xctestplan"
+# 两端各一份 plan。
+#
+# iOS 那份在 app 的源码目录里（历史位置），Mac 这份在仓库根的 TestPlans/。
+# **别把 Mac 这份挪进 FlatRadarMac/**：那个目录是 PBXFileSystemSynchronizedRootGroup，
+# 扔进去的文件会自动成为 app target 的资源——也就是说，一份刚被注入了明文凭据的
+# plan 会被原样拷进 .app 里跟着上架。
+#
+# 这不是假想：iOS 那两份现在正是这个状态，Release 产物里实测有
+#     Release-iphonesimulator/FlatRadar.app/Screenshots.xctestplan
+#     Release-iphonesimulator/FlatRadar.app/FlatRadar.xctestplan
+# 所以 iOS 那两份该挪出来，挪完把上面这行路径改掉。
+PLANS="$CI_PRIMARY_REPOSITORY_PATH/FlatRadar/Screenshots.xctestplan
+$CI_PRIMARY_REPOSITORY_PATH/TestPlans/MacScreenshots.xctestplan"
 
-if [ ! -f "$PLAN" ]; then
-    echo "找不到 test plan：$PLAN"
-    exit 1
-fi
+for PLAN in $PLANS; do
+    if [ ! -f "$PLAN" ]; then
+        echo "找不到 test plan：$PLAN"
+        exit 1
+    fi
+done
 
 if [ -z "${UI_TEST_USERNAME:-}" ] || [ -z "${UI_TEST_PASSWORD:-}" ]; then
     echo "未设置 UI_TEST_USERNAME / UI_TEST_PASSWORD，跳过注入（将以访客模式截图）"
     exit 0
 fi
 
+for PLAN in $PLANS; do
 python3 - "$PLAN" <<'PY'
 import json, os, sys
 
@@ -70,3 +85,4 @@ with open(path, "w", encoding="utf-8") as f:
 # 不打印值。只确认写进去了。
 print("已注入 %d 个环境变量到 %s" % (len(entries), os.path.basename(path)))
 PY
+done

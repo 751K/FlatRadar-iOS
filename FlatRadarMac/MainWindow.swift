@@ -100,6 +100,10 @@ struct MainWindow: View {
         // 这也是 docs/DESIGN.md §8 那个待定项的答案：不选色相，冲突就不存在。
         .tint(Theme.ink)
         .task {
+            // 截图模式落位。放在这里而不是 `RootView`：`MainWindow` 是认证之后
+            // 才挂载的，跑到这一行时身份已经落地，不存在 iOS 那边「登录是异步的、
+            // tab 是同步设的，设完又被重置回默认值」那种竞态。
+            if let section = ScreenshotMode.section() { model.section = section }
             // 两个请求互不依赖，并发发出去。统计带慢一点不该挡住表格。
             //
             // 房源是**这个窗口的**（各排各的序、各筛各的），共享那一份是应用级的
