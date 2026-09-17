@@ -189,6 +189,42 @@ echo "› [awake]   caffeinate pid=$!"
 REPO_PATH="${CI_PRIMARY_REPOSITORY_PATH:-}"
 XCB_ACTION="${CI_XCODEBUILD_ACTION:-}"
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 把构建机的分辨率调大。
+#
+# 这台 `VirtualMac2,1` 默认 1280×800 点，而 ASC 最小的合法截图尺寸在 2x 下
+# **正好**也是 1280×800 点——菜单栏 30 + Dock 78 占掉之后窗口只剩 1280×692，
+# 差出来的 108 点在合成时补成白边（build 372 那六张图上下各 108 像素的白边就是它）。
+#
+# 屏幕够大的话窗口就能拿到首选的 1440×900 点，合成时画布正好等于图，零留白、
+# 零重采样——本地那块 2560 点宽的屏正是这样。
+#
+# 工具默认只列模式、不改任何东西（在开发机上误改分辨率很讨厌），这里显式给
+# `--apply`。挑不到够大的模式就保持现状，只把模式表打进日志，下一轮据此再判断。
+# 整段失败都不影响构建。
+# 分两趟：`build-for-testing` 时编译，两趟都执行。
+#
+# 必须这样，因为 `CI_PRIMARY_REPOSITORY_PATH` **只在第一趟有定义**（build 353
+# 就是栽在这上面），而 app 真正运行、分辨率真正需要生效的是**第二趟**
+# （test-without-building）。所以第一趟把工具编译到 /tmp 留着——两趟跑在同一台
+# 机器上，第二趟直接用那个二进制。
+DISPLAY_BIN=/tmp/mac-display-mode
+if [ "${CI_PRODUCT_PLATFORM:-}" = "macOS" ]; then
+  if [ ! -x "$DISPLAY_BIN" ] && [ -n "$REPO_PATH" ]; then
+    DISPLAY_TOOL="$REPO_PATH/tools/screenshots/mac-display-mode.swift"
+    if [ -f "$DISPLAY_TOOL" ]; then
+      echo "› [display] 编译分辨率工具"
+      xcrun --sdk macosx swiftc -O "$DISPLAY_TOOL" -o "$DISPLAY_BIN" 2>&1 \
+        || echo "› [display] 编译失败（不影响构建）"
+    fi
+  fi
+  if [ -x "$DISPLAY_BIN" ]; then
+    "$DISPLAY_BIN" --apply || true
+  else
+    echo "› [display] 没有可用的分辨率工具，保持现状"
+  fi
+fi
+
 echo "› [entitlements] CI_XCODEBUILD_ACTION='${XCB_ACTION}' CI_PRODUCT_PLATFORM='${CI_PRODUCT_PLATFORM:-}'"
 
 case "$XCB_ACTION" in
