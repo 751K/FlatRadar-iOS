@@ -225,15 +225,13 @@ public extension NotificationItem {
     public nonisolated var createdDate: Date? { parsedDate }
 
     /// 相对年龄串：`now` / `38m` / `5h` / `2d`。
+    ///
+    /// 算法搬进了 ``ServerTime/compactAge(since:now:)``：小组件的 NEWEST 三行
+    /// 要贴同样的一小格，而它得按"条目打算什么时候显示"来算（WidgetKit 提前
+    /// 渲染），这里的 `Date()` 那一版给不了。两处共用一份，写法不会漂。
     nonisolated var ageText: String {
         guard let d = createdDate else { return "" }
-        let interval = Date().timeIntervalSince(d)
-        if interval < 60 { return "now" }
-        if interval < 3600 { return "\(Int(interval / 60))m" }
-        if interval < 86400 { return "\(Int(interval / 3600))h" }
-        if interval < 86400 * 7 { return "\(Int(interval / 86400))d" }
-        // 超过一周回退到具体日期（共享 formatter）
-        return Self.shortDateFormatter.string(from: d)
+        return ServerTime.compactAge(since: d, now: Date())
     }
 
     /// "Today" / "Yesterday" / "Earlier" 三段——给 NotificationsView 做 Section 分组。

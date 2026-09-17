@@ -32,6 +32,7 @@ import os
 /// 两处各写一遍字面量的话，拼错一个字符的症状是"app 永远以为没装"——不报错。
 public nonisolated enum WidgetKind {
     public static let status = "FlatRadarStatus"
+    public static let unread = "FlatRadarUnread"
     public static let calendar = "FlatRadarCalendar"
 }
 

@@ -39,13 +39,20 @@ final class AppFeed {
     /// 顶部统计带的数据。菜单栏常驻也读它——所以它必须在窗口之外活着。
     let summary = SummaryModel()
 
-    /// 只是为了拿 `total` 和 `isFiltered` 的一个轻量 store。
+    /// 拿 `total` / `isFiltered`，**顺便拿最新那三条**。
     ///
     /// 菜单栏要显示「当前匹配数」，而这个数在**没有任何窗口**时也得有——
-    /// 不能从某个 `BrowseModel.listings` 里读。`pageSize: 1` 的一次 `fetch()`
-    /// 就能拿到服务端算好的 `total`（以及「这个数是不是套了你的个人筛选」），
-    /// 比自己拼一个 `limit=1` 的请求省事，也复用了已经测过的那条路径。
-    private let counter = ListingsStore(pageSize: 1)
+    /// 不能从某个 `BrowseModel.listings` 里读。一次 `fetch()` 就能拿到服务端
+    /// 算好的 `total`（以及「这个数是不是套了你的个人筛选」），比自己拼一个
+    /// `limit=1` 的请求省事，也复用了已经测过的那条路径。
+    ///
+    /// `pageSize` 从 1 提到 3，是因为设计稿里小组件中号 / 大号有一段 NEWEST
+    /// 三行。**不是多发一个请求**：同一条 `/listings` 顺手多带回两条，
+    /// 而它默认就按 `-first_seen` 排（写进契约的），第一页前三条正好是最新三条。
+    private let recent = ListingsStore(pageSize: AppFeed.newestCount)
+
+    /// 小组件 NEWEST 那一段放几条。设计稿画的是三条。
+    static let newestCount = 3
 
     /// 日历数据。**从窗口级提上来的**。
     ///
@@ -67,8 +74,8 @@ final class AppFeed {
     /// 28 个三元组，几百字节。
     static let moveInDays = 28
 
-    var matchCount: Int? { counter.total > 0 ? counter.total : nil }
-    var matchIsFiltered: Bool { counter.isFiltered }
+    var matchCount: Int? { recent.total > 0 ? recent.total : nil }
+    var matchIsFiltered: Bool { recent.isFiltered }
 
     // MARK: - 一次性的启动动作
 
@@ -192,8 +199,8 @@ final class AppFeed {
     }
 
     func refreshMatchCount() async {
-        guard !counter.isLoading else { return }
-        await counter.fetch()
+        guard !recent.isLoading else { return }
+        await recent.fetch()
     }
 
     /// 菜单栏的刷新，以及窗口里 ⌘R 的连带刷新。
@@ -215,7 +222,7 @@ final class AppFeed {
     func signedOut() {
         alerts.disconnectStream()
         alerts.clear()
-        counter.clear()
+        recent.clear()
         calendar.clear()
         WidgetBridge.clear()
     }
@@ -243,9 +250,43 @@ final class AppFeed {
             unreadAlerts: alerts.unreadCount,
             // 访客没有个人通知流，那个数永远是 0。和菜单栏那一行同一个判断。
             showsUnread: !auth.isGuest,
+            newest: newestForWidget,
+            unreadKinds: auth.isGuest ? .none : unreadKindsForWidget,
             moveIns: MoveInDay.series(listingsByDay: calendar.listingsByDay,
                                       from: now, days: Self.moveInDays),
             lastScrape: summary.summary?.lastScrape ?? "",
             capturedAt: now))
+    }
+
+    /// NEWEST 三行。
+    ///
+    /// 只搬画得出来的五个字段，不搬整个 `Listing`——那玩意带 features /
+    /// featureMap / 坐标，几百字节一条，而共享容器那份 JSON 每次刷新都整份重写。
+    private var newestForWidget: [WidgetListing] {
+        recent.listings.prefix(Self.newestCount).map { listing in
+            WidgetListing(id: listing.id,
+                          name: listing.name,
+                          city: listing.city,
+                          platform: Platform.displayName(listing.source),
+                          price: listing.priceRaw ?? "",
+                          firstSeen: listing.firstSeen ?? "")
+        }
+    }
+
+    /// 未读按类别拆开。
+    ///
+    /// 用的是 `NotificationItem.kind`，**不再自己判一遍**——那个分类是后端
+    /// `type` 加正文启发式判出来的，判错过一次（`new_listing` 正文里那个 `→`
+    /// 是入住日、被当成状态迁移，Mac 实测 17 条全判成 Status），已经修在包里。
+    ///
+    /// 数的是**已经拉回本地**的未读。`NotificationsStore.fetch()` 会一直翻页到
+    /// `unreadCount <= loadedUnreadCount` 为止，所以正常情况下这三个数加起来
+    /// 就等于头条那个数；翻页失败时头条那个才是对的，这三行只是没数全。
+    private var unreadKindsForWidget: UnreadBreakdown {
+        let unread = alerts.notifications.filter { !$0.isRead }
+        return UnreadBreakdown(
+            newListings: unread.filter { $0.kind == .book }.count,
+            statusChanges: unread.filter { $0.kind == .status }.count,
+            lottery: unread.filter { $0.kind == .lottery }.count)
     }
 }

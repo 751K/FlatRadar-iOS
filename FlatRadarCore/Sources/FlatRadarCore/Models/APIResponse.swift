@@ -205,6 +205,45 @@ public enum ServerTime {
         ago(seconds: now.timeIntervalSince(date))
     }
 
+    /// 紧凑年龄串：`now` / `38m` / `5h` / `2d`，超过一周退回具体日期。
+    ///
+    /// 和 ``relativeTime(_:now:)`` 是**两种格式**，都留着：那个是"距今多久"的
+    /// 完整说法（`4m ago`），用在一句话里；这个是贴在列表行尾的一小格，
+    /// 空间只够两三个字符。``NotificationItem/ageText`` 和小组件的 NEWEST
+    /// 三行读的是同一份，所以两处不会写出两种写法。
+    ///
+    /// `now` 传进来的理由和 `relativeTime` 一样：WidgetKit 提前渲染，
+    /// 视图体里的 `Date()` 是渲染那一刻，不是读者看见那一刻。
+    public nonisolated static func compactAge(_ iso: String, now: Date) -> String {
+        guard let date = parse(iso) else { return "" }
+        return compactAge(since: date, now: now)
+    }
+
+    public nonisolated static func compactAge(since date: Date, now: Date) -> String {
+        let interval = max(0, now.timeIntervalSince(date))
+        if interval < 60 { return "now" }
+        if interval < 3600 { return "\(Int(interval / 60))m" }
+        if interval < 86400 { return "\(Int(interval / 3600))h" }
+        if interval < 86400 * 7 { return "\(Int(interval / 86400))d" }
+        return shortDate(date)
+    }
+
+    nonisolated private static let compactDateFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = .autoupdatingCurrent
+        f.timeZone = timeZone
+        f.setLocalizedDateFormatFromTemplate("MMMd")
+        return f
+    }()
+
+    /// `4 Sep`。柱子两端的标签、日历那格的头条日期都用它。
+    ///
+    /// `public`：小组件够不着包外的 formatter，而它必须和包里其它日期走同一个
+    /// 时区（后端按 Europe/Amsterdam 分桶，用本地时区会在月初差一天）。
+    public nonisolated static func shortDate(_ date: Date) -> String {
+        compactDateFormatter.string(from: date)
+    }
+
     /// 分档本身。`max(0,)` 挡的是时钟回拨和服务端时间略微超前——那时候差值是负的，
     /// 不挡就会显示 `-3s ago`。
     private nonisolated static func ago(seconds: TimeInterval) -> String {

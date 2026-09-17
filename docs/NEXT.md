@@ -9,7 +9,7 @@
 |---|---|
 | Core 迁成本地 SwiftPM 包（macOS 版的前置条件，见 [MACOS.md](MACOS.md) Phase 0） | 完成 |
 | macOS 客户端：见 [MACOS.md](MACOS.md)。Phase 1 起没有截止日期，也不阻塞本版发布 | Phase 1 进行中 |
-| 桌面 / 主屏小组件：今日新增 + 未读为锚点，另一格日历。不做房源列表 | Mac 端完成（两格 × 三档），iOS 未开始 |
+| 桌面 / 主屏小组件：照 `FlatRadar Widgets.dc.html` 做。~~不做房源列表~~——设计稿的中 / 大号有 NEWEST 三行，推翻了这一条 | Mac 端完成（三格），iOS 未开始 |
 | AI 筛选：自然语言 → `ListingFilter`。入口只在 `SystemLanguageModel` 可用时出现 | 未开始 |
 | App 图标：浅色和 tinted 两张重导，去掉烤进 PNG 的白圆角，tinted 改灰度 | 未开始 |
 | iPad `NavigationSplitView`：横屏点房源不再把列表整个顶掉 | 未开始 |

@@ -334,3 +334,84 @@ final class SnapshotCompatibilityTests: XCTestCase {
         XCTAssertFalse(a.sameNumbers(as: c))
     }
 }
+
+/// 设计稿那一轮新加的几块。
+final class WidgetDesignTests: XCTestCase {
+
+    private func snap(captured: Date, live: Int? = 831) -> WidgetSnapshot {
+        WidgetSnapshot(newToday: 31,
+                       dailyNew: [14, 9, 22, 17, 11, 26, 19, 13, 8, 24, 20, 16, 12, 31],
+                       totalListings: live,
+                       matchCount: 193, isFiltered: true,
+                       unreadAlerts: 7, showsUnread: true,
+                       lastScrape: captured.addingTimeInterval(-60).ISO8601Format(),
+                       capturedAt: captured)
+    }
+
+    /// 小号底下那行：`831 live · 1m ago`。
+    func test_底行新鲜时带出在线数() {
+        let now = Date()
+        XCTAssertEqual(snap(captured: now).compactFooter(at: now), "831 live · 1m ago")
+    }
+
+    /// 过期之后**连 `831 live` 一起不说**。
+    ///
+    /// 这是这一版最容易做漏的一条。`live` 字面意思就是「现在在线的有这么多」，
+    /// 快照三小时没更新时，这句话和它旁边那个绿点一样是在替后端打包票。
+    func test_底行过期后连在线数一起收回() {
+        let captured = Date()
+        let line = snap(captured: captured).compactFooter(at: captured.addingTimeInterval(3 * 3600))
+        XCTAssertEqual(line, "checked 3h ago")
+        XCTAssertFalse(line.contains("live"),
+                       "过期之后还在报 831 live，等于替后端说「现在还有这么多在线」")
+    }
+
+    /// 拿不到全库数时只说时间，不拼一个空的前半句。
+    func test_没有在线数就只说时间() {
+        let now = Date()
+        XCTAssertEqual(snap(captured: now, live: nil).compactFooter(at: now), "1m ago")
+    }
+
+    /// NEWEST 行尾那一小格的年龄，和通知列表行尾用的是同一个函数。
+    func test_房源年龄和通知行尾同一套分档() {
+        let now = Date()
+        let listing = WidgetListing(id: "a", name: "n", city: "Eindhoven",
+                                    platform: "Holland2Stay", price: "€1,142",
+                                    firstSeen: now.addingTimeInterval(-120).ISO8601Format())
+        XCTAssertEqual(listing.ageText(at: now), "2m")
+        XCTAssertEqual(listing.ageText(at: now),
+                       ServerTime.compactAge(since: now.addingTimeInterval(-120), now: now))
+    }
+
+    /// 副标题缺一半时不留那个间隔符——`Eindhoven · ` 后面空着比没有间隔符更像出错。
+    func test_副标题缺一半不留间隔符() {
+        let noPlatform = WidgetListing(id: "a", name: "n", city: "Eindhoven",
+                                       platform: "", price: "", firstSeen: "")
+        XCTAssertEqual(noPlatform.longSubtitle, "Eindhoven")
+        let noCity = WidgetListing(id: "a", name: "n", city: "",
+                                   platform: "Xior", price: "", firstSeen: "")
+        XCTAssertEqual(noCity.longSubtitle, "Xior")
+    }
+
+    /// 三行分类加起来就是头条那个数——正常情况下。
+    ///
+    /// `NotificationsStore.fetch()` 会一直翻页到未读全部拉回来为止，所以两者
+    /// 相等；真要不等（翻页失败），头条那个才是对的，这三行只是没数全。
+    /// 这条钉的是 `total` 的算法，不是那个不变式。
+    func test_未读三行加起来() {
+        let kinds = UnreadBreakdown(newListings: 3, statusChanges: 2, lottery: 2)
+        XCTAssertEqual(kinds.total, 7)
+        XCTAssertFalse(kinds.isEmpty)
+        XCTAssertTrue(UnreadBreakdown.none.isEmpty)
+    }
+
+    /// 旧版本写的 JSON 里没有这两个新字段，照样要读得出来。
+    func test_新字段缺席也解得出来() throws {
+        let old = """
+        {"matchCount":193,"isFiltered":true,"newToday":12,"capturedAt":780000000}
+        """
+        let snap = try JSONDecoder().decode(WidgetSnapshot.self, from: Data(old.utf8))
+        XCTAssertEqual(snap.newest, [])
+        XCTAssertEqual(snap.unreadKinds, .none)
+    }
+}

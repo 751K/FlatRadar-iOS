@@ -68,6 +68,12 @@ public nonisolated struct WidgetSnapshot: Codable, Sendable, Equatable {
     /// 常驻的 `0` 只会让人以为坏了。菜单栏那一格是同样的判断。
     public var showsUnread: Bool
 
+    /// NEWEST 那三行。设计稿 4a 中号 / 大号都有这一段。
+    public var newest: [WidgetListing]
+
+    /// 未读按类别拆开。UNREAD 那一格下半部分的三行。
+    public var unreadKinds: UnreadBreakdown
+
     // MARK: 日历
 
     /// 从今天起连续若干天的起租情况。日历那一格的全部数据。
@@ -94,6 +100,8 @@ public nonisolated struct WidgetSnapshot: Codable, Sendable, Equatable {
                 isFiltered: Bool = false,
                 unreadAlerts: Int = 0,
                 showsUnread: Bool = false,
+                newest: [WidgetListing] = [],
+                unreadKinds: UnreadBreakdown = .none,
                 moveIns: [MoveInDay] = [],
                 lastScrape: String = "",
                 capturedAt: Date) {
@@ -105,6 +113,8 @@ public nonisolated struct WidgetSnapshot: Codable, Sendable, Equatable {
         self.isFiltered = isFiltered
         self.unreadAlerts = unreadAlerts
         self.showsUnread = showsUnread
+        self.newest = newest
+        self.unreadKinds = unreadKinds
         self.moveIns = moveIns
         self.lastScrape = lastScrape
         self.capturedAt = capturedAt
@@ -126,6 +136,8 @@ public nonisolated struct WidgetSnapshot: Codable, Sendable, Equatable {
         isFiltered    = (try? c.decodeIfPresent(Bool.self, forKey: .isFiltered)) as? Bool ?? false
         unreadAlerts  = (try? c.decodeIfPresent(Int.self, forKey: .unreadAlerts)) as? Int ?? 0
         showsUnread   = (try? c.decodeIfPresent(Bool.self, forKey: .showsUnread)) as? Bool ?? false
+        newest        = (try? c.decodeIfPresent([WidgetListing].self, forKey: .newest)) as? [WidgetListing] ?? []
+        unreadKinds   = (try? c.decodeIfPresent(UnreadBreakdown.self, forKey: .unreadKinds)) as? UnreadBreakdown ?? .none
         moveIns       = (try? c.decodeIfPresent([MoveInDay].self, forKey: .moveIns)) as? [MoveInDay] ?? []
         lastScrape    = (try? c.decodeIfPresent(String.self, forKey: .lastScrape)) as? String ?? ""
         // 只有这一条不能退默认值：没有采集时间就判断不了新鲜度，
@@ -150,8 +162,22 @@ public nonisolated struct WidgetSnapshot: Codable, Sendable, Equatable {
         DailyNew.changeVsBaseline(today: newToday, series: dailyNew)
     }
 
-    /// 序列里第一个有货可抢的日子。日历那一格的头条。
+    /// 序列里第一个有货可抢的日子。日历那一格的头条，也是大号状态格底部那一条。
     public var nextBookable: MoveInDay? { MoveInDay.nextBookable(in: moveIns) }
+
+    /// 小号 / 中号底下那行：`831 live · 4m ago`。
+    ///
+    /// 过期之后**整句换成** `checked 3h ago`，连 `831 live` 一起不说了——
+    /// 理由和 ``footnote(at:)`` 一样，而且更强一层：那个 `live` 字面意思就是
+    /// 「现在在线的有这么多」，快照三小时没更新的时候，这句话和那个绿点
+    /// 一样是在替后端打包票。
+    public func compactFooter(at now: Date) -> String {
+        guard isFresh(at: now), let scanned = scannedAgoText(at: now) else {
+            return StatusWording.checked(ServerTime.relativeTime(since: capturedAt, now: now))
+        }
+        guard let live = totalListings else { return scanned }
+        return "\(StatusWording.liveCount(live)) · \(scanned)"
+    }
 
     // MARK: - 旧了怎么办
 

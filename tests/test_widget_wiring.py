@@ -193,13 +193,15 @@ def test_widget_kind_改了等于把用户摆好的那一格弄没():
     """
     source = KINDS.read_text(encoding="utf-8")
     found = dict(re.findall(r'static let (\w+) = "(FlatRadar\w+)"', source))
-    assert found == {"status": "FlatRadarStatus", "calendar": "FlatRadarCalendar"}, found
+    assert found == {"status": "FlatRadarStatus",
+                     "unread": "FlatRadarUnread",
+                     "calendar": "FlatRadarCalendar"}, found
 
 
 def test_两格都注册在_bundle_里():
     """`WidgetBundle` 里漏掉一格的症状是"图库里没有它"——不报错。"""
     bundle = (WIDGET_DIR / "FlatRadarMacWidgetBundle.swift").read_text(encoding="utf-8")
-    for widget in ["StatusWidget()", "CalendarWidget()"]:
+    for widget in ["StatusWidget()", "UnreadWidget()", "CalendarWidget()"]:
         assert widget in bundle, f"{widget} 没出现在 WidgetBundle 里"
 
 
@@ -213,12 +215,14 @@ def test_小组件里不许再出现裸的文案字面量():
     只扫 `Text("…")`：`configurationDisplayName` / `description` 那两句是
     小组件图库里的介绍语，只出现在那一个地方，没有第二处会漂。
     """
+    # 品牌名不是文案，没有第二种写法可漂。设计稿大号那一格的页眉就是它。
+    ALLOWED = {"FlatRadar"}
     offenders = []
     for path in sorted(WIDGET_DIR.glob("*.swift")):
         for lineno, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
             for literal in re.findall(r'Text\("([^"\\]+)"\)', line):
                 # 纯插值和标点不算文案。
-                if re.search(r"[A-Za-z]{3}", literal):
+                if literal not in ALLOWED and re.search(r"[A-Za-z]{3}", literal):
                     offenders.append(f"{path.name}:{lineno} Text(\"{literal}\")")
     assert not offenders, (
         "这些地方直接写了要显示的文字，绕开了 StatusWording：\n  "

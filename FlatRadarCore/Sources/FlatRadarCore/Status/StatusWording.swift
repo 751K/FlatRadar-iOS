@@ -51,6 +51,62 @@ public nonisolated enum StatusWording {
     public static let statusChanges = "Status changes"
     public static let unread = "Unread"
 
+    // MARK: - 小组件那几段的标题
+    //
+    // 设计稿里它们是全大写的等宽小标签，但**这里存的是正常大小写**——
+    // 大写是排版（`.textCase(.uppercase)`），不是文案。存大写的话，同一句话在
+    // 统计带（`New today`）和小组件（`NEW TODAY`）就成了两个字符串常量。
+
+    /// NEWEST 那三行的段标题。
+    public static let newest = "Newest"
+    /// 大号那三格里的第一格。就是全库房源数，换了个更口语的说法——
+    /// 那一格窄，`Total listings` 放不下。
+    public static let liveNow = "Live now"
+
+    /// `831 live`。小号底下那行的前半句。
+    public static func liveCount(_ n: Int) -> String { "\(n) live" }
+
+    /// `avg 19`。中号左栏那一行窄，`vs. 14-day average of 19` 放不下。
+    public static func avgShort(_ average: Int) -> String { "avg \(average)" }
+
+    /// `vs. avg 19`。大号那一行里跟在 `+63%` 后面。
+    public static func vsAverage(_ average: Int) -> String { "vs. avg \(average)" }
+
+    /// 柱子右端那个标签。
+    public static let today = "today"
+
+    // MARK: - 未读那三行
+    //
+    // 三个名字对着 ``NotificationItem/Kind`` 的 `.book` / `.status` / `.lottery`。
+    // `.book` 叫 `New listings` 而不是 `Bookable`：这一格说的是"来了什么通知"，
+    // 不是"能不能订"。
+
+    public static let kindNewListings = "New listings"
+    public static let kindStatusChanges = "Status changes"
+
+    /// 窄的地方用这个短的。
+    ///
+    /// **设计稿自己就是这么干的**：4a（macOS 170pt 宽）那张卡写的是
+    /// `Status changes`，4b 里那张同样内容但更挤的卡写的是 `Status`。
+    /// 而 macOS 真正的小号是 155pt，比稿子还窄 15pt——实测 `Status changes`
+    /// 在那儿会被截成 `Status chang…`，所以这一格用短的。
+    public static let kindStatusShort = "Status"
+    public static let kindLottery = "Lottery"
+
+    /// 大号底部那一条：`Next move-in · 23 Sep`。
+    ///
+    /// **设计稿那一条原本是 `Lottery closes · Kastanjelaan 400 · in 2d`。**
+    /// 换掉的理由和 `CalendarPane` 顶上写的是同一条：openapi 里 `deadline` /
+    /// `closes` / `draw_at` 各出现 0 次，listings 表只有 `available_from`
+    /// 一个日期列而且只到日。抽签截止时刻这个数据**整条不存在**，
+    /// 画出来只能是编的。换成同一个形状里放真有的东西。
+    public static func nextMoveInOn(_ date: String) -> String { "\(nextMoveIn) · \(date)" }
+
+    /// `in 6d` / `today`。大号底部那一条右端。
+    public static func inDays(_ days: Int) -> String {
+        days <= 0 ? "today" : "in \(days)d"
+    }
+
     /// `vs. 14-day average of 19` 里那句。基准由 ``DailyNew/baselineAverage(_:)`` 给。
     public static func vsBaseline(_ average: Int) -> String {
         "vs. 14-day average of \(average)"
