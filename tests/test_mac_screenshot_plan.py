@@ -235,3 +235,56 @@ def test_pre_xcodebuild_guards_every_ci_variable():
         f"这些 CI_ 变量没带 `:-` 默认值：{sorted(bare)}。"
         "脚本每个 xcodebuild action 都会跑一遍，而各阶段定义的变量不是同一组——"
         "set -u 下引用到没定义的那个会让整轮构建红，报错只说 'exited with code 1'。")
+
+
+def test_mac_launch_arguments_are_dash_prefixed():
+    """Mac 的启动参数必须是 `-KEY value`，**不能**用 iOS 那种裸 token。
+
+    AppKit 把不带 `-` 的裸参数当成「要打开的文档」。它不是路径，打开失败，于是
+    app 走「为打开文档而启动」那条路——`WindowGroup` 的默认窗口根本不创建。
+
+    build 358 就是这么挂的：六条用例全卡在 `waitForWindow`，60 秒 `windows=0`，
+    而进程活着、菜单栏齐全、辅助功能正常响应。屏幕录像里是一张空桌面配一条
+    FlatRadarMac 的菜单栏。错误信息里没有任何一处指向启动参数。
+
+    本地对照（`open -n -a FlatRadarMac.app --args …`）：
+
+        HELLO                        → 无窗口     ← 和截图逻辑完全无关
+        UI_TEST_SCREENSHOT_MODE      → 无窗口
+        -UITestFoo 1                 → 有窗口
+        （不传 --args）               → 有窗口
+
+    iOS 不受影响，UIKit 没有这套开文档的语义——所以这条只查 Mac 那份。
+    """
+    src = TESTS.read_text(encoding="utf-8")
+    m = re.search(r"app\.launchArguments\s*=\s*(\w+)", src)
+    assert m, "没找到 app.launchArguments 的赋值——测试结构变了"
+
+    # 收集所有拼进 args 的字符串字面量
+    pushed = re.findall(r'args\s*(?:=|\+=)\s*\[([^\]]*)\]', src)
+    literals = []
+    for chunk in pushed:
+        literals += re.findall(r'"([^"]*)"', chunk)
+    assert literals, "没解析出任何启动参数字面量"
+
+    bare = [t for t in literals
+            if not t.startswith("-") and not t.startswith("\\(") and t != "1"]
+    assert not bare, (
+        f"这些启动参数没带 `-` 前缀：{bare}。AppKit 会把它们当成要打开的文档，"
+        "结果是 app 起来了却一个窗口都没有，而且六条用例的失败信息都只说"
+        "「主窗口未在 60s 内出现」。")
+
+
+def test_screenshot_flag_name_matches_core():
+    """UI 测试里硬写的开关名，要和 Core 里那个常量一致。
+
+    UI 测试 target 不链 FlatRadarCore（为一个常量加依赖不值得），所以名字是抄的。
+    抄错的后果是静默的：App 那边 `isOn` 永远为假，于是不进截图模式——窗口尺寸
+    不钉、身份不设、推送权限框照弹，而测试照跑，拍出来的图全是错的。
+    """
+    core = (ROOT / "FlatRadarCore" / "Sources" / "FlatRadarCore" / "Platform"
+            / "UITestFlags.swift").read_text(encoding="utf-8")
+    m = re.search(r'screenshotMode\s*=\s*"([^"]+)"', core)
+    assert m, "UITestFlags 里没找到 screenshotMode 常量"
+    assert f'"-{m.group(1)}"' in TESTS.read_text(encoding="utf-8"), (
+        f"MacScreenshotTests 里没有 \"-{m.group(1)}\"——和 Core 的常量对不上了")

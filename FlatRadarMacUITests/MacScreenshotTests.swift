@@ -40,7 +40,7 @@ final class MacScreenshotTests: XCTestCase {
     // MARK: - Captures
 
     func testCapture00_SignIn() throws {
-        launch(extra: ["UI_TEST_SHOW_LOGIN"])
+        launch(flags: ["UI_TEST_SHOW_LOGIN": "1"])
         let window = waitForWindow()
         // 登录屏上不该有侧栏。用「主界面不存在」判，不找登录页上的具体控件：
         // 和 iOS 那条同一个理由——真正会打破这张图的是「带凭据登录了」，
@@ -58,7 +58,7 @@ final class MacScreenshotTests: XCTestCase {
 
     /// 一屏的完整流程：启动 → 等窗口 → 验选中 → 等内容 → 拍。
     private func capture(_ section: String, _ name: String) throws {
-        launch(extra: ["UI_TEST_SECTION=\(section)"])
+        launch(flags: ["UI_TEST_SECTION": section])
         let window = waitForWindow()
         assertSelected(section)
         settle(section)
@@ -67,9 +67,25 @@ final class MacScreenshotTests: XCTestCase {
 
     // MARK: - Helpers
 
-    private func launch(extra: [String]) {
-        var args = ["UI_TEST_SCREENSHOT_MODE"]
-        args += extra
+    /// 启动参数**必须带 `-` 前缀、成对给值**，不能用 iOS 那种裸 token。
+    ///
+    /// AppKit 把不带 `-` 的裸参数当成「要打开的文档」。
+    /// `UI_TEST_SCREENSHOT_MODE` 不是路径，打开失败，于是 app 走「为打开文档而
+    /// 启动」那条路——`WindowGroup` 的默认窗口根本不创建。build 358 六条用例全挂
+    /// 在 `waitForWindow` 上，60 秒 `windows=0`，而进程活着、菜单栏齐全、辅助功能
+    /// 正常响应，错误信息里没有任何一处指向启动参数。
+    ///
+    /// 本地对照过，换成完全无关的 `HELLO` 也一样没窗口，加 `-` 前缀立刻就有——
+    /// 所以这跟截图逻辑无关。完整实测见 ``UITestFlags``。
+    ///
+    /// `-KEY value` 会进 `NSArgumentDomain`，App 那边用 `UserDefaults` 读，
+    /// 且不写盘、不污染用户偏好。
+    private func launch(flags: [String: String]) {
+        // 名字和 `UITestFlags.screenshotMode` 必须一致，由
+        // tests/test_mac_screenshot_plan.py 的 test_screenshot_flag_name_matches_core 钉住
+        // （UI 测试 target 不链 FlatRadarCore，为一个常量加依赖不值得）。
+        var args = ["-UI_TEST_SCREENSHOT_MODE", "1"]
+        for (k, v) in flags.sorted(by: { $0.key < $1.key }) { args += ["-\(k)", v] }
         // 凭据从环境变量取，**不写在代码里**——这个仓库是公开的。
         // 云端由 ci_scripts/ci_post_clone.sh 写进 test plan 的
         // environmentVariableEntries（Xcode Cloud 禁止 TEST_RUNNER_ 前缀，
@@ -78,7 +94,7 @@ final class MacScreenshotTests: XCTestCase {
         let env = ProcessInfo.processInfo.environment
         if let u = env["UI_TEST_USERNAME"], let p = env["UI_TEST_PASSWORD"],
            !u.isEmpty, !p.isEmpty {
-            args += ["UI_TEST_USER=\(u)", "UI_TEST_PASS=\(p)"]
+            args += ["-UI_TEST_USER", u, "-UI_TEST_PASS", p]
         }
         app.launchArguments = args
         app.launch()
@@ -140,8 +156,24 @@ final class MacScreenshotTests: XCTestCase {
         Thread.sleep(forTimeInterval: 1)
     }
 
+    /// 等窗口尺寸稳定下来。
+    ///
+    /// 走全屏兜底那条路时有一段过渡动画（构建机那块 1280×800 的屏就会走到它），
+    /// 拍早了尺寸是过渡中的中间值。而尺寸断言只会说「不是合法值」，看不出是
+    /// **没等够**还是**钉错了**——这两种失败的改法完全不同。
+    private func waitForStableFrame(_ window: XCUIElement) {
+        var last = CGRect.zero
+        for _ in 0..<40 {                       // 最多 ~10s
+            let f = window.frame
+            if f == last, f != .zero { return }
+            last = f
+            Thread.sleep(forTimeInterval: 0.25)
+        }
+    }
+
     /// 拍窗口，存成附件，并**当场验尺寸**。
     private func snap(_ window: XCUIElement, named step: String) {
+        waitForStableFrame(window)
         let shot = window.screenshot()
         let size = pixelSize(shot)
         XCTAssertTrue(Self.accepted.contains(size),

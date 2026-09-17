@@ -27,9 +27,9 @@ import FlatRadarCore
 ///     1440×900 ×1 → 1440×900       1440×900 ×2 → 2880×1800
 ///     1280×800 ×1 → 1280×800       1280×800 ×2 → 2560×1600
 ///
-/// 四个合法尺寸**正好**被这两个点尺寸 × 两种系数覆盖满。于是不管构建机是什么屏，
-/// 拍出来都是能直接上传的尺寸，不需要缩放、不需要补边。挑大的那个，屏幕放不下
-/// （构建机的虚拟显示器可能比 1440 点还窄）才退到小的。
+/// 四个合法尺寸**正好**被这两个点尺寸 × 两种系数覆盖满。挑大的那个，屏幕放不下
+/// 就退到小的；两个都放不下就**全屏**——全屏窗口恰好等于屏幕尺寸，构建机那块
+/// 1280×800@2x 的屏于是给出 2560×1600，同样是合法值。见 ``pin(_:)``。
 ///
 /// `MacScreenshotTests` 会把这条断言真的执行一遍——拍完就查像素尺寸在不在
 /// ``acceptedPixelSizes`` 里，不在就红。否则这段推理只是注释。
@@ -38,7 +38,7 @@ enum ScreenshotMode {
     /// 和 iOS 用同一个名字。UI Test 启动时传，真实用户启动不会带。
     static let flag = "UI_TEST_SCREENSHOT_MODE"
 
-    static var isOn: Bool { CommandLine.arguments.contains(flag) }
+    static var isOn: Bool { UITestFlags.isScreenshotMode }
 
     /// ASC 收的四种 Mac 截图尺寸（像素）。
     /// https://developer.apple.com/help/app-store-connect/reference/screenshot-specifications/
@@ -55,27 +55,24 @@ enum ScreenshotMode {
         NSSize(width: 1280, height: 800),
     ]
 
-    /// 在这块屏上用哪个窗口尺寸：挑放得下的最大那个。
+    /// 这块屏放得下的最大那个合法尺寸；一个都放不下就返回 nil（改走全屏）。
     ///
     /// 用 `visibleFrame` 不用 `frame`：前者已经扣掉菜单栏和 Dock，那才是窗口真
-    /// 能占的地方。放不下也要给一个（退回最小的），让测试去报「尺寸不合法」，
-    /// 而不是在这里静默地拍一张不能上传的图。
-    static func windowSize(on screen: NSScreen?) -> NSSize {
+    /// 能占的地方。放不下**不能**硬塞一个——`XCUIElement.screenshot()` 是从整屏
+    /// 截图里按元素 frame 裁的，窗口被 Dock 压住的部分会把 Dock 一起裁进去。
+    static func fittingWindowSize(on screen: NSScreen?) -> NSSize? {
         guard let visible = screen?.visibleFrame.size else { return windowSizes[0] }
         return windowSizes.first { $0.width <= visible.width && $0.height <= visible.height }
-            ?? windowSizes[windowSizes.count - 1]
     }
 
     // MARK: - Launch arguments
 
-    /// `KEY=value` 形式的 launch arg。和 iOS 的 `argValue(_:in:)` 同一个约定。
-    static func value(_ key: String) -> String? {
-        CommandLine.arguments
-            .first { $0.hasPrefix("\(key)=") }
-            .map { String($0.dropFirst(key.count + 1)) }
-    }
+    /// 开关的值。两端传法不同，判据统一在 ``UITestFlags`` 里——**macOS 必须传
+    /// `-KEY value`**，裸 token 会被 AppKit 当成要打开的文档，结果是 app 起来了
+    /// 却一个窗口都没有（build 358 就是这么挂的，详见 ``UITestFlags``）。
+    static func value(_ key: String) -> String? { UITestFlags.value(key) }
 
-    static func has(_ key: String) -> Bool { CommandLine.arguments.contains(key) }
+    static func has(_ key: String) -> Bool { UITestFlags.isOn(key) }
 
     /// `UI_TEST_SECTION=<listings|map|calendar|alerts|stats>` → 侧栏那一屏。
     ///
@@ -151,9 +148,28 @@ enum ScreenshotMode {
     static func pin(_ window: NSWindow) {
         guard isOn else { return }
         window.isRestorable = false
+        let screen = window.screen ?? NSScreen.main
+        guard let size = fittingWindowSize(on: screen) else {
+            // 窗口化放不下任何一个合法尺寸 → 全屏。
+            //
+            // Xcode Cloud 的构建机实测就是这种屏：
+            //
+            //     frame=(0,0,1280,800)  visible=(0,78,1280,692)  scale=2.0
+            //                                      ↑Dock 78    ↑菜单栏 30
+            //
+            // 最小的合法尺寸 1280×800 需要 800 点高，而能用的只有 692。藏 Dock
+            // 也只能到 770，还差菜单栏那 30 点，而 `_HIHideMenuBar` 要重新登录
+            // 才生效——在一次性的构建机上不可靠。
+            //
+            // 全屏则**恰好等于屏幕尺寸**：1280×800 点 ×2 = 2560×1600 像素，正是
+            // 一个合法值。而且它不依赖 Dock / 菜单栏的任何设置，换一台构建机
+            // 照样成立。
+            if !window.styleMask.contains(.fullScreen) { window.toggleFullScreen(nil) }
+            return
+        }
+        // 全屏状态下改 styleMask / setFrame 都会打架，所以这两行只走窗口化这条路。
         window.styleMask.remove(.resizable)
-        let size = windowSize(on: window.screen ?? NSScreen.main)
-        let visible = (window.screen ?? NSScreen.main)?.visibleFrame ?? .zero
+        let visible = screen?.visibleFrame ?? .zero
         let origin = NSPoint(x: visible.midX - size.width / 2,
                              y: visible.midY - size.height / 2)
         window.setFrame(NSRect(origin: origin, size: size), display: true)

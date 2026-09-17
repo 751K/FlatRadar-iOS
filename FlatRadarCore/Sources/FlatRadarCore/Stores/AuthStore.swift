@@ -114,7 +114,7 @@ public final class AuthStore {
 
         // 截图测试：要求 LoginView 时跳过恢复，否则 keychain 残留的 token
         // 会让 ContentView 直接展示 Dashboard。生产 build 永远不会进这个分支。
-        if CommandLine.arguments.contains("UI_TEST_SHOW_LOGIN") {
+        if UITestFlags.isOn("UI_TEST_SHOW_LOGIN") {
             return
         }
 

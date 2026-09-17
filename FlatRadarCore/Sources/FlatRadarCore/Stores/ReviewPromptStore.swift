@@ -119,7 +119,7 @@ public final class ReviewPromptStore {
         // 盖在界面正中间，而带系统弹窗的截图不能上架。2026-09-04 那批产出就是被
         // 通知权限框毁掉的，每种语言两张图作废。评分框比那个更难防——它由系统
         // 决定弹不弹，调用方看不到结果，所以只能在源头拦住。
-        guard !CommandLine.arguments.contains("UI_TEST_SCREENSHOT_MODE") else {
+        guard !UITestFlags.isScreenshotMode else {
             return false
         }
         return ReviewPromptPolicy.shouldAsk(currentState, trigger: trigger, now: now)

@@ -164,7 +164,7 @@ public final class PushStore {
         //
         // 拦在这里而不是逐个调用点：这个方法有六处调用（App 启动、登录、注册、
         // 设置页重新注册…），漏掉任何一处，弹窗就会在某张截图上重新出现。
-        guard !CommandLine.arguments.contains("UI_TEST_SCREENSHOT_MODE") else {
+        guard !UITestFlags.isScreenshotMode else {
             #if DEBUG
             print("[PushStore] 截图模式，跳过通知权限申请")
             #endif
