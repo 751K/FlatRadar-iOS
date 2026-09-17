@@ -162,7 +162,8 @@ private struct BreakdownRow: View {
         HStack(spacing: 12) {
             Text(label)
                 .font(.subheadline)
-                .frame(width: 100, alignment: .leading)
+                // `minWidth`：字号跟系统涨之后，写死的宽度会把标签裁掉。
+                .frame(minWidth: 100, alignment: .leading)
                 .lineLimit(1)
 
             GeometryReader { proxy in
@@ -179,12 +180,12 @@ private struct BreakdownRow: View {
             Text(pct)
                 .font(.caption2)
                 .foregroundStyle(.secondary)
-                .frame(width: 36, alignment: .trailing)
+                .frame(minWidth: 36, alignment: .trailing)
 
             Text("\(count)")
                 .font(.subheadline.weight(.medium))
                 .monospacedDigit()
-                .frame(width: 40, alignment: .trailing)
+                .frame(minWidth: 40, alignment: .trailing)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)

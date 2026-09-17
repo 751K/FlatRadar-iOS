@@ -22,6 +22,8 @@ struct CalendarView: View {
     @Environment(CalendarStore.self) private var store
     @Environment(NavigationCoordinator.self) private var coord
     @Environment(\.horizontalSizeClass) private var hSizeClass
+    /// 状态色当文字用时要按明暗压暗/提亮，见 ``Color/onSurface(in:)``。
+    @Environment(\.colorScheme) private var scheme
 
     /// 宽屏（iPad）把日历下方的房源行**留白**放大一档。
     ///
@@ -306,11 +308,9 @@ struct CalendarView: View {
             } else {
                 ForEach(listings) { l in
                     Button {
-                        if UIDevice.current.userInterfaceIdiom == .pad {
-                            coord.openListing(id: l.id, titleHint: l.name)
-                        } else {
-                            coord.listingsPath.append(.byId(l.id, titleHint: l.name))
-                        }
+                        // 判据在 coordinator 里，不在这里猜设备——
+                        // 见 ``NavigationCoordinator/showListing(id:titleHint:)``。
+                        coord.showListing(id: l.id, titleHint: l.name)
                     } label: {
                         listingRow(l)
                     }
@@ -360,11 +360,26 @@ struct CalendarView: View {
         }
         .padding(.vertical, isRegular ? 16 : 10)
         .padding(.horizontal, isRegular ? 18 : 14)
-        .liquidGlass(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        // 卡底用**分组表格的次级底色**，不是玻璃。
+        //
+        // 规范里这条是明写的：玻璃属于浮在内容之上的功能层（工具栏、悬浮控件），
+        // 内容本身——卡片、行、正文——用 `background-secondary` /
+        // `grouped-background-secondary`。这些是日历下面的房源行，是内容。
+        //
+        // 而且它真的在花钱：玻璃把底垫亮之后，行里那句 `.secondary` 的城市名
+        // 实测只有 **2.95:1**，比 Apple 给 label-secondary 的 3.5:1 还低一档。
+        // 换成不透明的卡底，同一个语义色就回到它该有的对比度。
+        .background(Color(.secondarySystemGroupedBackground),
+                    in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
+    /// 行里那行状态文字的颜色。
+    ///
+    /// 不能直接用状态色：`Occupied`（系统灰）实测 **3.03:1**，而这行是 11pt。
+    /// 规范里那句是"`gray` 3.2:1：符号和分隔线可以，文字不行"。压暗一档，
+    /// 见 ``Color/onSurface(in:)``。
     private func statusColor(for status: String) -> Color {
-        ListingStatus.from(status).color
+        ListingStatus.from(status).color.onSurface(in: scheme)
     }
 
 

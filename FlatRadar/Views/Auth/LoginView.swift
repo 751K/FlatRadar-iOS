@@ -251,18 +251,18 @@ struct LoginView: View {
     private func hero(_ m: LoginMetrics) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("FlatRadar")
-                .font(.system(size: m.wordmark, weight: .bold))
+                .scaledFont(m.wordmark, relativeTo: .title, weight: .bold)
                 .tracking(m.wordmark * -0.023)
                 .foregroundStyle(SignInPalette.wordmark)
 
             Text("INDEPENDENT · v\(appVersion)")
-                .font(.system(size: m.caption, design: .monospaced))
+                .scaledFont(m.caption, relativeTo: .caption2, design: .monospaced)
                 .tracking(m.captionTracking)
                 .foregroundStyle(pitchMuted)
                 .padding(.top, m.caption > 10.5 ? 5 : 3)
 
             Text("Searching for a new\nhome in the Netherlands?")
-                .font(.system(size: m.headline, weight: .bold))
+                .scaledFont(m.headline, relativeTo: .largeTitle, weight: .bold)
                 .tracking(m.headlineTracking)
                 .foregroundStyle(SignInPalette.ink)
                 .fixedSize(horizontal: false, vertical: true)
@@ -272,7 +272,7 @@ struct LoginView: View {
             // 平台数由 Platform 推出来，不写死——写死的数字就是下一次
             // "登录页还写着 H2S"。接第八个平台时这里自动跟上。
             Text("Real-time availability across \(Platform.knownKeys.count) rental platforms.")
-                .font(.system(size: m.subtitle))
+                .scaledFont(m.subtitle, relativeTo: .subheadline)
                 .foregroundStyle(pitchMuted)
                 .padding(.top, m.subtitle > 15 ? 14 : 9)
 
@@ -317,8 +317,8 @@ struct LoginView: View {
         HStack(spacing: m.chipGap - 1) {
             icon()
             HStack(spacing: 4) {
-                Text(value).font(.system(size: m.chipFont, weight: .bold))
-                Text(label).font(.system(size: m.chipFont))
+                Text(value).scaledFont(m.chipFont, relativeTo: .subheadline, weight: .bold)
+                Text(label).scaledFont(m.chipFont, relativeTo: .subheadline)
             }
             .foregroundStyle(SignInPalette.ink)
             .fixedSize()
@@ -381,7 +381,7 @@ struct LoginView: View {
             ForEach(Platform.featuredOrder, id: \.self) { key in
                 let tint = Platform.color(key)
                 Text(Platform.shortName(key))
-                    .font(.system(size: 11, weight: .heavy, design: .monospaced))
+                    .font(.system(.caption2, design: .monospaced, weight: .heavy))
                     .tracking(0.5)
                     .foregroundStyle(highContrast ? SignInPalette.ink : tint)
                     .padding(.horizontal, 9)
@@ -431,7 +431,7 @@ struct LoginView: View {
     private func sheetContent(_ m: LoginMetrics) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("CONTINUE AS")
-                .font(.system(size: m.sectionLabel, weight: .bold))
+                .scaledFont(m.sectionLabel, relativeTo: .caption2, weight: .bold)
                 .tracking(m.sectionLabelTracking)
                 .foregroundStyle(sheetMuted)
                 .padding(.leading, 4)
@@ -518,7 +518,7 @@ struct LoginView: View {
         description: String, isExpanded: Bool
     ) -> some View {
         let desc = Text(description)
-            .font(.system(size: m.cardDescription))
+            .scaledFont(m.cardDescription, relativeTo: .subheadline)
             .foregroundStyle(sheetMuted)
             .fixedSize(horizontal: false, vertical: true)
 
@@ -529,13 +529,13 @@ struct LoginView: View {
                         .fill(fill(0.09, 0.10))
                         .frame(width: m.iconTile, height: m.iconTile)
                     Image(systemName: icon)
-                        .font(.system(size: m.iconGlyph))
+                        .scaledFont(m.iconGlyph, relativeTo: .title2)
                         .foregroundStyle(SignInPalette.ink)
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 8) {
                         Text(title)
-                            .font(.system(size: m.cardTitle, weight: .bold))
+                            .scaledFont(m.cardTitle, relativeTo: .title3, weight: .bold)
                             .tracking(-0.3)
                             .foregroundStyle(SignInPalette.ink)
                         if mode == .user { mostBadge }
@@ -547,7 +547,7 @@ struct LoginView: View {
                 // `flex:1` 挂在文字块上、只有两个 gap——这一行等价。
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: m.chevron, weight: .light))
+                    .scaledFont(m.chevron, relativeTo: .body, weight: .light)
                     .foregroundStyle(isExpanded ? SignInPalette.accent : chevronTint)
                     .rotationEffect(isExpanded ? .degrees(90) : .zero)
             }
@@ -562,7 +562,7 @@ struct LoginView: View {
 
     private var mostBadge: some View {
         Text("MOST")
-            .font(.system(size: 10, weight: .heavy))
+            .font(.system(.caption2, weight: .heavy))
             .tracking(0.6)
             .foregroundStyle(SignInPalette.flagText)
             .padding(.horizontal, 7)
@@ -634,7 +634,7 @@ struct LoginView: View {
                 HStack(spacing: 6) {
                     if auth.isLoading { ProgressView().tint(SignInPalette.onAccent) }
                     Text(mode == .user ? "Sign In / Register" : "Login")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 44)
@@ -676,16 +676,16 @@ struct LoginView: View {
         } label: {
             HStack(spacing: 14) {
                 Image(systemName: name == "Face ID" ? "faceid" : "touchid")
-                    .font(.system(size: m.faceGlyph))
+                    .scaledFont(m.faceGlyph, relativeTo: .title3)
                 Text("Sign in with \(name)")
-                    .font(.system(size: m.faceFont, weight: .semibold))
+                    .scaledFont(m.faceFont, relativeTo: .body, weight: .semibold)
                     .tracking(-0.2)
                 Spacer(minLength: 8)
                 if isAuthenticatingBiometric {
                     ProgressView().controlSize(.small).tint(SignInPalette.onAccent)
                 } else {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: m.chevron - 2, weight: .light))
+                        .scaledFont(m.chevron - 2, relativeTo: .body, weight: .light)
                         .opacity(0.55)
                 }
             }
@@ -707,7 +707,7 @@ struct LoginView: View {
             // 只声明"与 Holland2Stay 无关"是不够的：现在监控七个平台，其余六个
             // 一个都没覆盖到。改成泛指，加平台时不必再回来改这句法律声明。
             Text("FlatRadar is an **independent** third-party client. Not affiliated with, endorsed by, or sponsored by any of the platforms it monitors. All listing data belongs to its respective owners.")
-                .font(.system(size: m.legal))
+                .scaledFont(m.legal, relativeTo: .caption)
                 .foregroundStyle(sheetMuted)
                 .multilineTextAlignment(m.centersFooter ? .center : .leading)
                 .lineSpacing(m.legal * 0.42)
@@ -726,7 +726,7 @@ struct LoginView: View {
                     domainMark(m)
                 }
             }
-            .font(.system(size: m.link, weight: .semibold))
+            .scaledFont(m.link, relativeTo: .footnote, weight: .semibold)
             .foregroundStyle(SignInPalette.accent)
             .frame(maxWidth: .infinity, alignment: m.centersFooter ? .center : .leading)
             .padding(.top, m.centersFooter ? 10 : 14)
@@ -740,7 +740,7 @@ struct LoginView: View {
 
     private func domainMark(_ m: LoginMetrics) -> some View {
         Text("flatradar.app")
-            .font(.system(size: m.domain, design: .monospaced))
+            .scaledFont(m.domain, relativeTo: .caption2, design: .monospaced)
             .tracking(1.2)
             .foregroundStyle(SignInPalette.domain)
     }

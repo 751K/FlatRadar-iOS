@@ -8,6 +8,8 @@ import FlatRadarCore
 struct ListingsView: View {
     @Environment(ListingsStore.self) private var store
     @Environment(NavigationCoordinator.self) private var coord
+    /// 分区标题的绿色要按明暗两套压暗/提亮，见 ``Color/onTint(in:)``。
+    @Environment(\.colorScheme) private var scheme
     @State private var searchText = ""
     @State private var searchDraft = ""
     @State private var showSearch = false
@@ -192,8 +194,15 @@ struct ListingsView: View {
                         row(for: listing, lastID: lastID)
                     }
                 } header: {
+                    // 原来这里写死 `Color(red: 52/255, green: 199/255, blue: 89/255)`
+                    // ——那正好是 systemGreen 的**浅色值** `#34C759`，深色模式下
+                    // 系统本该给 `#30D158`，写死之后它停在浅色那一档不动。
+                    // 同一个 `sectionHeader` 另外两个调用点传的都是语义样式。
+                    //
+                    // 不是简单换成 `.green`：这行是 11pt 的分区标题，绿字在白底上
+                    // 只有 2.2:1。跟徽标同一条路——压暗一档再用（``Color/onTint(in:)``）。
                     sectionHeader("NEW TODAY · \(new.count)",
-                                  color: Color(red: 52/255, green: 199/255, blue: 89/255))
+                                  color: Color.statusBook.onTint(in: scheme))
                 }
             }
 
@@ -238,7 +247,7 @@ struct ListingsView: View {
                 ListingRow(listing: listing)
                 Spacer(minLength: 10)
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(.subheadline, weight: .semibold))
                     .foregroundStyle(.tertiary)
             }
         }
@@ -259,7 +268,7 @@ struct ListingsView: View {
     /// 而周围的内容都翻译好了。
     private func sectionHeader(_ title: LocalizedStringKey, color: Color) -> some View {
         Text(title)
-            .font(.system(size: 11, weight: .bold, design: .monospaced))
+            .font(.system(.caption2, design: .monospaced, weight: .bold))
             .tracking(0.7)
             .foregroundStyle(color)
             .textCase(nil)
@@ -274,14 +283,14 @@ struct ListingsView: View {
             Circle()
                 .fill(Color.green)
                 .frame(width: 6, height: 6)
-            (Text("\(store.total)").font(.system(size: 12, weight: .bold, design: .monospaced))
-                + Text(" listings").font(.system(size: 12)))
+            (Text("\(store.total)").font(.system(.caption, design: .monospaced, weight: .bold))
+                + Text(" listings").font(.system(.caption)))
                 .foregroundStyle(.primary)
             Text("·")
-                .font(.system(size: 12))
+                .font(.system(.caption))
                 .foregroundStyle(.secondary)
             Text("updated \(updatedAgoText)")
-                .font(.system(size: 12))
+                .font(.system(.caption))
                 .foregroundStyle(.secondary)
             Spacer()
         }
@@ -339,10 +348,10 @@ struct ListingsView: View {
                     } label: {
                         HStack(spacing: 5) {
                             Text(chip.label)
-                                .font(.system(size: 12, weight: .semibold,
-                                              design: chip.mono ? .monospaced : .default))
+                                .font(.system(.caption, design: chip.mono ? .monospaced : .default,
+                                              weight: .semibold))
                             Image(systemName: "xmark")
-                                .font(.system(size: 8, weight: .bold))
+                                .font(.system(.caption2, weight: .bold))
                                 // 装饰性 glyph：跟 chip label 一起被读会变成
                                 // "Eindhoven xmark"——把它从 a11y 树里摘掉，
                                 // 让按钮整体只暴露一个清晰意图。
@@ -371,10 +380,10 @@ struct ListingsView: View {
                     .accessibilityLabel("Remove filter: \(chip.label)")
                 }
                 if activeFilterChips.count > 1 {
-                    Button("Clear all", role: .destructive) {
+                    Button("Clear All", role: .destructive) {
                         clearAllFilters()
                     }
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(.caption, weight: .semibold))
                     .padding(.leading, 4)
                 }
             }
@@ -796,7 +805,7 @@ private struct ListingFilterSheet: View {
                 isPresented: $showDiscardConfirm,
                 titleVisibility: .visible
             ) {
-                Button("Discard changes", role: .destructive) {
+                Button("Discard", role: .destructive) {
                     // 还原到打开 sheet 那一刻的初始值，避免下次再打开还看到脏数据
                     selectedStatus = initialStatus
                     selectedSources = initialSources
@@ -806,7 +815,7 @@ private struct ListingFilterSheet: View {
                     selectedEnergy = initialEnergy
                     dismiss()
                 }
-                Button("Keep editing", role: .cancel) {}
+                Button("Keep Editing", role: .cancel) {}
             }
             .task {
                 // 第一次出现时快照初始 filter 值；后续 sheet 内修改 binding
@@ -875,7 +884,7 @@ private struct ListingFilterSheet: View {
             )) {
                 HStack {
                     Text(sourceShortLabel(source))
-                        .font(.system(size: 12, weight: .heavy, design: .monospaced))
+                        .font(.system(.caption, design: .monospaced, weight: .heavy))
                         .padding(.horizontal, 7)
                         .padding(.vertical, 3)
                         .background(Color.secondary.opacity(0.12), in: Capsule())

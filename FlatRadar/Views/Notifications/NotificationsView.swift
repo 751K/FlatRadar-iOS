@@ -11,6 +11,8 @@ import FlatRadarCore
 struct NotificationsView: View {
     @Environment(NotificationsStore.self) private var store
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// 强调色当小字用时要按明暗压暗/提亮，见 ``Color/onSurface(in:)``。
+    @Environment(\.colorScheme) private var scheme
     private let scrollTopID = "notifications-scroll-top"
 
     @State private var showRefreshError = false
@@ -208,9 +210,11 @@ struct NotificationsView: View {
     @ViewBuilder
     private func lazyGroup(title: String, items: [NotificationItem]) -> some View {
         Text(title)
-            .font(.system(size: 11, weight: .bold, design: .monospaced))
+            .font(.system(.caption2, design: .monospaced, weight: .bold))
             .tracking(0.8)
-            .foregroundStyle(.blue)
+            // 蓝字在白底上只有 3.5:1，而这是 11pt 的分组标题。
+            // 压暗一档，见 ``Color/onSurface(in:)``。
+            .foregroundStyle(Color.accentColor.onSurface(in: scheme))
             .textCase(nil)
             .padding(.horizontal, 16)
             .padding(.top, 20)
@@ -227,7 +231,7 @@ struct NotificationsView: View {
                     .onTapGesture { handleTap(n) }
                     .contextMenu {
                         if !n.isRead {
-                            Button("Mark as read") {
+                            Button("Mark as Read") {
                                 Task { await store.markRead(ids: [n.id]) }
                             }
                         }
@@ -268,12 +272,12 @@ struct NotificationsView: View {
     private var headerRow: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text("Alerts")
-                .font(.system(size: 34, weight: .heavy))
+                .font(.system(.largeTitle, weight: .heavy))
                 .tracking(-1.0)
             if store.unreadCount > 0 {
                 Text("· \(store.unreadCount) new")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(.blue)
+                    .font(.system(.title3, weight: .semibold))
+                    .foregroundStyle(Color.accentColor.onSurface(in: scheme))
             }
             Spacer()
         }
@@ -357,7 +361,7 @@ struct NotificationsView: View {
                 .fill(dot)
                 .frame(width: 8, height: 8)
             Text(label)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(.subheadline, weight: .semibold))
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
@@ -365,13 +369,13 @@ struct NotificationsView: View {
                 Spacer(minLength: 12)
             }
             Text("\(count)")
-                .font(.system(size: 12, weight: .semibold, design: .monospaced))
-                .foregroundStyle(.blue)
+                .font(.system(.caption, design: .monospaced, weight: .semibold))
+                .foregroundStyle(Color.accentColor.onSurface(in: scheme))
                 .lineLimit(1)
                 .monospacedDigit()
                 .fixedSize(horizontal: true, vertical: false)
             Image(systemName: "chevron.down")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(.caption2, weight: .semibold))
                 .foregroundStyle(.secondary)
         }
     }
@@ -386,10 +390,10 @@ struct NotificationsView: View {
         } label: {
             HStack(spacing: 7) {
                 Image(systemName: "checkmark")
-                    .font(.system(size: 13, weight: .bold))
+                    .font(.system(.footnote, weight: .bold))
                 if hasUnread {
                     Text("Mark all read")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .lineLimit(1)
                 }
             }
@@ -424,7 +428,7 @@ struct NotificationsView: View {
             HStack(spacing: 7) {
                 liveDot
                 (Text("\(count)")
-                    .font(.system(size: 15, weight: .bold, design: .monospaced))
+                    .font(.system(.subheadline, design: .monospaced, weight: .bold))
                     .foregroundColor(.primary)
                  + Text(" today")
                     .font(.subheadline)

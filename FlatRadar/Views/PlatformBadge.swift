@@ -26,13 +26,18 @@ struct PlatformBadge: View {
         /// 房源详情页头部。
         case large
 
-        var font: CGFloat {
+        /// 字号走**文字样式**不是裸数字，这样才跟随系统字号。
+        ///
+        /// small / medium 原先是 9pt 和 10pt——`caption-2`（11pt）是设计系统
+        /// 的地板，比它小的字号不在这套系统里，而且裸尺寸完全不随「辅助功能 →
+        /// 字体大小」变化。两者现在都落到 `.caption2`，差异靠内边距表达；
+        /// 它们本来也只差 1pt，视觉上分不出来。
+        var style: Font.TextStyle {
             switch self {
-            case .small: return 9
-            case .medium: return 10
-            // 12 而不是 11：用它的两处（地图弹卡、房源详情页头部）旁边都是
-            // 17pt 的正文，11pt 的徽标在那个语境里显小。
-            case .large: return 12
+            case .small, .medium: return .caption2
+            // caption（12pt）而不是 caption2：用它的两处（地图弹卡、房源详情页
+            // 头部）旁边都是 body，11pt 的徽标在那个语境里显小。
+            case .large: return .caption
             }
         }
         var hPadding: CGFloat {
@@ -51,17 +56,20 @@ struct PlatformBadge: View {
         }
     }
 
+    @Environment(\.colorScheme) private var scheme
+
     let source: String?
     var size: Size = .medium
 
     var body: some View {
         let color = Platform.color(source)
         Text(Platform.shortName(source))
-            .font(.system(size: size.font, weight: .heavy, design: .monospaced))
+            .font(.system(size.style, design: .monospaced, weight: .heavy))
             .padding(.horizontal, size.hPadding)
             .padding(.vertical, size.vPadding)
             .background(color.opacity(0.16), in: Capsule())
-            .foregroundStyle(color)
+            // 字色不能就是底色——理由和换算见 Color.onTint(in:)。
+            .foregroundStyle(color.onTint(in: scheme))
             // 缩写对读屏软件没有意义，念全名。
             .accessibilityLabel("Platform \(Platform.displayName(source))")
     }

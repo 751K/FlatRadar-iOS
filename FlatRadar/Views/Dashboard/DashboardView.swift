@@ -10,6 +10,26 @@ struct DashboardView: View {
     /// 启用时关闭呼吸/脉冲一类的循环动画，避免触发前庭功能敏感的用户。
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// 心跳点呼吸动画的相位（true ↔ false 反复切换驱动 .scaleEffect / .opacity）。
+    /// 三个**展示型大数字**的字号。
+    ///
+    /// 它们不落在任何一档文字样式上（58 / 38 / 26，最大的 `largeTitle` 才 34），
+    /// 所以不能写成 `.font(.system(.largeTitle))`——那会把 58pt 的主数字缩成
+    /// 34pt。`@ScaledMetric` 保住原尺寸，同时让它按 `relativeTo:` 那一档的比例
+    /// 跟随系统字号，这是 Apple 给「超出标准档的展示字号」的正解。
+    @ScaledMetric(relativeTo: .largeTitle) private var totalNumberSize: CGFloat = 58
+    @ScaledMetric(relativeTo: .largeTitle) private var matchedNumberSize: CGFloat = 38
+    @ScaledMetric(relativeTo: .title) private var miniStatNumberSize: CGFloat = 26
+    /// 头像圆的直径。字号一涨，圆也要跟着涨，否则首字母会从圆里溢出来。
+    @ScaledMetric(relativeTo: .caption) private var avatarDiameter: CGFloat = 28
+    /// 动态字号的**倍数**。
+    ///
+    /// `@ScaledMetric` 没有直接给倍数的写法，所以拿 100 当基准去量：系统字号
+    /// 放大之后这个值变成 130，就是 1.3 倍。Explore 卡的高度是写死的
+    /// （116 / 140 / 170），字一大内容就从卡底顶出去——实测在
+    /// `AccessibilityL` 下 "By tenant" 那张卡只剩半行。卡高乘上这个倍数之后，
+    /// 卡和它装的东西一起长。
+    @ScaledMetric(relativeTo: .caption2) private var typeScale: CGFloat = 100
+
     @State private var liveDotBreathing = false
 
     /// Cached chart data for inline mini visualizations.
@@ -146,16 +166,19 @@ struct DashboardView: View {
 
         if auth.isGuest {
             Menu {
-                Button("Sign out", systemImage: "rectangle.portrait.and.arrow.right",
+                Button("Sign Out", systemImage: "rectangle.portrait.and.arrow.right",
                        role: .destructive) {
                     Task { await auth.logout() }
                 }
             } label: {
                 HStack(spacing: 8) {
                     ZStack {
-                        Circle().fill(Color.secondary.opacity(0.12)).frame(width: 28, height: 28)
+                        Circle().fill(Color.secondary.opacity(0.12))
+                            .frame(width: avatarDiameter, height: avatarDiameter)
                         Text(initial)
-                            .font(.system(size: 12, weight: .bold)).foregroundStyle(.secondary)
+                            // `.primary` 不是 `.secondary`：灰字写在 12% 的灰圆
+                            // 上实测不过 4.5:1，而这是一个 11pt 的字母。
+                            .font(.system(.caption, weight: .bold)).foregroundStyle(.primary)
                     }
                     Text("Guest")
                         .font(.subheadline.weight(.semibold))
@@ -169,7 +192,7 @@ struct DashboardView: View {
         } else {
             Menu {
                 Section { Text(label) }
-                Button("Log out", systemImage: "rectangle.portrait.and.arrow.right",
+                Button("Sign Out", systemImage: "rectangle.portrait.and.arrow.right",
                        role: .destructive) {
                     Task { await auth.logout() }
                 }
@@ -177,10 +200,11 @@ struct DashboardView: View {
                 HStack(spacing: 8) {
                     ZStack {
                         Circle().fill(auth.isAdmin ? Color.red.opacity(0.12) : Color.blue.opacity(0.12))
-                            .frame(width: 28, height: 28)
+                            .frame(width: avatarDiameter, height: avatarDiameter)
                         Text(initial)
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(auth.isAdmin ? .red : .blue)
+                            .font(.system(.caption, weight: .bold))
+                            .foregroundStyle((auth.isAdmin ? Color.red : Color.accentColor)
+                                .onSurface(in: colorScheme))
                     }
                     Text(label)
                         .font(.subheadline.weight(.semibold))
@@ -200,7 +224,9 @@ struct DashboardView: View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
                 Text("Dashboard")
-                    .font(.system(size: 28, weight: .heavy))
+                    // `.title`（title-1）就是 28pt，和原来写死的数字一样大，
+                    // 区别只在于它跟随系统字号。
+                    .font(.system(.title, weight: .heavy))
                     .tracking(-0.8)
                 Spacer()
                 if auth.isAuthenticated {
@@ -488,11 +514,11 @@ struct DashboardView: View {
         let s = store.summary
         return VStack(alignment: .leading, spacing: 6) {
             Text("TOTAL LISTINGS")
-                .font(.system(size: 13, weight: .heavy))
+                .font(.system(.footnote, weight: .heavy))
                 .foregroundStyle(.secondary)
                 .tracking(1.5)
             Text("\(s?.total ?? 0)")
-                .font(.system(size: 58, weight: .heavy))
+                .font(.system(size: totalNumberSize, weight: .heavy))
                 .monospacedDigit()
                 .tracking(-2)
             if let wg = weekGrowthText {
@@ -501,10 +527,17 @@ struct DashboardView: View {
                         .font(.caption2.weight(.bold))
                     Text("+\(wg)")
                     Text("this week")
-                        .foregroundStyle(.secondary)
+                        // **不能写 `.secondary`**：它在外层那个绿色
+                        // `foregroundStyle` 里，`.secondary` 解析出来是「同一个
+                        // 绿的低透明度版本」，比压暗之前还淡——真机审计里
+                        // 修完外层它还在报。显式给中性色。
+                        .foregroundStyle(Color.secondary)
                 }
                 .font(.subheadline)
-                .foregroundStyle(.green)
+                // 纯绿字在白底上实测 **2.18:1**（15pt，门槛 4.5）。压暗一档，
+                // 见 ``Color/onSurface(in:)``。绿色本身要留着——它和那个 ↑ 箭头
+                // 一起表达"涨"，规范也要求状态不能只靠色相。
+                .foregroundStyle(Color.statusBook.onSurface(in: colorScheme))
             }
         }
         .fixedSize(horizontal: true, vertical: false)
@@ -558,7 +591,7 @@ struct DashboardView: View {
         Button(action: onTap) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("\(num)")
-                    .font(.system(size: 26, weight: .heavy))
+                    .font(.system(size: miniStatNumberSize, weight: .heavy))
                     .monospacedDigit()
                     .foregroundStyle(.primary)
                 Text(desc)
@@ -634,7 +667,7 @@ struct DashboardView: View {
         HStack {
             HStack(spacing: 4) {
                 Text("Your matches")
-                    .font(.system(size: 22, weight: .heavy))
+                    .font(.system(.title2, weight: .heavy))
                     .tracking(-0.5)
                 if me.filterActive {
                     Text("(filtered)")
@@ -685,7 +718,7 @@ struct DashboardView: View {
     @ViewBuilder
     private func matchedTotalBlock(_ me: MeSummary, stacked: Bool) -> some View {
         let total = Text("\(me.matchedTotal)")
-            .font(.system(size: 38, weight: .heavy))
+            .font(.system(size: matchedNumberSize, weight: .heavy))
             .monospacedDigit()
             .tracking(-1)
         let caption = Text("matched · all available")
@@ -709,19 +742,28 @@ struct DashboardView: View {
         }
     }
 
+    /// 数据还没到时的占位。
+    ///
+    /// 原先是拿 `⋯⋯` 这种省略号字符当假文字画出来的。两个问题：VoiceOver 会把
+    /// 那串点**原样念出来**（"中间省略号 中间省略号"），而且它长得不像系统的
+    /// 骨架屏，用户看不出"这是在加载"还是"这条就是这么显示的"。
+    ///
+    /// `.redacted(reason: .placeholder)` 是系统给这件事的原生做法：它把文字换成
+    /// 灰条，尺寸取自真实文字的排版，所以数据到位时高度不跳——这也正是原来
+    /// 手写占位想达到的效果；同时它对辅助功能是有语义的。
     @ViewBuilder
     private func matchPreviewPlaceholder(stacked: Bool) -> some View {
         if stacked {
             // 结构照着 matchPreviewRow 走，数据到位时高度才不会跳。
             VStack(alignment: .leading, spacing: 3) {
                 HStack {
-                    Text("⋯⋯⋯⋯").font(.system(size: 14, weight: .semibold))
+                    Text(verbatim: "Placeholder").font(.system(.subheadline, weight: .semibold))
                     Spacer(minLength: 8)
-                    Text("—").font(.system(size: 15, weight: .bold))
+                    Text(verbatim: "€0000").font(.system(.subheadline, weight: .bold))
                 }
-                Text("⋯⋯").font(.system(size: 11)).foregroundStyle(.secondary)
+                Text(verbatim: "Placeholder").font(.system(.caption2)).foregroundStyle(.secondary)
             }
-            .foregroundStyle(.secondary)
+            .redacted(reason: .placeholder)
             .frame(maxWidth: .infinity,
                    minHeight: Self.stackedRowHeight - 28,
                    alignment: .leading)
@@ -729,11 +771,12 @@ struct DashboardView: View {
             .background(Color(.systemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
         } else {
             VStack(alignment: .leading, spacing: 4) {
-                Text("—").font(.system(size: 13, weight: .bold))
+                Text(verbatim: "€0000").font(.system(.footnote, weight: .bold))
                 ForEach(0..<5, id: \.self) { _ in
-                    Text("⋯⋯").font(.system(size: 10)).foregroundStyle(.secondary)
+                    Text(verbatim: "Placeholder").font(.system(.caption2)).foregroundStyle(.secondary)
                 }
             }
+            .redacted(reason: .placeholder)
             .frame(maxWidth: .infinity, minHeight: 128, alignment: .topLeading)
             .padding(.vertical, 12).padding(.horizontal, 10)
             .background(Color(.systemGroupedBackground), in: RoundedRectangle(cornerRadius: 12))
@@ -752,12 +795,12 @@ struct DashboardView: View {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(listing.name)
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(.system(.subheadline, weight: .semibold))
                         .lineLimit(1)
                         .truncationMode(.tail)
                     Spacer(minLength: 8)
                     Text(listing.priceText ?? "—")
-                        .font(.system(size: 17, weight: .bold))
+                        .font(.system(.body, weight: .bold))
                         .lineLimit(1)
                 }
 
@@ -766,12 +809,12 @@ struct DashboardView: View {
                         .fill(matchStatusColor(listing))
                         .frame(width: 6, height: 6)
                     Text(matchStatusLabel(listing))
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(.system(.caption, weight: .semibold))
                         .foregroundStyle(matchStatusColor(listing))
                         .lineLimit(1)
                     if let detail = matchRowDetail(listing) {
                         Text("· \(detail)")
-                            .font(.system(size: 12))
+                            .font(.system(.caption))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .truncationMode(.tail)
@@ -782,7 +825,7 @@ struct DashboardView: View {
                     // 靠右单独放，不混进左边那串副信息里。
                     if let from = listing.availableShortText {
                         Text(from)
-                            .font(.system(size: 12, weight: .medium))
+                            .font(.system(.caption, weight: .medium))
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
@@ -861,7 +904,7 @@ struct DashboardView: View {
     private func matchPreviewCard(_ listing: Listing) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(listing.priceText ?? "—")
-                .font(.system(size: 13, weight: .bold))
+                .font(.system(.footnote, weight: .bold))
                 .lineLimit(1)
                 .minimumScaleFactor(0.85)
 
@@ -870,28 +913,29 @@ struct DashboardView: View {
                     .fill(matchStatusColor(listing))
                     .frame(width: 5, height: 5)
                 Text(matchStatusLabel(listing))
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(matchStatusColor(listing))
+                    .font(.system(.caption2, weight: .semibold))
+                    // 状态色当文字用要压暗一档，见 ``Color/onSurface(in:)``。
+                    .foregroundStyle(matchStatusColor(listing).onSurface(in: colorScheme))
                     .lineLimit(1)
             }
 
             // 副信息层：面积 → 楼栋 → 城市 → 起租日，每行独占一条，10pt 副字号
             if let area = matchAreaText(listing) {
                 Text(area)
-                    .font(.system(size: 10))
+                    .font(.system(.caption2))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             if let building = listing.buildingText {
                 Text(building)
-                    .font(.system(size: 10))
+                    .font(.system(.caption2))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
             }
             if !listing.city.isEmpty {
                 Text(listing.city)
-                    .font(.system(size: 10))
+                    .font(.system(.caption2))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -899,7 +943,7 @@ struct DashboardView: View {
             if let from = listing.availableShortText {
                 // 不加 "from" 前缀 —— 用户希望窄卡里直接显示"Jun 22"，少噪声
                 Text(from)
-                    .font(.system(size: 10))
+                    .font(.system(.caption2))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -976,7 +1020,7 @@ struct DashboardView: View {
         VStack(spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
                 Text("Explore")
-                    .font(.system(size: 22, weight: .heavy))
+                    .font(.system(.title2, weight: .heavy))
                     .tracking(-0.5)
                 Spacer()
             }
@@ -986,7 +1030,7 @@ struct DashboardView: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10),
                                      count: exploreColumns(for: availableWidth)),
                       spacing: 10) {
-                let h = exploreCardHeight(for: availableWidth)
+                let h = exploreCardHeight(for: availableWidth) * typeScale / 100
                 sourceMiniCard(height: h)
                 statusMiniCard(height: h)
                 priceMiniCard(height: h)
@@ -1007,11 +1051,21 @@ struct DashboardView: View {
         Button {
             coord.selectedTab = .browse; coord.selectedBrowseMode = .list
         } label: {
-            Text("More breakdowns ›")
+            // `›` 换成 SF Symbol：规范说标准动作用平台的标准符号，而且一个
+            // 裸的单书名号字符在 VoiceOver 里会被当成标点念出来。
+            HStack(spacing: 4) {
+                Text("More breakdowns")
+                Image(systemName: "chevron.right")
+                    .imageScale(.small)
+            }
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.blue)
+                .foregroundStyle(Color.accentColor.onSurface(in: colorScheme))
+                // 命中区补到 44pt 高。原来这里只有一个裸 `Text`，没有内边距也
+                // 没有 `contentShape`，可点范围就是字的外框——真机审计量到
+                // **138×18**，而下限是 44。字本身不变大，只是把可点的那块撑开。
+                .frame(maxWidth: .infinity, minHeight: 44)
+                .contentShape(Rectangle())
         }
-        .frame(maxWidth: .infinity)
     }
 
     // MARK: - Mini cards
@@ -1038,10 +1092,10 @@ struct DashboardView: View {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .center) {
                     Text(title)
-                        .font(.system(size: 13, weight: .heavy))
+                        .font(.system(.footnote, weight: .heavy))
                     Spacer()
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(.caption2, weight: .semibold))
                         .foregroundStyle(.tertiary)
                 }
                 Spacer(minLength: 10)
@@ -1088,21 +1142,24 @@ struct DashboardView: View {
 
                     HStack(alignment: .firstTextBaseline) {
                         VStack(spacing: 2) {
-                            Text("\(available)").fontWeight(.bold).foregroundStyle(Color.statusBook)
+                            Text("\(available)").fontWeight(.bold)
+                                .foregroundStyle(Color.statusBook.onSurface(in: colorScheme))
                             Text("book").foregroundStyle(.secondary)
                         }
                         Spacer()
                         VStack(spacing: 2) {
-                            Text("\(lottery)").fontWeight(.bold).foregroundStyle(Color.statusLottery)
+                            Text("\(lottery)").fontWeight(.bold)
+                                .foregroundStyle(Color.statusLottery.onSurface(in: colorScheme))
                             Text("lottery").foregroundStyle(.secondary)
                         }
                         Spacer()
                         VStack(spacing: 2) {
-                            Text("\(unavailable)").fontWeight(.bold).foregroundStyle(Color.statusOccupied)
+                            Text("\(unavailable)").fontWeight(.bold)
+                                .foregroundStyle(Color.statusOccupied.onSurface(in: colorScheme))
                             Text("other").foregroundStyle(.secondary)
                         }
                     }
-                    .font(.system(size: 11, design: .monospaced))
+                    .font(.system(.caption2, design: .monospaced))
                 }
             }
         }
@@ -1136,24 +1193,30 @@ struct DashboardView: View {
                             VStack(spacing: 2) {
                                 Text("\(entry.count)")
                                     .fontWeight(.bold)
-                                    .foregroundStyle(Platform.color(entry.label))
+                                    .foregroundStyle(Platform.color(entry.label)
+                                        .onSurface(in: colorScheme))
                                 Text(entry.label)
                                     .foregroundStyle(.secondary)
                             }
-                            .font(.system(size: 11, design: .monospaced))
+                            .font(.system(.caption2, design: .monospaced))
                             .frame(maxWidth: .infinity)
                         }
                         // 卡片只放得下三列，但不能让另外几个平台**无声消失**——
                         // 用户会以为只有三家。点开卡片有完整图表。
                         if hidden > 0 {
                             VStack(spacing: 2) {
+                                // 这两行原来是 `.secondary` / `.tertiary`，实测
+                                // **1.72:1**——基本看不见，而它说的是"还有 4 家
+                                // 平台没显示"，是信息不是水印。规范里 tertiary
+                                // 的用途写得很明确：禁用态和水印。
+                                // 数字抬到 label，词留在 label-secondary。
                                 Text("+\(hidden)")
                                     .fontWeight(.bold)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(.primary)
                                 Text("more")
-                                    .foregroundStyle(.tertiary)
+                                    .foregroundStyle(.secondary)
                             }
-                            .font(.system(size: 11, design: .monospaced))
+                            .font(.system(.caption2, design: .monospaced))
                             .frame(maxWidth: .infinity)
                         }
                     }
@@ -1176,10 +1239,23 @@ struct DashboardView: View {
                                 .frame(height: max(4, ratio(entry.count, maxCount) * 36 * chartScale(for: height)))
                         }
                     }
-                    HStack {
-                        Text(sorted.first?.label ?? "€—").foregroundStyle(.secondary)
-                        Spacer()
-                        Text(sorted.last?.label ?? "€—").foregroundStyle(.secondary)
+                    // 两端的标签**不参与压缩**，而且中间至少留 8pt。
+                    //
+                    // 原先是裸的 `HStack { Text; Spacer; Text }`：两台真机的审计
+                    // 都把这两个标签报成 "Text clipped"，截图上右端那个
+                    // `€1400-1600` 的最后一个 0 几乎贴到卡片圆角上——`Spacer`
+                    // 会一直推到没有余量为止。`fixedSize` 让它们保住自己的宽度，
+                    // `minLength` 保证两头不会撞在一起。
+                    HStack(spacing: 8) {
+                        Text(sorted.first?.label ?? "€—")
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .fixedSize()
+                        Spacer(minLength: 8)
+                        Text(sorted.last?.label ?? "€—")
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .fixedSize()
                     }
                     .font(.caption)
                 }
@@ -1197,9 +1273,11 @@ struct DashboardView: View {
                     ForEach(Array(merged)) { entry in
                         HStack(spacing: 6) {
                             Text(entry.label)
-                                .font(.system(size: 11))
+                                .font(.system(.caption2))
                                 .lineLimit(1)
-                                .frame(width: 44, alignment: .leading)
+                                // `minWidth` 不是 `width`：字号跟系统涨之后，
+                                // 写死的 44pt 会把标签裁掉。
+                                .frame(minWidth: 44, alignment: .leading)
                             GeometryReader { proxy in
                                 RoundedRectangle(cornerRadius: 2)
                                     .fill(.blue.opacity(0.6))
@@ -1207,8 +1285,8 @@ struct DashboardView: View {
                             }
                             .frame(height: 5 * chartScale(for: height))
                             Text("\(entry.count)")
-                                .font(.system(size: 11, weight: .bold))
-                                .frame(width: 26, alignment: .trailing)
+                                .font(.system(.caption2, weight: .bold))
+                                .frame(minWidth: 26, alignment: .trailing)
                         }
                     }
                 }
@@ -1234,7 +1312,7 @@ struct DashboardView: View {
                     HStack(spacing: 4) {
                         ForEach(merged.prefix(5)) { entry in
                             Text(entry.label)
-                                .font(.system(size: 10, weight: .bold))
+                                .font(.system(.caption2, weight: .bold))
                                 .foregroundStyle(.secondary)
                                 .frame(maxWidth: .infinity)
                         }
@@ -1252,10 +1330,16 @@ struct DashboardView: View {
                 VStack(spacing: 5) {
                     ForEach(tenantTopThree) { entry in
                         HStack(spacing: 6) {
-                            Text(tenantMiniLabel(entry.label))
-                                .font(.system(size: 11))
+                            Text(Self.tenantMiniLabel(entry.label, within: tenantTopThree))
+                                .font(.system(.caption2))
                                 .lineLimit(1)
-                                .frame(width: 54, alignment: .leading)
+                                // 撞名时标签会退回原文（"Student Only" /
+                                // "Student And Employed"），比缩写长。让它先于
+                                // 那根条拿空间，并且允许缩到 0.8 再截断——
+                                // 两行同名比截断严重得多，但能不截当然更好。
+                                .minimumScaleFactor(0.8)
+                                .layoutPriority(1)
+                                .frame(minWidth: 54, alignment: .leading)
                             GeometryReader { proxy in
                                 RoundedRectangle(cornerRadius: 2)
                                     .fill(.blue.opacity(0.6))
@@ -1263,8 +1347,8 @@ struct DashboardView: View {
                             }
                             .frame(height: 5 * chartScale(for: height))
                             Text("\(entry.count)")
-                                .font(.system(size: 11, weight: .bold))
-                                .frame(width: 24, alignment: .trailing)
+                                .font(.system(.caption2, weight: .bold))
+                                .frame(minWidth: 24, alignment: .trailing)
                         }
                     }
                 }
@@ -1331,13 +1415,37 @@ struct DashboardView: View {
         }
     }
 
-    private func tenantMiniLabel(_ label: String) -> String {
+    /// 把后端那些长短不一的租客类别缩成卡片里放得下的一个词。
+    ///
+    /// ⚠️ 这里**只在不会撞名时**才缩。原先是无条件缩的：任何含 "student" 的值
+    /// 一律变成 "Student"，于是两个不同的后端类别在卡上成了两行都叫 Student
+    /// 的数据（真机上看到的是 `Student 193` 和 `Student 15`），读的人没法分辨
+    /// 哪行是哪个，而缩写本来是为了让人读懂。
+    ///
+    /// 判据是**这一批数据里**缩完之后还唯不唯一，不是写死一张表——后端随时
+    /// 可能加一个新类别，写死的表挡不住下一次撞名。撞了就退回原文，宁可窄卡
+    /// 里截断，也不要两行同名。
+    static func tenantMiniLabel(_ label: String, within all: [ChartEntry]) -> String {
+        let short = Self.tenantShortForm(label)
+        let collides = all.contains {
+            $0.label != label && Self.tenantShortForm($0.label) == short
+        }
+        return collides ? Self.tenantFallbackForm(label) : short
+    }
+
+    /// `internal` 而不是 `private`：`DashboardMetricsTests` 守着「缩写完不能撞名」
+    /// 这条，而撞名只在真实数据上才出现，不可能靠跑一遍界面发现。
+    static func tenantShortForm(_ label: String) -> String {
         let lower = label.lowercased()
         if lower.contains("student") { return "Student" }
         if lower.contains("working") || lower.contains("employed") { return "Working" }
         if lower.contains("young") { return "Young" }
         if lower.contains("any") || lower.contains("all") { return "Any" }
-        return label
+        return tenantFallbackForm(label)
+    }
+
+    static func tenantFallbackForm(_ label: String) -> String {
+        label
             .components(separatedBy: CharacterSet(charactersIn: "(_-"))
             .first?
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1544,9 +1652,9 @@ struct RecentActivitySheet: View {
                                     } label: {
                                         VStack(alignment: .leading, spacing: 4) {
                                             Text(n.listingTitleHint)
-                                                .font(.system(size: 14, weight: .medium))
+                                                .font(.system(.subheadline, weight: .medium))
                                             Text(n.body)
-                                                .font(.system(size: 12))
+                                                .font(.system(.caption))
                                                 .foregroundStyle(.secondary)
                                                 .lineLimit(2)
                                         }
@@ -1556,7 +1664,7 @@ struct RecentActivitySheet: View {
                                 }
                             } header: {
                                 Text("\(changes.count) status changes")
-                                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                    .font(.system(.caption2, design: .monospaced, weight: .bold))
                                     .tracking(0.7)
                                     .foregroundStyle(.secondary)
                                     .textCase(nil)
@@ -1583,7 +1691,7 @@ struct RecentActivitySheet: View {
                             }
                         } header: {
                             Text("\(filtered.count) \(filtered.count == 1 ? "listing" : "listings") · matches your filter")
-                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .font(.system(.caption2, design: .monospaced, weight: .bold))
                                 .tracking(0.7)
                                 .foregroundStyle(.secondary)
                                 .textCase(nil)

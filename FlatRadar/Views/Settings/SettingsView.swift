@@ -258,11 +258,11 @@ struct SettingsView: View {
                 Button(role: .destructive) {
                     showLogoutConfirm = true
                 } label: {
-                    Text("Log Out")
+                    Text("Sign Out")
                     .foregroundStyle(.red)
                 }
-                .confirmationDialog("Log Out", isPresented: $showLogoutConfirm) {
-                    Button("Log Out", role: .destructive) {
+                .confirmationDialog("Sign Out", isPresented: $showLogoutConfirm) {
+                    Button("Sign Out", role: .destructive) {
                         Task {
                             await push.logout()
                             await auth.logout()
@@ -304,7 +304,7 @@ struct SettingsView: View {
                     showGuestRegister = true
                 } label: {
                     HStack {
-                        Text("Create an Account")
+                        Text("Create Account")
                             .foregroundStyle(.primary)
                         Spacer()
                         Image(systemName: "chevron.right")

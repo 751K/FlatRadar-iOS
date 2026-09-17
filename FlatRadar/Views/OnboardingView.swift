@@ -12,6 +12,7 @@ struct OnboardingView: View {
     /// 改用瞬时切换。遵守 iOS HIG：前庭功能敏感的用户开了这个 flag 后
     /// 不应再被快速横向滑动 / 弹簧反馈打扰。
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(NavigationCoordinator.self) private var coord
 
     /// 翻页动画：reduceMotion 时返回 nil（withAnimation 用 .default 等于无动效），
     /// 否则用与全局一致的 spring 0.3。
@@ -21,11 +22,22 @@ struct OnboardingView: View {
 
     /// 首次启动的功能引导。
     ///
-    /// 两件之前错的事
-    /// --------------
-    /// 1. 第一页写着"用顶部的分段选择器切换视图"——分段选择器**只有 iPad 有**
-    ///    （见 ``BrowseView`` 的 `usesInlineModePicker`），iPhone 是左上角的
-    ///    菜单。新用户被指去找一个不存在的控件。现在按设备分别措辞。
+    /// 「Browse」那一页的措辞被同一个坑绊了两次
+    /// ------------------------------------
+    /// 1. 最早写的是"用顶部的分段选择器切换视图"，而分段选择器只有 iPad 有，
+    ///    iPhone 是左上角的菜单。新用户被指去找一个不存在的控件。当时的修法是
+    ///    **按设备**分别措辞（`idiom == .pad`）。
+    /// 2. 后来 ``BrowseView`` 把那个 inline picker 删了（理由写在那边），所有
+    ///    形态都统一走 nav bar 左上角的菜单——于是"按设备分支"这条修法自己变成
+    ///    了同一个 bug：**任何 iPad 上**这一页都还在说"用顶部的选择器"，而那个
+    ///    控件已经不存在了；注释里引用的 `BrowseView.usesInlineModePicker` 连
+    ///    符号都没了。
+    ///
+    /// 现在按**形态**措辞，而且两支说的都是当下真实存在的东西：窄窗口里三个
+    /// 视图挤在 Browse 一个 tab 里，靠左上角的菜单换；宽窗口里它们本来就是三个
+    /// 并排的 tab，没有"切换"这个动作。判据取自 ``NavigationCoordinator/
+    /// usesCompactTabs``——引导页是登录之后才弹的，那时 `MainTabView` 已经量过
+    /// 宽度了。
     /// 2. 整组文案原本声明成 `String`，``Text`` 因此走非本地化重载，一条都没
     ///    进过 `Localizable.xcstrings`。西/荷/简中/繁中用户第一次打开 App 看到
     ///    四页英文，然后进入一个已经翻译好的界面。改成 ``LocalizedStringKey``。
@@ -45,10 +57,9 @@ struct OnboardingView: View {
                 icon: "square.grid.2x2.fill",
                 iconColor: .indigo,
                 title: "Browse Listings",
-                // 分段选择器只有 iPad 有；iPhone 是 nav bar 左上角的菜单。
-                body: usesInlineModePicker
-                    ? "List, Map, and Calendar show the same listings from different angles.\nSwitch between them with the picker at the top."
-                    : "List, Map, and Calendar show the same listings from different angles.\nSwitch between them from the menu at the top left."
+                body: coord.usesCompactTabs
+                    ? "List, Map, and Calendar show the same listings from different angles.\nSwitch between them from the menu at the top left."
+                    : "List, Map, and Calendar show the same listings from different angles.\nEach one has its own tab at the top."
             ),
             .init(
                 icon: "line.3.horizontal.decrease.circle.fill",
@@ -69,11 +80,6 @@ struct OnboardingView: View {
                 body: "Set a notification filter in Settings to receive push alerts for new listings that match your criteria.\nThe Alerts tab shows a live stream of every match."
             ),
         ]
-    }
-
-    /// 与 ``BrowseView`` 同一条判据——两处说的必须是同一件事。
-    private var usesInlineModePicker: Bool {
-        UIDevice.current.userInterfaceIdiom == .pad
     }
 
     var body: some View {
@@ -138,6 +144,10 @@ struct OnboardingView: View {
         .background(Color(.systemGroupedBackground))
     }
 
+    /// 插画 glyph 的字号。`@ScaledMetric` 让它跟随系统字号，`relativeTo:
+    /// .largeTitle` 是因为它在视觉层级上就是那一档。
+    @ScaledMetric(relativeTo: .largeTitle) private var glyphSize: CGFloat = 48
+
     private func pageCard(_ page: OnboardingPage, index: Int) -> some View {
         VStack(spacing: 0) {
             Spacer()
@@ -147,7 +157,9 @@ struct OnboardingView: View {
                     .fill(page.iconColor.opacity(0.12))
                     .frame(width: 120, height: 120)
                 Image(systemName: page.icon)
-                    .font(.system(size: 48, weight: .medium))
+                    // 引导页的插画字号：跟着系统字号走，但**以 120pt 的圆角方块
+                    // 为上限**——它不是正文，是一张图，撑破那个方块只会难看。
+                    .font(.system(size: glyphSize, weight: .medium))
                     .foregroundStyle(page.iconColor)
             }
 

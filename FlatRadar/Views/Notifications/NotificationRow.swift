@@ -18,6 +18,8 @@ struct NotificationRow: View {
     let notification: NotificationItem
     /// Increase Contrast: 已读卡的 .tertiary 文字提到 .secondary，满足 AA。
     @Environment(\.colorSchemeContrast) private var contrast
+    /// 胶囊和状态字要按明暗压暗/提亮，见 ``Color/onTint(in:)``。
+    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         let style = TypeSpec(kind: notification.kind)
@@ -32,7 +34,7 @@ struct NotificationRow: View {
                 eventPill(label: style.label, color: style.color, isRead: isRead)
 
                 Text(displayTitle)
-                    .font(.system(size: 15, weight: isRead ? .semibold : .bold))
+                    .font(.system(.subheadline, weight: isRead ? .semibold : .bold))
                     .foregroundStyle(isRead ? .secondary : .primary)
                     .lineLimit(1)
                     .truncationMode(.tail)
@@ -45,12 +47,12 @@ struct NotificationRow: View {
             // Right: time + chevron
             VStack(alignment: .trailing, spacing: 8) {
                 Text(notification.ageText)
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                    .font(.system(.caption2, design: .monospaced, weight: .semibold))
                     .foregroundStyle(isRead ? readSecondaryStyle : .secondary)
                     .fixedSize()
                 if isTappable {
                     Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(.caption2, weight: .semibold))
                         .foregroundStyle(.tertiary)
                 }
             }
@@ -76,7 +78,9 @@ struct NotificationRow: View {
         let textColor: AnyShapeStyle = {
             if isRead { return AnyShapeStyle(Color.secondary) }
             if contrast == .increased { return AnyShapeStyle(Color.primary) }
-            return AnyShapeStyle(color)
+            // 不能直接用 `color`：字和 12% 的底同色相，实测最低 1.8:1，
+            // 而这是 11pt 的文字。压暗/提亮一档，见 ``Color/onTint(in:)``。
+            return AnyShapeStyle(color.onTint(in: scheme))
         }()
         let bgColor = isRead
             ? Color(.systemFill).opacity(0.5)
@@ -86,7 +90,7 @@ struct NotificationRow: View {
             : color.opacity(0.30)
 
         Text(label)
-            .font(.system(size: 10, weight: .heavy, design: .monospaced))
+            .font(.system(.caption2, design: .monospaced, weight: .heavy))
             .tracking(0.7)
             .foregroundStyle(textColor)
             .lineLimit(1)
@@ -105,7 +109,7 @@ struct NotificationRow: View {
             statusTransitionView(transition, isRead: isRead)
         } else if !bodyText.isEmpty {
             Text(bodyText)
-                .font(.system(size: 12.5))
+                .font(.system(.caption))
                 .foregroundStyle(isRead ? readSecondaryStyle : .secondary)
                 .lineLimit(2)
                 .multilineTextAlignment(.leading)
@@ -152,27 +156,31 @@ struct NotificationRow: View {
     ) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 5) {
             Text(t.from)
-                .font(.system(size: 12.5, weight: .semibold))
+                .font(.system(.caption, weight: .semibold))
                 .foregroundStyle(statusColor(for: t.from, isRead: isRead))
             Image(systemName: "arrow.right")
-                .font(.system(size: 9, weight: .bold))
+                .font(.system(.caption2, weight: .bold))
                 .foregroundStyle(.tertiary)
             Text(t.to)
-                .font(.system(size: 12.5, weight: .bold))
+                .font(.system(.caption, weight: .bold))
                 .foregroundStyle(statusColor(for: t.to, isRead: isRead))
             if !t.tail.isEmpty {
                 Text("·  \(t.tail)")
-                    .font(.system(size: 12.5))
+                    .font(.system(.caption))
                     .foregroundStyle(isRead ? readSecondaryStyle : .secondary)
                     .lineLimit(1)
             }
         }
     }
 
-    /// "Book" / "Reserved" / "Occupied" / "Lottery" → 颜色映射
+    /// 状态迁移那行（`Book → Reserved`）的字色。
+    ///
+    /// 这里的状态色是**直接写在行背景上**的文字，不像胶囊那样有一层同色淡底，
+    /// 所以更要压暗：`statusOccupied`（系统灰）在白底上只有 2.8:1，而这一行
+    /// 是 12pt。走和徽标同一条换算。
     private func statusColor(for raw: String, isRead: Bool) -> Color {
         if isRead { return .secondary }
-        return ListingStatus.from(raw).color
+        return ListingStatus.from(raw).color.onTint(in: scheme)
     }
 
     // MARK: - Styles

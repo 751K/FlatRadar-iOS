@@ -372,6 +372,26 @@ struct NativeMonthCalendar: UIViewRepresentable {
         }
     }
 
+    /// 日期下面那个计数的字体：caption2（11pt）加粗，跟随动态字号。
+    ///
+    /// `nonisolated` + `static`：常量，跟 actor 无关；而下面那个颜色的
+    /// provider 闭包**必须**是 nonisolated 的——UIKit 会在非主线程上调它解析
+    /// 颜色，2.1.0 那次线上无限崩溃就是这个（见 `Color+Tokens` 的注释）。
+    nonisolated static let dayCountFont: UIFont = {
+        let base = UIFont.preferredFont(forTextStyle: .caption2)
+        let descriptor = base.fontDescriptor.withSymbolicTraits(.traitBold) ?? base.fontDescriptor
+        return UIFont(descriptor: descriptor, size: 0)
+    }()
+
+    /// 计数的颜色：强调色**压暗一档**。
+    ///
+    /// 原来直接用 `Color.accentColor`，实测在白底上只有 **3.54:1**，而它是
+    /// 11pt 的文字，门槛 4.5。换算见 ``Color/onSurface(in:)``。
+    nonisolated static let dayCountColor = UIColor { traits in
+        UIColor(Color.accentColor.onSurface(
+            in: traits.userInterfaceStyle == .dark ? .dark : .light))
+    }
+
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
 
     @MainActor
@@ -399,8 +419,16 @@ struct NativeMonthCalendar: UIViewRepresentable {
             return .customView {
                 let label = UILabel()
                 label.text = "\(count)"
-                label.font = .systemFont(ofSize: 11, weight: .semibold)
-                label.textColor = UIColor(Color.accentColor)
+                // 跟随动态字号。原来是写死的 `systemFont(ofSize: 11)`——裸
+                // `UILabel` 不会自己跟系统字号走，要 `preferredFont` 加上
+                // `adjustsFontForContentSizeCategory` 两件事一起。
+                // 这个数字（"这天有几套房"）正是这一屏要回答的问题，不该是
+                // 全屏唯一一个调大字号也不动的东西。
+                label.font = NativeMonthCalendar.dayCountFont
+                label.adjustsFontForContentSizeCategory = true
+                label.adjustsFontSizeToFitWidth = true
+                label.minimumScaleFactor = 0.7
+                label.textColor = NativeMonthCalendar.dayCountColor
                 label.textAlignment = .center
                 return label
             }

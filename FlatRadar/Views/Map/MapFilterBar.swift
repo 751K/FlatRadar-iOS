@@ -72,6 +72,8 @@ enum MapLayout {
 struct MapStatusChips: View {
     @Environment(MapStore.self) private var store
     @Environment(\.horizontalSizeClass) private var hSizeClass
+    /// 状态色当文字用时要按明暗压暗/提亮，见 ``Color/onSurface(in:)``。
+    @Environment(\.colorScheme) private var scheme
 
     private var metrics: MapLayout.ControlMetrics { .of(hSizeClass) }
 
@@ -125,8 +127,14 @@ struct MapStatusChips: View {
             //
             // 之前是给玻璃 tint：绿橙蓝紫灰五档底色亮度差很多，前景色只好一档
             // 一档去凑，凑到最后是「颜色太浓」和「数字看不见」。文字上色没有这个
-            // 问题——色相由状态决定，对比度由系统的中性玻璃保证，两件事解耦。
-            .foregroundStyle(on ? kind.color : Color.secondary)
+            // 问题——色相由状态决定，两件事解耦。
+            //
+            // ⚠️ 但**不能直接用 `kind.color`**。这里原先写着「对比度由系统的中性
+            // 玻璃保证」，那句是想当然：真机审计里 `Lottery` / `Reserved` /
+            // `Occupied` / `Direct book` 四条全部不过——原色在浅底上只有
+            // 2.0–3.3:1。玻璃只是让底变中性，并不会把字提亮。压暗一档才行，
+            // 见 ``Color/onSurface(in:)``。
+            .foregroundStyle(on ? kind.color.onSurface(in: scheme) : Color.secondary)
             .padding(.horizontal, metrics.chipPaddingH)
             .padding(.vertical, metrics.chipPaddingV)
             .liquidGlass(Capsule(), interactive: true)

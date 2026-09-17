@@ -68,6 +68,24 @@ final class NavigationCoordinator {
     var selectedTab: AppTab = NavigationCoordinator.initialTab
     var selectedBrowseMode: BrowseMode = .list
 
+    /// 当前是不是「窄窗口」形态——List / Map / Calendar 三个视图挤在 Browse
+    /// 这一个 tab 里，共用 ``listingsPath`` 那一个导航栈。
+    ///
+    /// 为什么要存一份
+    /// -------------
+    /// 判据是**内容宽度**（`MainTabView.shouldUseCompactTabs`，< 920），而那个
+    /// 宽度只有 `MainTabView` 的 `GeometryReader` 量得到。别的视图要知道自己
+    /// 身处哪种形态时，此前各自猜了一个——`UIDevice.current.userInterfaceIdiom
+    /// == .pad`。那个判据在**窄窗口的 iPad** 上是错的，而 iPad 竖屏就是
+    /// 834pt < 920，分屏和台前调度更窄，全都落在那一档。
+    ///
+    /// 写它的只有 `MainTabView` 一处（和 `normalizeSelection` 同步），读它的是
+    /// 需要区分「我在 Browse 的栈里」还是「我是一个独立 tab」的那几个视图。
+    ///
+    /// 默认 `true`：iPhone 永远是这一档，而且猜窄的代价小——往 Browse 的栈里
+    /// 推一层，最坏是多一次返回；猜宽则会把人从日历甩到列表去。
+    var usesCompactTabs = true
+
     /// 启动时落在哪个 tab。只有 DEBUG 包认启动参数 `-initialTab <AppTab.rawValue>`，
     /// 给命令行验证用（`devicectl device process launch ... -initialTab calendar`），
     /// 真机上没法远程点 tab 栏。发布包一律 dashboard。
@@ -121,6 +139,29 @@ final class NavigationCoordinator {
     nonisolated static func isValidListingID(_ id: String) -> Bool {
         guard !id.isEmpty, id.count <= 128 else { return false }
         return id.allSatisfy { $0.isLetter || $0.isNumber || $0 == "-" || $0 == "_" }
+    }
+
+    /// 从**浏览房源的某个视图内部**（列表行、日历条目、地图弹卡）打开详情。
+    ///
+    /// 和 ``openListing(id:titleHint:)`` 的区别是「从哪来」：那个是给 deep link
+    /// 和通知用的，人不在 App 里，所以它会切 tab、切模式、把栈清成一层。而这个
+    /// 是人已经站在日历或地图上点了一条——**不能换掉他脚下那一屏**。
+    ///
+    /// 原先这两处各写了一个 `if UIDevice.current.userInterfaceIdiom == .pad`，
+    /// 走的是 `openListing`。在**窄窗口的 iPad**（竖屏 834pt、分屏、台前调度）
+    /// 上那是错的：三个视图此时共用 Browse 这一个 tab，而 `openListing` 会把
+    /// `selectedBrowseMode` 写成 `.list`——从日历点进一套房、按返回，人落在
+    /// 列表里，日历没了。iPhone 走的是另一个分支所以一直正常。
+    ///
+    /// 判据换成 ``usesCompactTabs``：窄窗口就往当前这个栈上推一层，宽窗口下
+    /// Listings 是独立 tab、详情本来就归它，才走 `openListing`。
+    func showListing(id: String, titleHint: String? = nil) {
+        guard Self.isValidListingID(id) else { return }
+        if usesCompactTabs {
+            listingsPath.append(.byId(id, titleHint: titleHint))
+        } else {
+            openListing(id: id, titleHint: titleHint)
+        }
     }
 
     /// 由 deep link / 通知点击调用：切到 List 视图并 push 详情。

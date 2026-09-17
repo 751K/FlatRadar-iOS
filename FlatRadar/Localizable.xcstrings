@@ -2430,12 +2430,12 @@
         }
       }
     },
-    "Clear all": {
+    "Clear All": {
       "localizations": {
         "en": {
           "stringUnit": {
             "state": "translated",
-            "value": "Clear all"
+            "value": "Clear All"
           }
         },
         "es": {
@@ -2867,34 +2867,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "創建賬號並登錄"
-          }
-        }
-      }
-    },
-    "Create an Account": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Crear una cuenta"
-          }
-        },
-        "nl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Account aanmaken"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "创建账户"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "創建賬戶"
           }
         }
       }
@@ -3341,34 +3313,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "放棄"
-          }
-        }
-      }
-    },
-    "Discard changes": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Deshacer los cambios"
-          }
-        },
-        "nl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Wijzigingen negeren"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "取消修改"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "取消修改"
           }
         }
       }
@@ -4721,34 +4665,6 @@
         }
       }
     },
-    "Keep editing": {
-      "localizations": {
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sigue editando"
-          }
-        },
-        "nl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Blijf bewerken"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "保持编辑"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "保持編輯"
-          }
-        }
-      }
-    },
     "Label": {
       "localizations": {
         "en": {
@@ -5304,74 +5220,6 @@
         }
       }
     },
-    "Log Out": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Log Out"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cerrar sesión"
-          }
-        },
-        "nl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Uitloggen"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "退出登录"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "退出登錄"
-          }
-        }
-      }
-    },
-    "Log out": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Log out"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cerrar sesión"
-          }
-        },
-        "nl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Uitloggen"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "退出登录"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "退出登錄"
-          }
-        }
-      }
-    },
     "Login": {
       "localizations": {
         "en": {
@@ -5604,7 +5452,7 @@
         }
       }
     },
-    "Mark as read": {
+    "Mark as Read": {
       "localizations": {
         "es": {
           "stringUnit": {
@@ -9703,40 +9551,6 @@
           "stringUnit": {
             "state": "translated",
             "value": "使用%@登陸"
-          }
-        }
-      }
-    },
-    "Sign out": {
-      "localizations": {
-        "en": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Sign out"
-          }
-        },
-        "es": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Cerrar sesión"
-          }
-        },
-        "nl": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "Uitloggen"
-          }
-        },
-        "zh-Hans": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "退出"
-          }
-        },
-        "zh-Hant": {
-          "stringUnit": {
-            "state": "translated",
-            "value": "退出"
           }
         }
       }

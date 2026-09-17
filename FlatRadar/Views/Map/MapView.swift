@@ -547,6 +547,9 @@ struct MapView: View {
     ) -> some View {
         Button(action: action) {
             Image(systemName: systemName)
+                // 和簇气泡里的数字同一条理由：这是**圆钮的几何**，字号和
+                // 直径一起出自 `MapLayout.ControlMetrics`。跟着动态字号变
+                // 的话图标会从圆里顶出来，而圆的大小是按可点区域定的。
                 .font(.system(size: metrics.symbolSize, weight: .semibold))
                 // 窄屏 44×44 命中 iOS HIG 最小可点击区域（之前 42×42 差 2pt）；
                 // 宽屏放大到 56——最小值是"挤不下更大的"时的下限，iPad 上没有
@@ -569,9 +572,19 @@ struct MapView: View {
         let size: CGFloat = selected ? 32 : 24
 
         ZStack {
-            // 主彩色实心圆
+            // 主彩色实心圆。
+            //
+            // 压暗 0.45 再填：白色的描边和中心图标写在原色上只有 2.2–4.2:1
+            // （green 2.22、orange 2.31），连符号要求的 3:1 都不到。规范里
+            // `on-accent` 那条只在 semibold 17pt 以上成立，而图钉里的东西
+            // 比那小得多——所以动的是**底色深浅**，不是白色本身：
+            // 「白图标 + 彩圆」是地图上的约定形状，改那个比改颜色代价大。
+            // 压完最差的 green 是 6.39:1。
+            //
+            // 0.40 试过，不够：`.gradient` 会把圆的上半截提亮，真机审计在
+            // 大字号那一轮还剩一个绿色簇气泡不达标。0.45 留出了那点余量。
             Circle()
-                .fill(color.gradient)
+                .fill(color.mix(with: .black, by: 0.45, in: .device).gradient)
                 .frame(width: size, height: size)
                 .shadow(color: .black.opacity(0.25),
                         radius: selected ? 6 : 3,
@@ -611,13 +624,19 @@ struct MapView: View {
                     .fill(color.opacity(0.25))
                     .frame(width: size + 12, height: size + 12)
                 Circle()
-                    .fill(color.gradient)
+                    // 和 `pinView` 同一条理由：这里的数字是白字写在实心色圆上。
+                    .fill(color.mix(with: .black, by: 0.45, in: .device).gradient)
                     .frame(width: size, height: size)
                     .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
                 Circle()
                     .stroke(.white, lineWidth: 2.5)
                     .frame(width: size, height: size)
                 Text("\(cluster.count)")
+                    // 这一个**故意**不走文字样式：它的尺寸是气泡直径的函数，
+                    // 而气泡直径是地图上的几何量（按簇内数量对数缓增）。跟着
+                    // 系统字号变的话，字会从气泡里溢出来——Apple 自己的地图
+                    // 里，图钉内容也不随动态字体缩放。可读性由上面那行压暗的
+                    // 底色保证，不是靠字号。
                     .font(.system(size: size * 0.42, weight: .bold))
                     .foregroundStyle(.white)
             }
@@ -791,6 +810,8 @@ struct MapView: View {
                     .fill(Color.accentColor.opacity(0.20))
                     .frame(width: 46, height: 46)
                 Image(systemName: "line.3.horizontal.decrease")
+                    // 空状态的插画 glyph，画在一个 46pt 的圆里——同样是几何，
+                    // 不是文字。它下面那两行说明走的是文字样式。
                     .font(.system(size: 19, weight: .semibold))
                     .foregroundStyle(Color.accentColor)
             }
@@ -868,7 +889,9 @@ struct MapView: View {
     private func focusNoticeBar(_ notice: MapStore.FocusNotice) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: notice.systemImage)
-                .font(.system(size: 13, weight: .semibold))
+                // 跟旁边那行 `.footnote` 同一档——规范说符号按它挨着的文字
+                // 画。原来写死 13pt，文字放大时图标不跟。
+                .font(.system(.footnote, weight: .semibold))
             Text(notice.text)
                 .font(.footnote)
                 .fixedSize(horizontal: false, vertical: true)
@@ -877,8 +900,12 @@ struct MapView: View {
                 store.focusNotice = nil
             } label: {
                 Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .bold))
-                    .frame(width: 28, height: 28)
+                    .font(.system(.caption2, weight: .bold))
+                    // 命中区 44×44，不是 28×28。原先视觉和命中框是同一个
+                    // `frame`，于是这个关闭按钮的可点范围就是 28pt 见方——
+                    // 规范的下限是 44，而且明说「A 20px glyph still needs a
+                    // 44px hit area」。glyph 保持小，只把 contentShape 撑开。
+                    .frame(width: 44, height: 44)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -905,16 +932,21 @@ struct MapView: View {
                         .font(.subheadline).fontWeight(.semibold).monospacedDigit()
                     Text("/ \(store.listings.count)")
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
                         .monospacedDigit()
                 }
             }
             if store.uncached > 0 {
                 Text("\(store.uncached) without coords")
                     .font(.caption2)
-                    .foregroundStyle(.secondary)
             }
         }
+        // 玻璃上的字**一律用 label**，不分主次。
+        //
+        // 规范里这条是明写的：「Labels on glass are monochrome by default:
+        // `label` on top of `glass-regular`」。原因是玻璃底下是地图，亮度不可
+        // 预测——`.secondary` 在深色地块上还行，压到浅色地块就没了。真机审计
+        // 把这里的 `N without coords` 报成了不达标。
+        .foregroundStyle(.primary)
         .padding(.horizontal, metrics.badgePaddingH)
         .padding(.vertical, metrics.badgePaddingV)
         // 不开 interactive：它只是个读数，按下去会形变的话看起来像能点。
@@ -1049,11 +1081,9 @@ struct MapView: View {
                     let id = l.id
                     let title = l.name
                     store.selectedID = nil   // close sheet
-                    if UIDevice.current.userInterfaceIdiom == .pad {
-                        coord.openListing(id: id, titleHint: title)
-                    } else {
-                        coord.listingsPath.append(.byId(id, titleHint: title))
-                    }
+                    // 判据在 coordinator 里，不在这里猜设备——
+                    // 见 ``NavigationCoordinator/showListing(id:titleHint:)``。
+                    coord.showListing(id: id, titleHint: title)
                 } label: {
                     Label("View Details", systemImage: "arrow.right.circle.fill")
                         .fontWeight(.semibold)

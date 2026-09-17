@@ -15,6 +15,8 @@ struct ListingRow: View {
     /// "增加对比度"系统开关。开启时把 10pt mono caps 列标题从 .tertiary 抬到
     /// .secondary，避免小字号 + .tertiary（~3.3:1）双重低对比。
     @Environment(\.colorSchemeContrast) private var contrast
+    /// 徽标字色要按明暗两套压暗/提亮，见 ``Color/onTint(in:)``。
+    @Environment(\.colorScheme) private var scheme
 
     let listing: Listing
 
@@ -36,6 +38,11 @@ struct ListingRow: View {
             //   mediumBody  (~460pt min) → iPad portrait / mini portrait：单列 +
             //                              名字下加一行 type/energy/move-in 细节
             //   compactBody             → 兜底，iPhone / 极窄分屏窗口
+            //
+            // 那几个 pt 数是**默认字号下**的。各档的列宽现在写的是 `minWidth`
+            // 而不是 `width`：用户把系统字号调大之后，各档需要的宽度会跟着涨，
+            // ViewThatFits 就会自己往下掉一档——这正是想要的。写死 `width` 的话
+            // 它永远觉得自己装得下，然后把字裁掉。
             inner = AnyView(ViewThatFits(in: .horizontal) {
                 regularBody
                 mediumBody
@@ -83,7 +90,7 @@ struct ListingRow: View {
 
                 if !metaText.isEmpty {
                     Text(metaText)
-                        .font(.system(size: 12))
+                        .font(.system(.caption))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -94,7 +101,7 @@ struct ListingRow: View {
 
             VStack(alignment: .trailing, spacing: 5) {
                 Text(priceText)
-                    .font(.system(size: 17, weight: .bold, design: .monospaced))
+                    .font(.system(.body, design: .monospaced, weight: .bold))
                     .monospacedDigit()
                     .lineLimit(1)
                     .fixedSize()
@@ -109,7 +116,7 @@ struct ListingRow: View {
             VStack(alignment: .leading, spacing: 5) {
                 titleLine
                 Text(locationText)
-                    .font(.system(size: 12.5))
+                    .font(.system(.caption))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
@@ -121,17 +128,17 @@ struct ListingRow: View {
                 detailColumn("Type", listing.typeText ?? listing.contractText ?? "—")
                 detailColumn("Energy", listing.energyText ?? listing.floorText ?? "—")
             }
-            .frame(width: 430, alignment: .leading)
+            .frame(minWidth: 430, alignment: .leading)
 
             VStack(alignment: .trailing, spacing: 6) {
                 Text(priceText)
-                    .font(.system(size: 17, weight: .bold, design: .monospaced))
+                    .font(.system(.body, design: .monospaced, weight: .bold))
                     .monospacedDigit()
                     .lineLimit(1)
                     .fixedSize()
                 statusBadge
             }
-            .frame(width: 120, alignment: .trailing)
+            .frame(minWidth: 120, alignment: .trailing)
         }
         .padding(.vertical, 8)
     }
@@ -144,12 +151,12 @@ struct ListingRow: View {
             VStack(alignment: .leading, spacing: 4) {
                 titleLine
                 Text(locationText)
-                    .font(.system(size: 12.5))
+                    .font(.system(.caption))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                 if !detailsText.isEmpty {
                     Text(detailsText)
-                        .font(.system(size: 11.5))
+                        .font(.system(.caption2))
                         .foregroundStyle(.tertiary)
                         .lineLimit(1)
                         .truncationMode(.tail)
@@ -159,13 +166,13 @@ struct ListingRow: View {
 
             VStack(alignment: .trailing, spacing: 6) {
                 Text(priceText)
-                    .font(.system(size: 17, weight: .bold, design: .monospaced))
+                    .font(.system(.body, design: .monospaced, weight: .bold))
                     .monospacedDigit()
                     .lineLimit(1)
                     .fixedSize()
                 statusBadge
             }
-            .frame(width: 110, alignment: .trailing)
+            .frame(minWidth: 110, alignment: .trailing)
         }
         .padding(.vertical, 6)
     }
@@ -184,7 +191,7 @@ struct ListingRow: View {
     private var titleLine: some View {
         HStack(spacing: 6) {
             Text(listing.name)
-                .font(.system(size: 15.5, weight: .semibold))
+                .font(.system(.subheadline, weight: .semibold))
                 .lineLimit(1)
                 .truncationMode(.tail)
 
@@ -196,11 +203,11 @@ struct ListingRow: View {
             let now = Date()
             if listing.isNew(asOf: now), let age = listing.ageText(asOf: now) {
                 Text("NEW · \(age)")
-                    .font(.system(size: 9, weight: .heavy, design: .monospaced))
+                    .font(.system(.caption2, design: .monospaced, weight: .heavy))
                     .tracking(0.5)
                     // 之前硬编码 RGB 没有 dark 变体；改用语义 token，
                     // Asset Catalog 已配好亮/暗双值。底色同色相不同明度。
-                    .foregroundStyle(Color.statusBook)
+                    .foregroundStyle(Color.statusBook.onTint(in: scheme))
                     .padding(.horizontal, 5)
                     .padding(.vertical, 1)
                     .background(Color.statusBook.opacity(0.14),
@@ -237,16 +244,16 @@ struct ListingRow: View {
     private func detailColumn(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label.uppercased())
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                .font(.system(.caption2, design: .monospaced, weight: .bold))
                 .tracking(0.5)
                 .foregroundStyle(columnLabelStyle)
             Text(value)
-                .font(.system(size: 12.5, weight: .medium))
+                .font(.system(.caption, weight: .medium))
                 .foregroundStyle(value == "—" ? placeholderStyle : .secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
         }
-        .frame(width: 88, alignment: .leading)
+        .frame(minWidth: 88, alignment: .leading)
     }
 
     /// 走包里的 ``Listing/priceText``，这里不再自己格式化。
@@ -272,8 +279,8 @@ struct ListingRow: View {
                 .fill(info.color)
                 .frame(width: 6, height: 6)
             Text(info.label)
-                .font(.system(size: 11, weight: .bold))
-                .foregroundStyle(info.color)
+                .font(.system(.caption2, weight: .bold))
+                .foregroundStyle(info.color.onTint(in: scheme))
         }
         .padding(.leading, 7)
         .padding(.trailing, 9)

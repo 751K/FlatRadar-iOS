@@ -18,6 +18,15 @@ import SwiftUI
 /// - iPad：`FlatRadar iPad - Sign in.dc.html` A（竖 834×1194）/ B（横 1194×834）/ C（横深色）
 ///
 /// CSS px 和 SwiftUI pt 在这些稿子里是 1:1（稿子按点阵尺寸画的），所以数值直接搬。
+///
+/// 这些字号怎么跟随系统字号
+/// ----------------------
+/// 表里的字号是**稿子上的绝对值**（27 / 38 / 40、10.5、14……），一个都不落在
+/// iOS 的标准字阶上，硬套 `.caption2` / `.title` 那套等于把设计稿改了。所以视图
+/// 里不写 `.font(.system(size:))`——那个完全不理会「辅助功能 → 字体大小」——而是
+/// 走 ``ScaledFont``（`.scaledFont(_:relativeTo:)`）：保住稿子上的数值，同时让它
+/// 按 `relativeTo:` 那一档的比例缩放。这一屏是新用户看到的**第一屏**，把字号调大
+/// 的人从这里就开始读。
 nonisolated struct LoginMetrics {
 
     // MARK: - 结构

@@ -293,7 +293,14 @@ struct MainTabView: View {
             .accessibilityLabel(label)
     }
 
+    /// 把「当前是哪种形态」写回 coordinator，并把 selection 规范化。
+    ///
+    /// 这个文件是**唯一**量得到内容宽度的地方（外层那个 `GeometryReader`），
+    /// 所以形态判断也只能出在这里。别的视图从前各自用
+    /// `UIDevice.current.userInterfaceIdiom == .pad` 猜，而那个判据在窄窗口的
+    /// iPad 上是错的——见 ``NavigationCoordinator/usesCompactTabs``。
     private func normalizeSelection(_ tab: AppTab, compact: Bool) {
+        coord.usesCompactTabs = compact
         if compact {
             switch tab {
             case .listings:
