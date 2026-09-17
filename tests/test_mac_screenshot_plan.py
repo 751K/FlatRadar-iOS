@@ -202,3 +202,36 @@ def test_ci_strips_exactly_the_profile_bound_entitlements():
         f"而 CI 剥离的是 {sorted(stripped)}。"
         f"少剥的（{sorted(needs_profile - stripped)}）会让 Mac 截图整轮挂在"
         f" app.launch()；多剥的（{sorted(stripped - needs_profile)}）是清单没跟着删。")
+
+
+def test_pre_xcodebuild_guards_every_ci_variable():
+    """`ci_pre_xcodebuild.sh` 里每个 `CI_*` 都必须带 `:-` 默认值。
+
+    这个脚本**每个 xcodebuild action 跑一遍**，而一次 TEST action 是两趟：
+    build-for-testing，然后 test-without-building。Xcode Cloud 在这两趟里定义的
+    `CI_*` 变量**不是同一组**——`CI_PRIMARY_REPOSITORY_PATH` 只有第一趟有。
+
+    脚本开头是 `set -u`，所以第二趟引用它就是立即 exit 1。build 353 正是这样：
+    第一趟已经把 entitlements 剥干净了，第二趟一句
+
+        ci_pre_xcodebuild.sh: line 141: CI_PRIMARY_REPOSITORY_PATH: unbound variable
+
+    把整轮判成 FAILED。日志里那行在 ci_pre_xcodebuild.log 的最后一行，而 ASC 的
+    issues 接口只报「Running ci_pre_xcodebuild.sh script failed (exited with
+    code 1)」——不下日志根本看不出是哪个变量。
+
+    `ci_post_clone.sh` 不在此列：它整个构建只跑一次，且跑在
+    `CI_PRIMARY_REPOSITORY_PATH` 确定存在的那个点上。
+    """
+    script = (ROOT / "ci_scripts" / "ci_pre_xcodebuild.sh").read_text(encoding="utf-8")
+    assert re.search(r"^set -[a-z]*u", script, flags=re.M), (
+        "脚本不再是 set -u 了——这条测试的前提没了，确认是有意的再删掉它")
+
+    # 注释里的 CI_xxx 是说明文字，不是引用，跳过。
+    code = "\n".join(l for l in script.splitlines() if not l.lstrip().startswith("#"))
+    bare = set(re.findall(r"\$(CI_[A-Z_]+)\b", code))          # $CI_FOO
+    bare |= set(re.findall(r"\$\{(CI_[A-Z_]+)\}", code))       # ${CI_FOO} 无默认值
+    assert not bare, (
+        f"这些 CI_ 变量没带 `:-` 默认值：{sorted(bare)}。"
+        "脚本每个 xcodebuild action 都会跑一遍，而各阶段定义的变量不是同一组——"
+        "set -u 下引用到没定义的那个会让整轮构建红，报错只说 'exited with code 1'。")

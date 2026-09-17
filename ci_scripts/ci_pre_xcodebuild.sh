@@ -46,6 +46,16 @@ DEVICES=(
   "iPad Pro 13-inch (M5) (16GB)"
 )
 
+# macOS 那条 workflow 不需要模拟器。build 350/353 上它照样把两台 iOS 模拟器
+# 启动了一遍再关掉，纯浪费——现在有实测值了（日志里 CI_PRODUCT_PLATFORM='macOS'），
+# 可以安全地跳过。
+#
+# 只认 'macOS' 这一个值就跳过，其余情况（包括变量为空）一律照跑——iOS 那套
+# 现在是好的，不能因为读不到变量就把 9:41 弄丢。
+if [ "${CI_PRODUCT_PLATFORM:-}" = "macOS" ]; then
+  echo "› [status-bar] 平台是 macOS，不需要模拟器，跳过"
+else
+
 echo "› [status-bar] 准备覆盖状态栏 9:41"
 
 for name in "${DEVICES[@]}"; do
@@ -88,6 +98,8 @@ for runtime, devices in data.get('devices', {}).items():
   # 关机。覆盖留在设备上，xcodebuild 待会按自己的流程重新启动。
   xcrun simctl shutdown "$udid" 2>/dev/null || true
 done
+
+fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # macOS 测试构建：把**需要描述文件授权**的 entitlement 剥掉。
@@ -138,13 +150,27 @@ done
 # entitlement 一个字都不能动——模拟器上那套现在是好的。
 # ─────────────────────────────────────────────────────────────────────────────
 
-MAC_ENTITLEMENTS="$CI_PRIMARY_REPOSITORY_PATH/FlatRadarMac/FlatRadarMac.entitlements"
+# 这个脚本**每个 xcodebuild action 都会跑一遍**——一次 TEST action 会跑两趟：
+# build-for-testing，然后 test-without-building。而 `CI_PRIMARY_REPOSITORY_PATH`
+# 只在第一趟有定义，第二趟是空的：build 353 就是这么挂的，
+#
+#     ci_pre_xcodebuild.sh: line 141: CI_PRIMARY_REPOSITORY_PATH: unbound variable
+#
+# （脚本开头 `set -u`）。第一趟其实已经剥干净了，第二趟纯属白跑——那时 app 早就
+# 构建并签好名了，改源文件毫无作用。所以只认 build-for-testing 这一趟，
+# 而且每个 CI_ 变量都带 `:-` 默认值，不让 set -u 再有机会。
+REPO_PATH="${CI_PRIMARY_REPOSITORY_PATH:-}"
 XCB_ACTION="${CI_XCODEBUILD_ACTION:-}"
 
 echo "› [entitlements] CI_XCODEBUILD_ACTION='${XCB_ACTION}' CI_PRODUCT_PLATFORM='${CI_PRODUCT_PLATFORM:-}'"
 
 case "$XCB_ACTION" in
-  *test*)
+  build-for-testing)
+    if [ -z "$REPO_PATH" ]; then
+      echo "› [entitlements] CI_PRIMARY_REPOSITORY_PATH 为空，跳过"
+      exit 0
+    fi
+    MAC_ENTITLEMENTS="$REPO_PATH/FlatRadarMac/FlatRadarMac.entitlements"
     if [ ! -f "$MAC_ENTITLEMENTS" ]; then
       echo "› [entitlements] 找不到 $MAC_ENTITLEMENTS"
       exit 1
@@ -176,7 +202,7 @@ print("› [entitlements] 保留：%s" % ", ".join(sorted(ent)))
 PYEOF
     ;;
   *)
-    echo "› [entitlements] 非测试构建，保留完整 entitlements"
+    echo "› [entitlements] 不是 build-for-testing（是 '${XCB_ACTION}'），不动 entitlements"
     ;;
 esac
 
