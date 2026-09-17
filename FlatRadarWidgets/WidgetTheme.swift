@@ -113,17 +113,20 @@ struct WidgetPalette {
     ///
     /// | | 来源 |
     /// |---|---|
-    /// ⚠️ **`paper` 在深色下其实用不上**：真摆到桌面上，稿子那个 `#16212B`
-    /// 是块偏蓝的实心底，旁边的系统组件（日历、天气）是中性近黑的半透材质，
-    /// 一眼看出是外人。所以深色改由系统铺底（见 ``WidgetSurface``），
-    /// 这个值只留作渲染脚本的背景和万一要回退时的记录。
+    /// ⚠️ **`paper` 没有照稿子来。** 稿子 4b 给的是 `#16212B`，一个偏蓝的深色；
+    /// 真摆到桌面上，旁边的日历、天气是中性近黑，这一格是蓝灰，一眼是外人。
+    /// 换成中性的 `#1C1C1E`——Apple 深色下那一档面色的标准值。
     ///
-    /// | paper / ink / muted / accent / status / lottery | 稿子上有 |
+    /// 中途还错走过一版 `.fill.tertiary`（以为那是"系统给小组件的材质"）：
+    /// 那个填充几乎透明，画出来是块被壁纸透穿的淡紫，比原来更不像。
+    /// 把五个候选并排画在同一张壁纸上才看出来——光读文档看不出它有多透。
+    ///
+    /// | ink / muted / accent / status / lottery | 稿子上有 |
     /// | up（绿） | 按红 `#AD3E39 → #E2706B` 那个提亮幅度推的 |
     /// | live（绿点） | Apple 自己的 systemGreen 深色配对 `#30D158` |
     /// | fill / barIdle / rowA / rowB / pinIdle | 和浅色一样的构造法：ink 压低透明度 |
     static let dark = WidgetPalette(
-        paper:   Color(hex: 0x16212B),
+        paper:   Color(hex: 0x1C1C1E),
         ink:     Color(hex: 0xF3F0E8),
         muted:   Color(hex: 0xA9B3BC),
         accent:  Color(hex: 0xE2706B),
