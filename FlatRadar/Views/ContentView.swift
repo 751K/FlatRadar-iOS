@@ -18,7 +18,16 @@ struct ContentView: View {
 
     var body: some View {
         Group {
-            if auth.isAuthenticated {
+            // 恢复会话期间既不显示主界面也不显示登录页。
+            //
+            // Mac 上这一条是必须的——登录页的密码框会触发系统的自动填充弹窗，
+            // 而那个弹窗在主界面换上来之后还浮着（见
+            // ``AuthStore/isRestoringSession``）。iOS 上没有那个弹窗，但每次冷
+            // 启动都闪一下登录页同样是错的：用户明明是登录着的。
+            if auth.isRestoringSession {
+                SessionRestoreView()
+                    .transition(.opacity)
+            } else if auth.isAuthenticated {
                 MainTabView()
                     .transition(.opacity)
             } else {

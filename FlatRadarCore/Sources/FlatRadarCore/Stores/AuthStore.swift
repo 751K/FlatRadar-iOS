@@ -21,9 +21,39 @@ enum DeviceName {
 public final class AuthStore {
 
     /// 隐式 init 随 `public` 一起变成 internal，宿主 app 构造不了。
-    /// 这些 store 的属性全有默认值，空实现与迁移前的隐式构造等价。
-    public init() {}
+    ///
+    /// 这里**不是**空实现：`isRestoringSession` 必须在第一帧之前就定好，
+    /// 理由见那个属性。
+    public init() {
+        isRestoringSession = Self.hasPersistedSession(server: server)
+    }
+
     public var isAuthenticated = false
+
+    /// 启动时的会话恢复还没跑完——**界面这段时间不该显示登录表单**。
+    ///
+    /// 要解决什么
+    /// ----------
+    /// 宿主那句 `if auth.isAuthenticated { 主界面 } else { 登录页 }` 里，
+    /// `isAuthenticated` 一开始是 false，而 ``restoreSession()`` 挂在 `.task`
+    /// 上、里面还要等一次 `getMe()` 网络往返。SwiftUI 先求值 `body` 再跑
+    /// `.task`，所以**冷启动必定先渲染一次登录页**，持续一整个网络往返。
+    ///
+    /// 在 Mac 上这不只是"闪一下"：登录页里那个 `.textContentType(.password)`
+    /// 的输入框会成为新窗口的初始第一响应者，macOS 于是弹出「密码」自动填充
+    /// 建议。等主界面换上来时，那个弹窗是**独立的系统窗口**，不会跟着消失——
+    /// 表现就是"自动登录进去了，房源列表上却浮着一个选密码的框"。
+    ///
+    /// 为什么在 `init` 里定，而不是让它从 false 开始
+    /// -----------------------------------------
+    /// 从 false 开始的话，第一帧仍然是登录页，只是短一点——而弹出自动填充
+    /// 只需要那一帧。所以在构造时就同步问一句「钥匙串里有没有 token」：
+    /// 有就说明马上会有一次恢复，先按"恢复中"渲染；没有就直接是登录页，
+    /// 那种情况下弹自动填充**正是应该的**。
+    ///
+    /// 读的是普通的 token 条目，不带访问控制，不会弹系统认证框——那条受保护的
+    /// 生物识别凭据由 ``BiometricAuthService`` 管，两回事。
+    public private(set) var isRestoringSession = false
     public var role: Role = .guest
     public var userInfo: UserInfo?
     public var isLoading = false
@@ -67,7 +97,21 @@ public final class AuthStore {
 
     // MARK: - Restore Session
 
+    /// 钥匙串（或旧的 UserDefaults 回退位）里有没有一份可以恢复的会话。
+    ///
+    /// 判据和 ``restoreSession()`` 取 token 的那两行**必须一致**：这边说有、
+    /// 那边取不到的话，界面会停在"恢复中"等一个永远不会发生的结果。
+    /// `AuthStoreRestoreTests` 守着这一条。
+    static func hasPersistedSession(server: String) -> Bool {
+        KeychainManager.load(server: server) != nil
+            || UserDefaults.standard.string(forKey: "auth_token") != nil
+    }
+
     public func restoreSession() async {
+        // 不管从哪条路返回，"恢复中"都要落下：提前 return 的那两条同样算数，
+        // 否则界面永远停在占位屏上。
+        defer { isRestoringSession = false }
+
         // 截图测试：要求 LoginView 时跳过恢复，否则 keychain 残留的 token
         // 会让 ContentView 直接展示 Dashboard。生产 build 永远不会进这个分支。
         if CommandLine.arguments.contains("UI_TEST_SHOW_LOGIN") {

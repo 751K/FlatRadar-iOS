@@ -266,6 +266,35 @@ private final class SessionReportState {
 // MARK: - 窗口
 
 /// 按登录态分流：登录了看表格，没登录看登录页。
+/// 恢复会话期间的占位。
+///
+/// 它存在的唯一理由是**这段时间不要把登录表单摆出来**：那个
+/// `.textContentType(.password)` 的输入框一旦成为新窗口的第一响应者，macOS
+/// 就会弹出密码自动填充建议，而它是一个独立的系统窗口，主界面换上来之后
+/// 它还浮在房源列表上面。详见 ``AuthStore/isRestoringSession``。
+///
+/// 转圈**延后 0.6 秒**才出现：本机恢复通常两三百毫秒就完了，让它闪一下再
+/// 消失比不转还晃眼。真等久了（网络慢）才需要告诉用户"在做事"。
+private struct SessionRestorePane: View {
+    @State private var showsSpinner = false
+
+    var body: some View {
+        ZStack {
+            Color(nsColor: .windowBackgroundColor)
+            if showsSpinner {
+                ProgressView()
+                    .controlSize(.large)
+                    .transition(.opacity)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .task {
+            try? await Task.sleep(for: .milliseconds(600))
+            withAnimation(.easeIn(duration: 0.2)) { showsSpinner = true }
+        }
+    }
+}
+
 private struct RootView: View {
     @Environment(AuthStore.self) private var auth
     @Environment(PushStore.self) private var push
@@ -388,7 +417,11 @@ private struct RootView: View {
 
     var body: some View {
         Group {
-            if auth.isAuthenticated {
+            // 恢复会话的那一小会儿**不能显示登录表单**——理由和那个弹出来的
+            // 密码建议框见 ``AuthStore/isRestoringSession``。
+            if auth.isRestoringSession {
+                SessionRestorePane()
+            } else if auth.isAuthenticated {
                 MainWindow()
             } else {
                 SignInPane()
