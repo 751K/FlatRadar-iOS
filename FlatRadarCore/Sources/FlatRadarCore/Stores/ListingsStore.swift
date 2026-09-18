@@ -57,9 +57,9 @@ public final class ListingsStore {
     private var currentContract: String?
     private var currentEnergy: String?
 
-    /// 当前排序。发给后端，不在本地排——本地只能排已加载的那几页，
-    /// 得到的是「已加载结果里最便宜的」而不是「全部里最便宜的」。
-    /// 见 ``ListingSort``。
+    /// 当前排序。发给后端，**只在全量已在手时**才允许本地重排——只拉了几页时本地
+    /// 排出来的是「已加载结果里最便宜的」而不是「全部里最便宜的」。
+    /// 见 ``ListingSort``、``reorderLocally(_:)``。
     public private(set) var sort: ListingSort = .newestFirst
 
     /// 已收录的 id，用于跨页去重。
@@ -198,8 +198,26 @@ public final class ListingsStore {
         if hasMore && !loadMoreFailed { loadMoreFailed = true }
     }
 
-    /// 换排序。重置分页从第一页重拉——**不能**只把已加载的重排，
-    /// 那正是这次要修掉的 bug。
+    /// 结果集已经**全部**在手时换排序：按服务端同一套规则在本地重排，不发请求。
+    ///
+    /// Mac 会把整个结果集拉进内存（``loadAllPages(maxPages:)``），这时点列头再从第一页
+    /// 重拉就是白拉——两千条每页五百是四个请求，外加解码（代码审查）。顺序和服务端
+    /// 逐条一致，见 ``ServerListingOrder``；所以之后刷新，行不会跳。
+    ///
+    /// 返回 `false` 表示条件不满足（还有没拉的页、正在请求、上次翻页失败），
+    /// 调用方照旧走 ``setSort(_:)`` 去服务端排。只拉了几页的 iOS 永远走那条路。
+    @discardableResult
+    public func reorderLocally(_ newSort: ListingSort) -> Bool {
+        guard !hasMore, !isLoading, !isLoadingMore, !loadMoreFailed else { return false }
+        guard newSort != sort else { return true }
+        // 之后的刷新 / 翻页都按新排序去问服务端，和眼前的顺序接得上。
+        sort = newSort
+        listings = ServerListingOrder.sorted(listings, by: newSort)
+        return true
+    }
+
+    /// 换排序。重置分页从第一页重拉——结果集没拉全时**不能**只把已加载的重排，
+    /// 那正是 iOS 当年那个 bug。全量在手时先试 ``reorderLocally(_:)``。
     public func setSort(_ newSort: ListingSort) async {
         guard newSort != sort else { return }
         await refresh(sort: newSort)

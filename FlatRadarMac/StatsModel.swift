@@ -34,7 +34,16 @@ final class StatsModel {
         didSet { guard days != oldValue else { return }; Task { await load(force: true) } }
     }
 
-    private(set) var charts: [String: [ChartEntry]] = [:]
+    private(set) var charts: [String: [ChartEntry]] = [:] {
+        didSet { revision &+= 1 }
+    }
+    /// `charts` 每变一次加一。右栏那张图的明细靠它跟着换（见 `StatsPane`）——图是
+    /// 一张张到的，只盯 ``chartsWindow`` 的话，同一个窗里后到的那几张换不过去。
+    private(set) var revision = 0
+
+    /// 这一趟还在路上的那几张。卡片位置先画占位，免得图一张张到的时候整屏跳动。
+    private(set) var pendingKeys: Set<String> = []
+
     private(set) var isLoading = false
     private(set) var failed = false
 
@@ -104,34 +113,49 @@ final class StatsModel {
         latest = (window, mine)
         isLoading = true
         failed = false
+        pendingKeys = Set(Self.keys)
 
         // 十二个请求一起发。都是公开接口（`bearer_optional`），互不依赖，
         // 串行发的话最慢的那个会把整屏拖到十几倍的等待。
         let fetch = fetchChart
         let dayCount = window.rawValue
-        var fetched: [String: [ChartEntry]] = [:]
+        var arrived: Set<String> = []
         await withTaskGroup(of: (String, [ChartEntry]?).self) { group in
             for key in Self.keys {
                 group.addTask { (key, await fetch(key, dayCount)) }
             }
             for await (key, data) in group {
+                // 期间又换过窗（或者又点了一次刷新）：这一趟作废，剩下的不用等了。
+                // `pendingKeys` 和 `isLoading` 也不碰——它们现在归更新的那一趟管。
+                guard latest?.generation == mine else {
+                    group.cancelAll()
+                    return
+                }
+                pendingKeys.remove(key)
                 guard let data else { continue }
+                // **到一张画一张。** 原先先攒进局部字典、十二张全回来才一起写：
+                // 十一张早就到了，只要剩一张慢，整屏还是转圈（代码审查）。
+                if chartsWindow != window {
+                    // 新窗的第一张到了：旧窗那批整批撤下。混着画就是 7 天和 30 天
+                    // 拼在同一屏上，比晚一点显示糟得多。
+                    charts = [:]
+                    chartsWindow = window
+                }
                 // 合并 + 排序在包里（``ChartPresentation``），两端同一份。
-                fetched[key] = ChartPresentation.display(data, forKey: key)
+                charts[key] = ChartPresentation.display(data, forKey: key)
+                arrived.insert(key)
             }
         }
 
-        // 期间又换过窗（或者又点了一次刷新）：这批作废，什么都不碰。
-        // `isLoading` 也不碰——它现在归更新的那次请求管，这里放下会让界面以为
-        // 已经取完了。
         guard latest?.generation == mine else { return }
         latest = nil
         isLoading = false
+        pendingKeys = []
 
         // **一张都没拿到才算失败。** 拿到一半就画一半——十二张图里某一张
         // 挂了不该让整屏变成错误页，而 `getPublicChart` 对未知 key 会 404，
         // 后端加减图表时也不该整屏炸。
-        if fetched.isEmpty {
+        if arrived.isEmpty {
             failed = true
             // 屏上那批是别的窗的，就不能留着：Picker 已经指着新窗了，留下来就是
             // 拿旧窗的图冒充新窗。同一个窗刷新失败则照旧留着，好过一片空白。
@@ -139,9 +163,9 @@ final class StatsModel {
                 charts = [:]
                 chartsWindow = nil
             }
-        } else {
-            charts = fetched
-            chartsWindow = window
+        } else if charts.keys.contains(where: { !arrived.contains($0) }) {
+            // 同一个窗刷新：这一趟没拿到的那几张不留旧的，和原先整批替换的结果一致。
+            charts = charts.filter { arrived.contains($0.key) }
         }
     }
 }

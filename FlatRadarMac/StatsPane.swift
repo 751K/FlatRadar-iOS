@@ -57,17 +57,18 @@ struct StatsPane: View {
     var body: some View {
         content
             .task { await stats.load() }
-            // 换了时间窗、新数据落地之后，右栏那张图的明细也要换成新窗的。
+            // 新数据落地之后，右栏那张图的明细也要换成新的。
             //
             // `StatsSelection` 存的是**整份数据**（见它的注释），不会自己跟着变。
             // 不补这一步的话，左边图已经是 7 天，右栏还在列 30 天的数字。
-            .onChange(of: stats.chartsWindow) { _, _ in
+            // 盯的是 `revision`：图现在是一张张到的，选中的那张可能比换窗晚到。
+            .onChange(of: stats.revision) { _, _ in
                 guard let chart = model.statsChart else { return }
                 if let entries = stats.charts[chart.key], !entries.isEmpty {
-                    model.statsChart = StatsSelection(key: chart.key, title: chart.title,
-                                                      entries: entries)
-                } else {
-                    model.statsChart = nil
+                    let fresh = StatsSelection(key: chart.key, title: chart.title, entries: entries)
+                    if fresh != chart { model.statsChart = fresh }
+                } else if !stats.pendingKeys.contains(chart.key) {
+                    model.statsChart = nil      // 这一趟没有这张图了
                 }
             }
     }
@@ -178,6 +179,11 @@ struct StatsPane: View {
                                                   title: StatsCopy.title(key),
                                                   entries: entries)
             }
+        } else if stats.pendingKeys.contains(key) {
+            // 还在路上的那张先占住位置：图一张张到，不占位的话网格每到一张就重排一次。
+            ChartPlaceholderCard(title: StatsCopy.title(key),
+                                 caption: StatsCopy.caption(key),
+                                 wide: isWide(key))
         }
     }
 

@@ -231,14 +231,44 @@ final class AppFeed {
 
     // MARK: - 取数
 
-    /// 启动时拉一次共享数据。幂等：第二个窗口出现时再调不会重复发请求。
+    /// 这一份共享数据是为哪个会话加载的，以及那一趟加载本身。
+    ///
+    /// 留着**跑完的**任务当"已加载"标记：再来的调用者 `await` 一个已完成的任务会
+    /// 立刻返回，不发任何请求。会话结束时清掉（``signedOut()``），换了人就重新加载。
+    private var sharedLoad: (session: String?, task: Task<Void, Never>)?
+
+    /// 每个主窗口出现时拉一次共享数据——**同一个会话里只真正拉一次**。
+    ///
+    /// 名字一直叫 loadOnce，注释也一直写着"幂等"，可原先既没有"已经加载过"的标记，
+    /// 也没有把进行中的那一趟合并：⌘N 开第二个窗口，摘要、走势图、通知、匹配数全部
+    /// 再请求一遍，通知请求连进行中保护都没有（代码审查）。
+    ///
+    /// 现在：同一个会话里，第一个窗口发起那一趟，之后的窗口等它（还在跑就等它跑完，
+    /// 跑完了就直接返回）。要新数据走刷新（工具栏 / ⌘R / 菜单栏面板），那是另一个入口。
     func loadOnce(auth: AuthStore) async {
-        async let stats: Void = summary.load()
-        async let feed: Void = alerts.fetch()
-        async let count: Void = refreshMatchCount()
-        async let days: Void = fetchCalendarIfWidgetInstalled()
-        _ = await (stats, feed, count, days)
-        publishWidgetSnapshot(auth: auth)
+        await loadShared(session: auth.sessionIdentity) { [weak self] in
+            guard let self else { return }
+            async let stats: Void = summary.load()
+            async let feed: Void = alerts.fetch()
+            async let count: Void = refreshMatchCount()
+            async let days: Void = fetchCalendarIfWidgetInstalled()
+            _ = await (stats, feed, count, days)
+            publishWidgetSnapshot(auth: auth)
+        }
+    }
+
+    /// "同一个会话只跑一趟、进行中就等它"这条规则本身。
+    ///
+    /// 收闭包是为了能测（和 ``restoreOnce(_:)`` 同一个理由）：规则和"加载什么"无关，
+    /// 测试传一个只记数、能扣住的闭包，就不必真去请求网络。
+    func loadShared(session: String?, _ work: @escaping @MainActor () async -> Void) async {
+        if let current = sharedLoad, current.session == session {
+            await current.task.value
+            return
+        }
+        let task = Task { await work() }
+        sharedLoad = (session, task)
+        await task.value
     }
 
     /// 只有桌面上真摆着日历那一格时才去拉 `/calendar`。
@@ -294,6 +324,10 @@ final class AppFeed {
     /// 桌面上那一格也是账户数据，而且**比窗口更显眼**——窗口里清干净了，
     /// 上一个账号的匹配数还挂在桌面上，那条判据就没做完。
     func signedOut() {
+        // 上一个会话那一趟作废：还在跑的取消掉，跑完的"已加载"标记也清掉，
+        // 下一个登录进来的人会重新加载自己的数据。
+        sharedLoad?.task.cancel()
+        sharedLoad = nil
         alerts.disconnectStream()
         alerts.clear()
         recent.clear()

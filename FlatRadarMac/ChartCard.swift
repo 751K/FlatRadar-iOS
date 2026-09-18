@@ -291,3 +291,41 @@ struct ChartCard: View {
         ChartPresentation.color(forKey: key, label: entry.label) ?? Theme.chart
     }
 }
+
+/// 还没到的那张图的位置。和 ``ChartCard`` 一样大、一样的底，只把图换成一个转圈。
+///
+/// 统计屏的十二张图现在是**到一张画一张**（见 `StatsModel.load`）。不占位的话，
+/// 网格每到一张就重排一次，已经在看的那张会被挤到别处去。
+struct ChartPlaceholderCard: View {
+
+    let title: String
+    let caption: String?
+    let wide: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                if let caption {
+                    Text(caption)
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                        .lineLimit(1)
+                }
+            }
+            ProgressView()
+                .controlSize(.small)
+                .frame(maxWidth: .infinity)
+                .frame(height: wide ? 150 : 132)
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 10))
+        .overlay {
+            RoundedRectangle(cornerRadius: 10).strokeBorder(Color.primary.opacity(0.07), lineWidth: 1)
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(title), loading")
+    }
+}

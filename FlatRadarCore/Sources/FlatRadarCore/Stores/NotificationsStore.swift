@@ -37,10 +37,6 @@ public final class NotificationsStore {
     }
     private var requestGeneration: UInt64 = 0
     private let pageSize = 50
-    private let decoder: JSONDecoder = {
-        let d = JSONDecoder()
-        return d
-    }()
 
     // SSE 后台任务句柄；登出 / 切后台时取消
     private var streamTask: Task<Void, Never>?
@@ -161,9 +157,11 @@ public final class NotificationsStore {
             try await markReadRequest(nil)
             guard generation == requestGeneration, !Task.isCancelled else { return }
             // Optimistic local update
-            for i in notifications.indices {
-                notifications[i] = notifications[i].markedRead()
-            }
+            //
+            // 整批换一次，不逐条赋值：逐条写的话，被观察的数组每条都发一次变更，
+            // 两千条就是两千次。已读的原样留着；`markedRead()` 本身也只翻一个字段，
+            // 不再重跑分类、正则和日期解析（见那里的说明）。
+            notifications = notifications.map { $0.isRead ? $0 : $0.markedRead() }
             unreadCount = 0
             revision &+= 1
         } catch {
@@ -263,7 +261,12 @@ public final class NotificationsStore {
             try Task.checkCancellation()
             switch event {
             case .data(let payload):
-                handleSSEData(payload)
+                // 解码放到主线程外：一批里每条都要分类、跑标题正则、解析日期
+                // （无时区的格式要逐个试备用解析器），原先整批都在主线程上做。
+                // 在这里 await，事件仍是一批一批按顺序处理的。
+                let decoded = await Self.decodeBatch(payload)
+                try Task.checkCancellation()
+                handleSSEData(decoded, raw: payload)
             case .keepalive:
                 continue   // 保活心跳，无操作
             case .retry:
@@ -295,10 +298,16 @@ public final class NotificationsStore {
         }
     }
 
-    private func handleSSEData(_ payload: String) {
-        guard let bytes = payload.data(using: .utf8) else { return }
+    /// SSE 的一批 `data:`，在**主线程外**解码。
+    @concurrent
+    nonisolated static func decodeBatch(_ payload: String) async -> Result<[NotificationItem], Error> {
+        Result { try JSONDecoder().decode([NotificationItem].self, from: Data(payload.utf8)) }
+    }
+
+    /// 解码好的一批并进列表。这一步碰的是界面状态，留在主线程。
+    private func handleSSEData(_ decoded: Result<[NotificationItem], Error>, raw payload: String) {
         do {
-            let incoming = try decoder.decode([NotificationItem].self, from: bytes)
+            let incoming = try decoded.get()
             if incoming.isEmpty { return }
             let existing = Set(notifications.map(\.id))
             let fresh = incoming.filter { !existing.contains($0.id) }

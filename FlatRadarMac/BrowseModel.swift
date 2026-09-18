@@ -284,11 +284,21 @@ final class BrowseModel {
         reconcileSelection()
     }
 
-    /// 列头点击 → 换服务端排序 → 从第一页重拉。
+    /// 列头点击 → 换排序。
     ///
-    /// 不能只把已加载的重排：那是 iOS 上刚修掉的那个 bug 的 Mac 版本。
+    /// 全量已经在手（Mac 的常态）：按服务端同一套规则**本地重排**，不发请求。
+    /// 原先这里总是从第一页重拉、再顺序拉完所有页——两千条每页五百就是四个请求，
+    /// 来回切几次排序就是几倍的请求和解码（代码审查）。顺序和服务端逐条一致，
+    /// 见 `ServerListingOrder`。
+    ///
+    /// 没拉全（还在翻页、翻页失败）才去服务端排：那时本地只能排已加载的那几页，
+    /// 正是 iOS 当年那个 bug。
     func applySortOrder() async {
         guard let c = sortOrder.first else { return }
+        if listings.reorderLocally(c.serverSort) {
+            reconcileSelection()
+            return
+        }
         await listings.setSort(c.serverSort)
         await listings.loadAllPages()
         reconcileSelection()
@@ -390,13 +400,14 @@ final class BrowseModel {
 
 /// 表格列头用的排序标签。
 ///
-/// **它不做比较。** `compare` 恒返回 `.orderedSame`，因为排序已经由服务端完成
-/// （`GET /listings?sort=`，见 `FlatRadarCore.ListingSort`）。SwiftUI 的 `Table`
-/// 要求列头带一个 `SortComparator` 才肯画箭头、才肯把点击反馈到 `sortOrder`，
-/// 所以这里提供一个只携带 `key` 的空壳。
+/// **它不做比较。** `compare` 恒返回 `.orderedSame`：真正的顺序要么来自服务端
+/// （`GET /listings?sort=`），要么在全量已在手时由 `ListingsStore.reorderLocally`
+/// 按服务端同一套规则重排（`ServerListingOrder`）。SwiftUI 要求列头带一个
+/// `SortComparator` 才肯画箭头、才肯把点击反馈到 `sortOrder`，所以这里提供一个
+/// 只携带 `key` 的空壳。
 ///
-/// 写成"真比较"反而是错的：那样点列头会先本地排一遍已加载的、再被服务端结果覆盖，
-/// 中间闪一下；而且一旦将来分页没拉全，本地那次排序就是错的顺序。
+/// 写成"真比较"反而是错的：那是另一套规则，和服务端的顺序对不上（未知值放哪、
+/// 并列怎么排），一刷新行就跳。
 struct ListingColumnComparator: SortComparator, Hashable {
 
     var key: ListingSortKey

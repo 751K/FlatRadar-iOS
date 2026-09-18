@@ -10,7 +10,8 @@ public nonisolated struct NotificationItem: Decodable, Identifiable, Equatable, 
     public let body: String
     public let url: String
     public let listingID: String
-    let read: Int
+    /// `var` 只为 ``markedRead()``：标已读只该改这一个字段，见那里的说明。
+    private(set) var read: Int
     /// Decode 时计算一次，后续访问 O(1)，避免每次 filter 都重复做 lowercased + contains。
     public let kind: Kind
 
@@ -63,10 +64,16 @@ public nonisolated struct NotificationItem: Decodable, Identifiable, Equatable, 
 
     public var isRead: Bool { read != 0 }
 
+    /// 同一条通知，只把已读位翻过来。
+    ///
+    /// **复制，不重建。** 原先这里走上面那个手动 init：分类、标题正则、日期解析全部
+    /// 重跑一遍——而标已读根本不改变它们。「全部已读」一次就是整批重建，两千条时
+    /// 标准 ISO 日期约 40ms、无时区格式（要逐个试备用解析器）约 135ms，全在主线程
+    /// 上（代码审查）。
     func markedRead() -> NotificationItem {
-        NotificationItem(id: id, createdAt: createdAt, type: type,
-                         title: title, body: body, url: url,
-                         listingID: listingID, read: 1)
+        var copy = self
+        copy.read = 1
+        return copy
     }
 
     /// 纯函数：title → 去前缀标题。decode 时调一次，结果存进 ``listingTitleHint``。
