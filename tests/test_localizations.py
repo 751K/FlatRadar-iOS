@@ -152,16 +152,16 @@ IPAD_TABS = ["Dashboard", "Listings", "Map", "Calendar", "Alerts", "Settings"]
 #:
 #:     es 58（Panel de control / Configuración） build 386 分页
 #:     nl 55（Advertenties / Instellingen）      build 386 放下、build 388 分页
-#:     en 42、es 改短后 41                        两轮都放下
+#:     en 42                                     build 390 也分页了一次
 #:
-#: 分页时 Alerts 和 Settings 落到第二页——截图测试找不到这两个 tab，真实用户
-#: 也得先点「下一页」才看得见它们。55 已经证明是临界值（同一份文案两轮结果
-#: 不同，大概和 Alerts 上的未读角标有关），所以上限取改短后 nl 的 47，
-#: 留出余量。按字符数估是粗的，但方向对：只会在「可能放不下」时红。
+#: 所以**字符数保证不了一页放下**——分页还跟 Alerts 上的未读角标之类的东西
+#: 有关，截图测试已经改成会翻页（ScreenshotTests.findTab）。这条守的是另一件
+#: 事：标签别再变长。越长越常分页，而分页时 Alerts 和 Settings 在第二页，
+#: 真实用户得先点「下一页」才看得见。上限取现在最长的 nl（47）。
 IPAD_TAB_BUDGET = 47
 
 
-def test_ipad_tab_labels_fit_on_one_page():
+def test_ipad_tab_labels_do_not_grow():
     cat = _catalog(ROOT / "FlatRadar" / "Localizable.xcstrings")
     over = {}
     for lang in _target_languages(cat) | {"en"}:
@@ -172,7 +172,7 @@ def test_ipad_tab_labels_fit_on_one_page():
         if sum(len(x) for x in labels) > IPAD_TAB_BUDGET:
             over[lang] = labels
     assert not over, (
-        f"这些语言的 iPad tab 标签合计超过 {IPAD_TAB_BUDGET} 个字符，tab 栏会分页："
+        f"这些语言的 iPad tab 标签合计超过 {IPAD_TAB_BUDGET} 个字符，tab 栏会更常分页："
         f"{over}")
 
 
