@@ -118,6 +118,21 @@ final class MacScreenshotTests: XCTestCase {
            !u.isEmpty, !p.isEmpty {
             args += ["-UI_TEST_USER", u, "-UI_TEST_PASS", p]
         }
+        // 语言**显式**传给 app，不指望 test plan 的 language 选项自己转发过去。
+        //
+        // 那个选项在 iOS 模拟器上管用，在 macOS 上会不会带到被测 app 身上，
+        // 没有文档说清楚，而传不到的后果是五套英文图、全绿。自己传就不存在
+        // 这个问题：值来自每个 configuration 自己的 UI_TEST_LANGUAGE，
+        // 拍之前 `assertLanguage` 再核对 app 真的用上了它。
+        //
+        // `-AppleLanguages` 的值是 plist 数组的文本写法 `(zh-Hans)`。
+        if let lang = Self.expectedLanguage {
+            let languages = "(\(lang))"
+            args += ["-AppleLanguages", languages]
+            if let locale = env["UI_TEST_LOCALE"], !locale.isEmpty {
+                args += ["-AppleLocale", locale]
+            }
+        }
         app.launchArguments = args
         app.launch()
     }
@@ -187,8 +202,42 @@ final class MacScreenshotTests: XCTestCase {
         }
     }
 
+    /// 这一轮应该是什么语言。来自 test plan 里每个 configuration 的环境变量。
+    ///
+    /// 本地直接跑单条用例（不经过 MacScreenshots.xctestplan）时没有它，
+    /// 那就不传语言、也不核对，按系统语言拍。
+    private static var expectedLanguage: String? {
+        let v = ProcessInfo.processInfo.environment["UI_TEST_LANGUAGE"] ?? ""
+        return v.isEmpty ? nil : v
+    }
+
+    /// app 真的在用这一轮该用的语言。
+    ///
+    /// 五种语言各跑一轮，而「语言没到 app」的样子是**五套英文图、全绿**——
+    /// iOS 那边真出过。App 在截图模式下把自己挑中的 localization 写进窗口的
+    /// AX value（``ScreenshotMode/reportLanguage(on:)``），这里拿来比。
+    ///
+    /// 要轮询：那个值是 `WindowSizer` 的重试写进去的，窗口出现的那一刻未必
+    /// 已经写了。
+    private func assertLanguage(_ window: XCUIElement, _ step: String) {
+        guard let expected = Self.expectedLanguage else { return }
+        var actual = ""
+        for _ in 0..<40 {                       // 最多 ~10s
+            actual = window.value as? String ?? ""
+            if !actual.isEmpty { break }
+            Thread.sleep(forTimeInterval: 0.25)
+        }
+        XCTAssertFalse(actual.isEmpty,
+                       "\(step)：app 没报告界面语言（窗口的 AX value 是空的）。"
+                       + "这一轮本该是 \(expected)，但无法确认——截图可能是任何语言。")
+        XCTAssertEqual(actual, expected,
+                       "\(step)：这一轮是 \(expected)，app 用的却是 \(actual)。"
+                       + "要么 -AppleLanguages 没传到，要么 app 包里没有 \(expected) 的 .lproj。")
+    }
+
     /// 拍窗口，存成附件，并**当场验尺寸**。
     private func snap(_ window: XCUIElement, named step: String) {
+        assertLanguage(window, step)
         waitForStableFrame(window)
         // **把指针移到窗口中央再拍。**
         //

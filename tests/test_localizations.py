@@ -119,6 +119,30 @@ def test_every_user_facing_string_is_translated(path):
             f"  {k!r} 缺 {v}" for k, v in sorted(missing.items())[:40])
 
 
+@pytest.mark.parametrize("path", CATALOGS, ids=lambda p: p.name)
+def test_catalog_has_no_duplicate_keys(path):
+    """同一个 key 在目录里只能出现一次。
+
+    JSON 允许重复 key，读的一方各有各的取法——Python 的 ``json`` 留最后一个，
+    别的解析器可能留第一个。16b76c5 手工合并进来的 ``First seen`` /
+    ``Last seen`` 就各有两份：一份 stale、一份在用，**译文还不一样**
+    （es「Visto por primera vez」对「Visto primero」）。哪份生效取决于谁来读，
+    而本文件其它测试用 ``json.loads`` 只看得见后一份，前一份完全隐身。
+    """
+    dups: list[str] = []
+
+    def hook(pairs):
+        seen: set[str] = set()
+        for k, _ in pairs:
+            if k in seen:
+                dups.append(k)
+            seen.add(k)
+        return dict(pairs)
+
+    json.loads(path.read_text(), object_pairs_hook=hook)
+    assert not dups, f"{path.name} 里这些 key 出现了不止一次：{sorted(set(dups))}"
+
+
 def test_allowlist_has_no_stale_entries():
     """白名单里的 key 必须真的还在目录里。
 
@@ -140,6 +164,13 @@ def test_allowlist_has_no_stale_entries():
         # 「抽签/命运」那个义项。钉住，别再回去。
         ("Sort", "es", "Suerte"),
         ("Sort", "nl", "Lot"),
+        # Unpin 的西语位置上填的是中文（16b76c5 合进来的），Mac 列表右键菜单和
+        # 侧栏 Pinned 里都看得见。
+        ("Unpin", "es", "取消固定"),
+        # "book" 是房源状态「可订」（iOS Dashboard 那格数字下面的小字），
+        # 被当成名词「书」译了。
+        ("book", "nl", "boek"),
+        ("book", "es", "libro"),
     ],
 )
 def test_known_mistranslations_do_not_come_back(key, lang, wrong):

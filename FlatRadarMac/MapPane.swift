@@ -483,7 +483,8 @@ struct MapPane: View {
                     radius: selected ? 8 : 3, y: selected ? 3 : 1)
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(b.name), \(b.city), \(b.count) listing\(b.count == 1 ? "" : "s")")
+        .accessibilityLabel(b.count == 1 ? "\(b.name), \(b.city), 1 listing"
+                                         : "\(b.name), \(b.city), \(b.count) listings")
         // 悬停预览：Phase 4 的「地图 pin 划过出卡片」。
         //
         // 卡片走 `.overlay` + `.offset` 浮在标记上方，**不进标记自己的布局**——

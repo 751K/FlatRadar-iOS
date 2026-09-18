@@ -4,8 +4,90 @@
       "id" : "3D2B6C11-9A44-5E7B-8C10-5F1A2E6D4B90",
       "name" : "en-US",
       "options" : {
+        "environmentVariableEntries" : [
+          {
+            "key" : "UI_TEST_LANGUAGE",
+            "value" : "en"
+          },
+          {
+            "key" : "UI_TEST_LOCALE",
+            "value" : "en_US"
+          }
+        ],
         "language" : "en",
         "region" : "US"
+      }
+    },
+    {
+      "id" : "E2DCDEAE-DED7-536C-BF7D-B1AC208E98D8",
+      "name" : "zh-Hans",
+      "options" : {
+        "environmentVariableEntries" : [
+          {
+            "key" : "UI_TEST_LANGUAGE",
+            "value" : "zh-Hans"
+          },
+          {
+            "key" : "UI_TEST_LOCALE",
+            "value" : "zh_CN"
+          }
+        ],
+        "language" : "zh-Hans",
+        "region" : "CN"
+      }
+    },
+    {
+      "id" : "8EE66A05-92A9-5F4B-947B-BB4F059EEE80",
+      "name" : "zh-Hant",
+      "options" : {
+        "environmentVariableEntries" : [
+          {
+            "key" : "UI_TEST_LANGUAGE",
+            "value" : "zh-Hant"
+          },
+          {
+            "key" : "UI_TEST_LOCALE",
+            "value" : "zh_TW"
+          }
+        ],
+        "language" : "zh-Hant",
+        "region" : "TW"
+      }
+    },
+    {
+      "id" : "72130E11-F68B-5946-9866-1862A4530181",
+      "name" : "nl-NL",
+      "options" : {
+        "environmentVariableEntries" : [
+          {
+            "key" : "UI_TEST_LANGUAGE",
+            "value" : "nl"
+          },
+          {
+            "key" : "UI_TEST_LOCALE",
+            "value" : "nl_NL"
+          }
+        ],
+        "language" : "nl",
+        "region" : "NL"
+      }
+    },
+    {
+      "id" : "7CF73FAC-7490-5E6E-A8BF-6CDEC4595E06",
+      "name" : "es-ES",
+      "options" : {
+        "environmentVariableEntries" : [
+          {
+            "key" : "UI_TEST_LANGUAGE",
+            "value" : "es"
+          },
+          {
+            "key" : "UI_TEST_LOCALE",
+            "value" : "es_ES"
+          }
+        ],
+        "language" : "es",
+        "region" : "ES"
       }
     }
   ],
@@ -14,19 +96,19 @@
   },
   "testTargets" : [
     {
+      "selectedTests" : [
+        "MacScreenshotTests/testCapture00_SignIn()",
+        "MacScreenshotTests/testCapture01_Listings()",
+        "MacScreenshotTests/testCapture02_Map()",
+        "MacScreenshotTests/testCapture03_Calendar()",
+        "MacScreenshotTests/testCapture04_Alerts()",
+        "MacScreenshotTests/testCapture05_Stats()"
+      ],
       "target" : {
         "containerPath" : "container:FlatRadar.xcodeproj",
         "identifier" : "FCC02E5A2FD10C0DE0000050",
         "name" : "FlatRadarMacUITests"
-      },
-      "selectedTests" : [
-        "MacScreenshotTests\/testCapture00_SignIn()",
-        "MacScreenshotTests\/testCapture01_Listings()",
-        "MacScreenshotTests\/testCapture02_Map()",
-        "MacScreenshotTests\/testCapture03_Calendar()",
-        "MacScreenshotTests\/testCapture04_Alerts()",
-        "MacScreenshotTests\/testCapture05_Stats()"
-      ]
+      }
     }
   ],
   "version" : 1

@@ -74,21 +74,38 @@ path = sys.argv[1]
 with open(path, encoding="utf-8") as f:
     plan = json.load(f)
 
-# 写进 defaultOptions，对所有 configuration（即所有语言）都生效。
-opts = plan.setdefault("defaultOptions", {})
-entries = [e for e in opts.get("environmentVariableEntries", [])
-           if e.get("key") not in ("UI_TEST_USERNAME", "UI_TEST_PASSWORD")]
-entries += [
+CREDS = [
     {"key": "UI_TEST_USERNAME", "value": os.environ["UI_TEST_USERNAME"]},
     {"key": "UI_TEST_PASSWORD", "value": os.environ["UI_TEST_PASSWORD"]},
 ]
-opts["environmentVariableEntries"] = entries
+
+def inject(opts):
+    entries = [e for e in opts.get("environmentVariableEntries", [])
+               if e.get("key") not in ("UI_TEST_USERNAME", "UI_TEST_PASSWORD")]
+    opts["environmentVariableEntries"] = entries + CREDS
+
+# 写进 defaultOptions，对所有 configuration（即所有语言）都生效——
+# 前提是 configuration 自己没写 environmentVariableEntries。
+#
+# Mac 那份每个语言 configuration 都写了（UI_TEST_LANGUAGE / UI_TEST_LOCALE，
+# 测试靠它核对 app 真的切到了这种语言）。configuration 里的这一项是**合并**
+# 还是**整个盖掉** defaultOptions 那份，没有文档能钉死；要是盖掉，凭据就
+# 只在默认那份里、哪个语言都拿不到，五种语言全退回访客模式，而构建照样绿。
+# 所以凡是自己带了环境变量的 configuration，凭据也写一份进去，两种语义下都对。
+inject(plan.setdefault("defaultOptions", {}))
+touched = 0
+for c in plan.get("configurations", []):
+    opts = c.get("options", {})
+    if "environmentVariableEntries" in opts:
+        inject(opts)
+        touched += 1
 
 with open(path, "w", encoding="utf-8") as f:
     json.dump(plan, f, ensure_ascii=False, indent=2)
     f.write("\n")
 
 # 不打印值。只确认写进去了。
-print("已注入 %d 个环境变量到 %s" % (len(entries), os.path.basename(path)))
+print("已注入凭据到 %s（defaultOptions + %d 个 configuration）"
+      % (os.path.basename(path), touched))
 PY
 done
