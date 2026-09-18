@@ -41,6 +41,7 @@ public nonisolated struct CalendarListing: Decodable, Identifiable, Hashable, Se
         name = try c.decode(String.self, forKey: .name)
         status = try c.decode(String.self, forKey: .status)
         availableFrom = try c.decode(String.self, forKey: .availableFrom)
+        date = Self.dateFormatter.date(from: availableFrom)
 
         source = try c.decodeIfPresent(String.self, forKey: .source)
         priceRaw = try c.decodeIfPresent(String.self, forKey: .priceRaw) ?? ""
@@ -50,7 +51,7 @@ public nonisolated struct CalendarListing: Decodable, Identifiable, Hashable, Se
     }
 
     /// 解析 ``availableFrom`` 为 ``Date``（按服务器 Amsterdam 日期）；解析失败返回 nil。
-    public var date: Date? { Self.dateFormatter.date(from: availableFrom) }
+    public let date: Date?
 
     /// 用于按"日"分组的 key（YYYY-MM-DD），保证同一天的房源会聚合在一起。
     public var dayKey: String { String(availableFrom.prefix(10)) }

@@ -107,7 +107,7 @@ struct MapView: View {
     /// 当前 cluster 列表（由 listings + currentRegion 决定）。
     /// **@State 缓存**：之前是 computed property，任何 MapStore 字段变化（包括
     /// selectedID 切换等无关项）都会触发 body 重算 → 重 cluster 2000 pin。
-    /// 现在只在可见房源内容变化或跨 bucket 时刷新。
+    /// 现在只在房源内容变化、跨 bucket 或视野超出缓冲区时刷新。
     @State private var clusters: [ListingCluster] = []
 
     /// 聚类后台任务句柄；新一轮 recompute 前取消上一轮，避免快速跨桶时
@@ -127,6 +127,12 @@ struct MapView: View {
         insertion: .scale(scale: 0.5).combined(with: .opacity),
         removal: .scale(scale: 0.5).combined(with: .opacity))
 
+    private static func viewport(_ region: MKCoordinateRegion, padding: Double = 1.5) -> MapViewport {
+        MapViewport(latitude: region.center.latitude, longitude: region.center.longitude,
+                    latitudeDelta: region.span.latitudeDelta, longitudeDelta: region.span.longitudeDelta,
+                    padding: padding)
+    }
+
     private func recomputeClusters() {
         // 在主线程取值类型快照（store.listings 是 [MapListing] Sendable，
         // region 只取两个 Double delta），聚类计算丢到后台 detached 跑——
@@ -135,6 +141,8 @@ struct MapView: View {
         let snapshot = store.visibleListings
         let latDelta = currentRegion.span.latitudeDelta
         let lngDelta = currentRegion.span.longitudeDelta
+        let viewport = Self.viewport(currentRegion)
+        let focusID = store.focusID ?? store.selectedID
 
         clusterTask?.cancel()
         // @MainActor in：计算在 detached 后台跑，但任务体本身锚在主 actor，
@@ -142,7 +150,8 @@ struct MapView: View {
         clusterTask = Task { @MainActor in
             let result = await Task.detached(priority: .userInitiated) {
                 MapClustering.cluster(
-                    listings: snapshot, latDelta: latDelta, lngDelta: lngDelta
+                    listings: viewport.listings(from: snapshot, preservingID: focusID),
+                    latDelta: latDelta, lngDelta: lngDelta
                 )
             }.value
             if Task.isCancelled { return }
@@ -170,9 +179,6 @@ struct MapView: View {
         }
     }
 
-    /// 判断两个 region 是否跨过 log2 量化桶边界。
-    /// 同桶内 cluster 不会变 → 不需要 withAnimation 包裹 currentRegion 更新，
-    /// 避免每秒 60 次 withAnimation 带来的开销。
     // MARK: - 可达圈
 
     /// 选中一套房源时，在它周围画「10 分钟可达」的圈——步行一个、骑车一个。
@@ -370,19 +376,11 @@ struct MapView: View {
             if id != nil, let l: MapListing = store.selected { ringsListing = l }
         }
         .onMapCameraChange(frequency: .continuous) { context in
-            // 关键：**只在跨 log2 桶时更新 currentRegion**。
-            //
-            // 为什么不更新 same-bucket：
-            // 1. cluster 计算只依赖 cellSize（同桶内不变）和房源绝对坐标
-            //    （永远不变）—— 中心点移动不影响 grid 分桶
-            // 2. 拖动时每帧更新 currentRegion → body 重算 → ForEach
-            //    迭代触发 SwiftUI 内部 diff，即便 cluster id 没变也可能
-            //    让 .transition 误触发动画 → 拖动时无关 pin 闪烁
-            // 3. 同桶时根本不更新就根本不重算，零开销零闪烁
-            if Self.bucketsDiffer(currentRegion, context.region) {
-                withAnimation(.easeInOut(duration: 0.22)) {
-                    currentRegion = context.region
-                }
+            // 在缓冲区内平移不重算；越界或跨缩放桶时补入新视野内的房源。
+            let visible = Self.viewport(context.region, padding: 1)
+            if Self.bucketsDiffer(currentRegion, context.region)
+                || !Self.viewport(currentRegion).contains(visible) {
+                currentRegion = context.region
                 recomputeClusters()
             }
         }
@@ -492,9 +490,7 @@ struct MapView: View {
     private var mapLifecycle: some View {
             mapChrome
             .task {
-                if store.listings.isEmpty {
-                    await store.fetch()
-                }
+                await store.loadIfNeeded()
                 await consumePendingFocus()
             }
             // 地图已经挂载时再点「在地图上查看」，.task 不会重跑，靠这个接住。

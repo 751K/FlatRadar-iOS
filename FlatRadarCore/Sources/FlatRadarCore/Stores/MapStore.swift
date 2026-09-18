@@ -91,8 +91,12 @@ public final class MapStore {
     /// 各档的房源数——筛选栏的 chip 上直接显示，让「七成是租不到的」这件事
     /// 不用点开就看得见。
     public var statusCounts: [ListingStatus: Int] {
+        let input = listings
+        if let cached = statusCache, cached.input == input { return cached.value }
         var counts: [ListingStatus: Int] = [:]
-        for l in listings { counts[l.statusKind, default: 0] += 1 }
+        for l in input { counts[l.statusKind, default: 0] += 1 }
+        statusCache = (input, counts)
+        statusComputations += 1
         return counts
     }
 
@@ -106,20 +110,36 @@ public final class MapStore {
 
     /// 通过筛选的房源，外加深链兜底那一条。
     public var visibleListings: [MapListing] {
-        var out = listings.filter(passes)
-        if let extra = focusExtra { out.append(extra) }
-        return out
+        visibility.listings
     }
 
     /// 通过筛选的条数（不含兜底那条——它不属于「当前视图里有几套」）。
-    public var visibleCount: Int { listings.filter(passes).count }
+    public var visibleCount: Int { visibility.count }
+
+    @ObservationIgnored private var statusCache: (input: [MapListing], value: [ListingStatus: Int])?
+    @ObservationIgnored private var visibilityCache: (key: VisibilityKey, listings: [MapListing], count: Int)?
+    @ObservationIgnored private(set) var visibilityComputations = 0
+    @ObservationIgnored private(set) var statusComputations = 0
+
+    private var visibility: (listings: [MapListing], count: Int) {
+        let key = visibilityKey
+        if let cached = visibilityCache, cached.key == key { return (cached.listings, cached.count) }
+        let cap = Self.number(from: maxRentText)
+        let floor = Self.number(from: minAreaText)
+        var result = listings.filter { passes($0, cap: cap, floor: floor) }
+        let count = result.count
+        if let extra = focusExtra { result.append(extra) }
+        visibilityCache = (key, result, count)
+        visibilityComputations += 1
+        return (result, count)
+    }
 
     /// 决定 ``visibleListings`` 的**全部**输入。两个键相等，可见的那批就一定相同。
     ///
     /// Mac 地图拿它当楼盘分组的缓存键：分组两千条要十几毫秒，而一次界面更新里
     /// 会被读好几遍，悬停、相机移动也会触发更新。
     ///
-    /// ⚠️ 和 ``passes(_:)`` 放在一起是故意的：**给 `passes` 加一个条件，这里就得
+    /// ⚠️ 和 ``passes(_:cap:floor:)`` 放在一起是故意的：**给 `passes` 加一个条件，这里就得
     /// 加一项**，否则缓存认不出筛选变了，地图会停在旧结果上。
     /// `MapVisibilityKeyTests` 逐项钉住了现有的每一个输入。
     public nonisolated struct VisibilityKey: Equatable, Sendable {
@@ -140,19 +160,19 @@ public final class MapStore {
                       focusID: focusID, focusExtra: focusExtra)
     }
 
-    private func passes(_ l: MapListing) -> Bool {
+    private func passes(_ l: MapListing, cap: Double?, floor: Double?) -> Bool {
         // 深链指定的那一套无条件保留：用户是点着它过来的，被默认筛选
         // （比如「已租出」默认关）挡掉会变成「点了没反应」。
         if let f = focusID, l.id == f { return true }
         guard activeStatuses.contains(l.statusKind) else { return false }
         if !cityFilter.isEmpty && l.city != cityFilter { return false }
         if !sourceFilter.isEmpty && (l.source ?? "") != sourceFilter { return false }
-        if let cap = Self.number(from: maxRentText),
+        if let cap,
            let rent = Self.price(from: l.priceRaw), rent > cap {
             // 价格解析不出来时**保留**：读不出 ≠ 超预算。丢掉才是替上游做判断。
             return false
         }
-        if let floor = Self.number(from: minAreaText),
+        if let floor,
            let area = Self.number(from: l.area), area < floor {
             return false
         }
@@ -237,16 +257,32 @@ public final class MapStore {
         return Double(out)
     }
 
+    private var hasLoaded = false
+    private var requestGeneration = 0
+    @ObservationIgnored var loadMap: () async throws -> MapResponse = {
+        try await APIClient.shared.getMap()
+    }
+
+    public func loadIfNeeded() async {
+        guard !hasLoaded, listings.isEmpty, !isLoading else { return }
+        await fetch()
+    }
+
     public func fetch() async {
         guard !isLoading else { return }
+        requestGeneration &+= 1
+        let generation = requestGeneration
         isLoading = true
         errorMessage = nil
-        defer { isLoading = false }
+        defer { if generation == requestGeneration { isLoading = false } }
         do {
-            let resp = try await client.getMap()
+            let resp = try await loadMap()
+            guard generation == requestGeneration, !Task.isCancelled else { return }
             listings = resp.listings
             uncached = resp.uncached
+            hasLoaded = true
         } catch {
+            guard generation == requestGeneration else { return }
             // 被取消不是失败——见 Error.isCancellation。
             if !error.isCancellation {
                 lastError = error as? APIError
@@ -298,6 +334,10 @@ public final class MapStore {
 
     /// 登出时清空——下个用户登入预热的是他自己的 map listings。
     public func clear() {
+        requestGeneration &+= 1
+        hasLoaded = false
+        statusCache = nil
+        visibilityCache = nil
         listings = []
         uncached = 0
         isLoading = false

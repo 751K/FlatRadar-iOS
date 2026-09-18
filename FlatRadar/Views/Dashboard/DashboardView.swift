@@ -33,6 +33,7 @@ struct DashboardView: View {
     @State private var liveDotBreathing = false
 
     /// Cached chart data for inline mini visualizations.
+    @State private var chartLoadGeneration = 0
     @State private var chartDailyNew: ChartData?
     @State private var chartSource: ChartData?
     @State private var chartStatus: ChartData?
@@ -1438,34 +1439,22 @@ struct DashboardView: View {
     }
 
     private func fetchMiniCharts() async {
-        // 分 3 批发出，每批 2-3 个请求，避免 7 并发同时打到后端造成 TCP 队头阻塞。
-        // 第一批是最重要的 3 张（首页 sparkline + source/status mini card），
-        // 第二批和第三批是详情页才展开的分布图，优先级靠后。
-
-        // Batch 1: daily_new + source_dist + status_dist
-        async let dn = try? APIClient.shared.getPublicChart(key: "daily_new", days: 7)
-        async let so = try? APIClient.shared.getPublicChart(key: "source_dist", days: 30)
-        async let st = try? APIClient.shared.getPublicChart(key: "status_dist", days: 30)
-        let (dnR, soR, stR) = await (dn, so, st)
-
-        // Batch 2: price_dist + type_dist
-        async let pr = try? APIClient.shared.getPublicChart(key: "price_dist", days: 30)
-        async let tp = try? APIClient.shared.getPublicChart(key: "type_dist", days: 30)
-        let (prR, tpR) = await (pr, tp)
-
-        // Batch 3: energy_dist + tenant_dist
-        async let en = try? APIClient.shared.getPublicChart(key: "energy_dist", days: 30)
-        async let tn = try? APIClient.shared.getPublicChart(key: "tenant_dist", days: 30)
-        let (enR, tnR) = await (en, tn)
-
-        chartDailyNew = dnR
-        chartSource = soR
-        chartStatus = stR
-        chartPrice = prR
-        chartType = tpR
-        chartEnergy = enR
-        chartTenant = tnR
-        recomputeDerivedCharts()
+        chartLoadGeneration &+= 1
+        let generation = chartLoadGeneration
+        await DashboardChartLoader.load { key, chart in
+            guard generation == chartLoadGeneration else { return }
+            switch key {
+            case "daily_new": chartDailyNew = chart
+            case "source_dist": chartSource = chart
+            case "status_dist": chartStatus = chart
+            case "price_dist": chartPrice = chart
+            case "type_dist": chartType = chart
+            case "energy_dist": chartEnergy = chart
+            case "tenant_dist": chartTenant = chart
+            default: return
+            }
+            recomputeDerivedCharts()
+        }
     }
 
     /// 把 mini chart 用到的派生数据（排序/分桶/求和）一次性算完并缓存到 @State，

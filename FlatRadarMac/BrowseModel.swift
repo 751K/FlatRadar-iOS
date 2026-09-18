@@ -223,38 +223,74 @@ final class BrowseModel {
 
     // MARK: - 派生
 
-    /// 表格实际显示的行。
-    ///
-    /// **按输入缓存**：房源、筛选条件、搜索词三者都没变，就直接还上次的结果。
-    /// 原先每读一次都全量过滤一遍，而表格、空状态、底栏计数、键盘浏览、选中对齐
-    /// 各读一次；悬停换行也会让表格重读（代码审查：2000 条下搜索一次约 24ms，
-    /// 类型 + 能效 + 面积组合筛选约 47ms，还没算行绘制）。见 ``Memo``。
-    var rows: [Listing] {
-        let key = RowsKey(listings: listings.listings, query: query,
-                          search: searchText.trimmingCharacters(in: .whitespacesAndNewlines))
-        return rowsMemo.value(for: key) { Self.filter(key) }
-    }
-
-    private struct RowsKey: Equatable {
+    /// 所有影响本地结果的输入。视图以它作为 task id，变化时取消旧任务。
+    nonisolated struct RowsInput: Equatable, Sendable {
         let listings: [Listing]
         let query: ListingQuery
         let search: String
+        var needsFiltering: Bool { !query.isEmpty || !search.isEmpty }
     }
 
-    @ObservationIgnored private let rowsMemo = Memo<RowsKey, [Listing]>()
+    var rowsInput: RowsInput {
+        RowsInput(listings: listings.listings, query: query,
+                  search: searchText.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
 
-    /// `rows` 里 `rowsMemo` 算了几次。测试用。
-    var rowsComputeCount: Int { rowsMemo.computeCount }
+    private var completedRows: (input: RowsInput, rows: [Listing])?
+    @ObservationIgnored private(set) var rowsComputeCount = 0
+    @ObservationIgnored var filterRows: @Sendable (RowsInput) async throws -> [Listing] = BrowseModel.filter
 
-    private static func filter(_ key: RowsKey) -> [Listing] {
-        let all = key.query.isEmpty ? key.listings : key.listings.filter(key.query.matches)
-        let q = key.search
-        guard !q.isEmpty else { return all }
-        return all.filter {
-            $0.name.localizedCaseInsensitiveContains(q)
-                || $0.city.localizedCaseInsensitiveContains(q)
-                || ($0.buildingText ?? "").localizedCaseInsensitiveContains(q)
+    var isFiltering: Bool {
+        let input = rowsInput
+        return input.needsFiltering && completedRows?.input != input
+    }
+
+    /// body、计数和键盘导航只读结果，不执行过滤。待计算时不暴露旧条件的行。
+    var rows: [Listing] {
+        let input = rowsInput
+        guard input.needsFiltering else { return input.listings }
+        guard completedRows?.input == input else { return [] }
+        return completedRows?.rows ?? []
+    }
+
+    func updateRows(debounce: Bool = true) async {
+        let input = rowsInput
+        guard input.needsFiltering else {
+            completedRows = nil
+            reconcileSelection()
+            return
         }
+        guard completedRows?.input != input else { return }
+        do {
+            if debounce, !input.search.isEmpty { try await Task.sleep(for: .milliseconds(150)) }
+            try Task.checkCancellation()
+            rowsComputeCount += 1
+            let result = try await filterRows(input)
+            guard !Task.isCancelled, rowsInput == input else { return }
+            completedRows = (input, result)
+            reconcileSelection()
+        } catch is CancellationError {
+            // 新输入、切屏或关窗取消了这次工作。
+        } catch {
+            assertionFailure("Unexpected local filter error: \(error)")
+        }
+    }
+
+    @concurrent
+    nonisolated static func filter(_ input: RowsInput) async throws -> [Listing] {
+        var result: [Listing] = []
+        result.reserveCapacity(input.listings.count)
+        for (index, listing) in input.listings.enumerated() {
+            if index.isMultiple(of: 64) { try Task.checkCancellation() }
+            guard input.query.isEmpty || input.query.matches(listing) else { continue }
+            let q = input.search
+            if q.isEmpty || listing.name.localizedCaseInsensitiveContains(q)
+                || listing.city.localizedCaseInsensitiveContains(q)
+                || (listing.buildingText ?? "").localizedCaseInsensitiveContains(q) {
+                result.append(listing)
+            }
+        }
+        return result
     }
 
     func listing(_ id: Listing.ID?) -> Listing? {
@@ -329,6 +365,7 @@ final class BrowseModel {
     /// 根本没有的房源上，右边详情变了、左边却没有任何东西高亮。
     /// - Parameter extending: ⇧↑ / ⇧↓ —— 把新落点**并进**选择集而不是替换它。
     func moveSelection(by delta: Int, extending: Bool = false) {
+        guard !isFiltering else { return }
         let visible = rows
         guard !visible.isEmpty else { return }
 
@@ -356,6 +393,7 @@ final class BrowseModel {
     /// 走的同样是 ``rows``——用户看见的是筛选后的那些行，"这两条之间"指的是
     /// **屏幕上**的之间，不是全量数组里的之间。
     func selectRange(from anchor: Listing.ID, to target: Listing.ID) {
+        guard !isFiltering else { return }
         let visible = rows
         guard let a = visible.firstIndex(where: { $0.id == anchor }),
               let b = visible.firstIndex(where: { $0.id == target }) else {
@@ -374,6 +412,7 @@ final class BrowseModel {
     /// 首屏必须有一条被选中，否则 ↑↓ 没有起点，而且右边 inspector 一片
     /// "No Selection"——用户看到的是一个"还没加载完"的界面，其实数据早就来了。
     func selectFirstRowIfNeeded() {
+        guard !isFiltering else { return }
         guard focused == nil, let first = rows.first else { return }
         focused = first.id
         selection = [first.id]
@@ -388,6 +427,7 @@ final class BrowseModel {
     /// 对齐的基准是 ``rows``（当前可见的行），不是全部已加载的：搜索框里有字的
     /// 时候，选中一条被筛掉的房源等于选中了一条看不见的行。
     func reconcileSelection() {
+        guard !isFiltering else { return }
         let visible = rows
         let live = Set(visible.map(\.id))
         selection.formIntersection(live)

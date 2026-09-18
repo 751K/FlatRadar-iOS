@@ -35,17 +35,15 @@ struct ListingsPane: View {
             statusBar
         }
         .onChange(of: model.searchFocusRequests) { _, _ in focus = .search }
-        // 数据到齐 → 选中第一条 → 把焦点交给表格，这样一启动就能直接按 ↑↓。
-        .onChange(of: model.listings.listings.count) { _, count in
-            guard !didFocusTable, count > 0 else { return }
+        .task(id: model.rowsInput) { await model.updateRows() }
+        .onChange(of: model.rows.isEmpty, initial: true) { _, empty in
+            guard !empty, !didFocusTable, focus != .search else { return }
             didFocusTable = true
             model.selectFirstRowIfNeeded()
             focus = .table
         }
-        // 搜索把当前选中那条筛掉了的话，焦点落到第一条可见行，而不是留一个
-        // 看不见的选中项——那会让 ↑↓ 从一个屏幕上不存在的位置开始走。
-        .onChange(of: model.searchText) { _, _ in
-            model.reconcileSelection()
+        .onChange(of: model.sortOrder) { _, _ in
+            Task { await model.applySortOrder() }
         }
     }
 
@@ -175,6 +173,8 @@ struct ListingsPane: View {
             centered { ProgressView("Loading listings…") }
         } else if let err = model.listings.errorMessage, model.listings.listings.isEmpty {
             centered { loadFailure(err) }
+        } else if model.isFiltering {
+            centered { ProgressView() }
         } else if model.rows.isEmpty {
             centered { noMatches }
         } else {
@@ -230,9 +230,6 @@ struct ListingsPane: View {
                     return .ignored
                 }
             }
-            .onChange(of: model.sortOrder) { _, _ in
-                Task { await model.applySortOrder() }
-            }
     }
 
     // MARK: - 底部状态栏
@@ -241,9 +238,13 @@ struct ListingsPane: View {
         HStack(spacing: 10) {
             // 窗口底栏是 chrome，不是数据：走 `.subheadline`（见 ``Theme`` 的字阶注释）。
             // Finder 底栏也是这个量级。
-            Text(rangeText)
-                .font(.subheadline)
-                .foregroundStyle(model.listings.loadMoreFailed ? .orange : .secondary)
+            if model.isFiltering {
+                ProgressView().controlSize(.small)
+            } else {
+                Text(rangeText)
+                    .font(.subheadline)
+                    .foregroundStyle(model.listings.loadMoreFailed ? .orange : .secondary)
+            }
             if model.listings.loadMoreFailed {
                 Button("Retry") { Task { await model.reload() } }
                     .buttonStyle(.link)

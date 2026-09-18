@@ -210,7 +210,7 @@ final class BrowseModelTests: XCTestCase {
     /// 这条是这组里最要紧的：拿全量算的话，↑↓ 会跳到一条屏幕上根本没有的房源，
     /// 右边详情变了、左边却没有任何东西高亮——看起来像界面坏了。
     @MainActor
-    func testMoveSelectionWalksVisibleRowsOnly() throws {
+    func testMoveSelectionWalksVisibleRowsOnly() async throws {
         let m = BrowseModel()
         loaded(m, [
             try listing(id: "a", name: "Kastanjelaan 1"),
@@ -218,6 +218,7 @@ final class BrowseModelTests: XCTestCase {
             try listing(id: "c", name: "Kastanjelaan 3"),
         ])
         m.searchText = "kastanjelaan"
+        await m.updateRows(debounce: false)
         XCTAssertEqual(m.rows.map(\.id), ["a", "c"], "前提：筛完只剩 a 和 c")
 
         m.focused = "a"
@@ -292,7 +293,7 @@ final class BrowseModelTests: XCTestCase {
 
     /// ⇧ 点选走的是**可见行**：被搜索筛掉的那些不该被圈进区间。
     @MainActor
-    func testSelectRangeSkipsFilteredOutRows() throws {
+    func testSelectRangeSkipsFilteredOutRows() async throws {
         let m = BrowseModel()
         loaded(m, [
             try listing(id: "a", name: "Kastanjelaan 1"),
@@ -300,6 +301,7 @@ final class BrowseModelTests: XCTestCase {
             try listing(id: "c", name: "Kastanjelaan 3"),
         ])
         m.searchText = "kastanjelaan"
+        await m.updateRows(debounce: false)
 
         m.selectRange(from: "a", to: "c")
         XCTAssertEqual(m.selection, ["a", "c"], "中间的 b 被筛掉了，不该进选择集")
@@ -307,7 +309,7 @@ final class BrowseModelTests: XCTestCase {
 
     /// 搜索把当前选中那条筛掉之后，焦点落到第一条可见行，而不是留一个看不见的选中项。
     @MainActor
-    func testSearchThatHidesFocusedRowMovesFocus() throws {
+    func testSearchThatHidesFocusedRowMovesFocus() async throws {
         let m = BrowseModel()
         loaded(m, [
             try listing(id: "a", name: "Kastanjelaan 1"),
@@ -317,6 +319,7 @@ final class BrowseModelTests: XCTestCase {
         m.selection = ["b"]
 
         m.searchText = "kastanjelaan"
+        await m.updateRows(debounce: false)
         m.reconcileSelection()
 
         XCTAssertEqual(m.focused, "a")

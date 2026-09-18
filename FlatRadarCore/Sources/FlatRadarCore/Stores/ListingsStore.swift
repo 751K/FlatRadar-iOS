@@ -83,6 +83,12 @@ public final class ListingsStore {
 
     public var hasMore: Bool { listings.count < total }
 
+    /// 启动预热和页面首次出现共用此入口；刷新/改筛选仍走 fetch/refresh。
+    public func loadIfNeeded() async {
+        guard lastUpdated == nil, listings.isEmpty, !isLoading else { return }
+        await refresh()
+    }
+
     public func fetch(city: String? = nil, status: String? = nil, query: String? = nil,
                sources: [String]? = nil, cities: [String]? = nil, types: [String]? = nil,
                contract: String? = nil, energy: String? = nil,

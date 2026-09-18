@@ -57,41 +57,46 @@ final class DerivedDataCacheTests: XCTestCase {
 
     // MARK: - 列表 rows
 
-    func test_rows_读很多遍只过滤一次() {
+    func test_rows_读很多遍只过滤一次() async {
         let m = BrowseModel()
         m.listings.listings = Fixture.listings(200)
         m.query.cities = ["Amsterdam"]
+        await m.updateRows(debounce: false)
         let first = m.rows
         for _ in 0..<20 { _ = m.rows }
         XCTAssertEqual(m.rowsComputeCount, 1)
         XCTAssertEqual(m.rows.map(\.id), first.map(\.id))
     }
 
-    func test_rows_搜索词_筛选_房源任一变了就重算_结果正确() {
+    func test_rows_搜索词_筛选_房源任一变了就重算_结果正确() async {
         let m = BrowseModel()
         m.listings.listings = Fixture.listings(200)
         let all = m.rows.count
         XCTAssertEqual(all, 200)
 
         m.searchText = "Amsterdam"
+        await m.updateRows(debounce: false)
         XCTAssertEqual(m.rows.count, m.listings.listings.filter { $0.city == "Amsterdam" }.count)
 
         m.searchText = ""
         m.query.cities = ["Utrecht"]
+        await m.updateRows(debounce: false)
         XCTAssertTrue(m.rows.allSatisfy { $0.city == "Utrecht" })
 
         m.query = ListingQuery()
         m.listings.listings.removeFirst(10)
         XCTAssertEqual(m.rows.count, 190, "房源变了，rows 必须跟着变")
-        XCTAssertEqual(m.rowsComputeCount, 4)
+        XCTAssertEqual(m.rowsComputeCount, 2, "没有筛选时直接返回全部数据，不调后台过滤")
     }
 
-    func test_rows_搜索词前后空格不算变化() {
+    func test_rows_搜索词前后空格不算变化() async {
         let m = BrowseModel()
         m.listings.listings = Fixture.listings(50)
         m.searchText = "Amsterdam"
+        await m.updateRows(debounce: false)
         _ = m.rows
         m.searchText = "Amsterdam  "
+        await m.updateRows(debounce: false)
         _ = m.rows
         XCTAssertEqual(m.rowsComputeCount, 1)
     }
@@ -193,7 +198,7 @@ final class DerivedDataCacheTests: XCTestCase {
     // MARK: - 2000 条下的计时
 
     /// 重算一次 vs 命中缓存读一次。打印出来写进报告；断言只要求缓存快一个数量级。
-    func test_两千条下_命中缓存比重算快一个数量级以上() {
+    func test_两千条下_命中缓存比重算快一个数量级以上() async {
         func time(_ n: Int = 1, _ body: () -> Void) -> Double {
             let t = Date()
             for _ in 0..<n { body() }
@@ -215,7 +220,9 @@ final class DerivedDataCacheTests: XCTestCase {
         m.listings.listings = Fixture.listings(2000)
         m.query.minArea = 30
         m.searchText = "straat"
-        let rowsCold = time { _ = m.rows }
+        let started = Date()
+        await m.updateRows(debounce: false)
+        let rowsCold = Date().timeIntervalSince(started) * 1000
         let rowsHot = time(200) { _ = m.rows }
         lines.append(String(format: "列表 rows %.2fms → 缓存命中 %.4fms", rowsCold, rowsHot))
 

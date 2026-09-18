@@ -18,7 +18,7 @@ import FlatRadarCore
 /// `nonisolated`：工程开着 `SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor`，不写的话
 /// 这个纯值类型会被钉到主 actor 上，`FlatRadarMacTests` 里就调不动（测试 target
 /// 没开默认隔离）。它不碰任何状态，本来也不该有 actor。
-nonisolated struct ListingQuery: Equatable {
+nonisolated struct ListingQuery: Equatable, Sendable {
 
     var cities: Set<String> = []
     var sources: Set<String> = []

@@ -130,9 +130,7 @@ struct ListingsView: View {
                 })
         }
         .task {
-            if store.listings.isEmpty {
-                await store.refresh()
-            }
+            await store.loadIfNeeded()
             recomputeCachedListings()
         }
         .onChange(of: store.errorMessage) { _, new in

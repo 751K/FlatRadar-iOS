@@ -292,7 +292,7 @@ struct CalendarView: View {
     @ViewBuilder
     private func dayListings(for date: Date) -> some View {
         let listings = store.listings(on: date)
-        VStack(alignment: .leading, spacing: 8) {
+        LazyVStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text(longDateLabel(date)).font(.headline)
                 Spacer()

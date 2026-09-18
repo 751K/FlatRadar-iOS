@@ -12,7 +12,18 @@ public final class CalendarStore {
     /// 隐式 init 随 `public` 一起变成 internal，宿主 app 构造不了。
     /// 这些 store 的属性全有默认值，空实现与迁移前的隐式构造等价。
     public init() {}
-    public var listings: [CalendarListing] = []
+    public var listings: [CalendarListing] = [] {
+        didSet {
+            listingsByDay = Dictionary(grouping: listings, by: \.dayKey)
+            var bounds: (start: Date, end: Date)?
+            for listing in listings {
+                guard let date = listing.date else { continue }
+                if let old = bounds { bounds = (min(old.start, date), max(old.end, date)) }
+                else { bounds = (date, date) }
+            }
+            dateRange = bounds
+        }
+    }
     /// 按日归组，key 是 `yyyy-MM-dd`。
     ///
     /// `public` 是为 Mac 端的月网格开的：它要一次铺 42 个格子，每格问一次
@@ -27,11 +38,7 @@ public final class CalendarStore {
     private let client = APIClient.shared
 
     /// 数据范围：第一个 / 最后一个可入住日期；UI 限制月份切换不超出。
-    public var dateRange: (start: Date, end: Date)? {
-        let dates = listings.compactMap(\.date)
-        guard let first = dates.min(), let last = dates.max() else { return nil }
-        return (first, last)
-    }
+    public private(set) var dateRange: (start: Date, end: Date)?
 
     public func fetch() async {
         guard !isLoading else { return }
@@ -41,7 +48,6 @@ public final class CalendarStore {
         do {
             let resp = try await client.getCalendar()
             listings = resp.listings
-            listingsByDay = Dictionary(grouping: listings, by: \.dayKey)
         } catch {
             // 被取消不是失败——见 Error.isCancellation。
             if !error.isCancellation {

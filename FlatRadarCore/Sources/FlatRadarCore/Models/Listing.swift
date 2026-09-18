@@ -18,6 +18,7 @@ public nonisolated struct Listing: Decodable, Identifiable, Hashable, Sendable {
     public let url: String
     public let city: String
     public let firstSeen: String?
+    private let parsedFirstSeen: Date?
     public let lastSeen: String?
 
     /// `featureMap` 的**键预归一化**版本（normalizedKey → value），decode 时
@@ -55,6 +56,7 @@ public nonisolated struct Listing: Decodable, Identifiable, Hashable, Sendable {
         url = try c.decodeIfPresent(String.self, forKey: .url) ?? ""
         city = try c.decodeIfPresent(String.self, forKey: .city) ?? ""
         firstSeen = try c.decodeIfPresent(String.self, forKey: .firstSeen)
+        parsedFirstSeen = Self.parseFirstSeen(firstSeen)
         lastSeen = try c.decodeIfPresent(String.self, forKey: .lastSeen)
 
         // 键预归一化（一次性）。collision 时后者覆盖——归一化后撞键极少见，
@@ -233,7 +235,9 @@ public extension Listing {
     }
 
     /// Parse `first_seen` —— 复用 ServerTime 的多格式兼容。
-    nonisolated var firstSeenDate: Date? {
+    nonisolated var firstSeenDate: Date? { parsedFirstSeen }
+
+    nonisolated fileprivate static func parseFirstSeen(_ firstSeen: String?) -> Date? {
         guard let firstSeen, !firstSeen.isEmpty else { return nil }
         if let d = try? Self.isoFrac.parse(firstSeen) { return d }
         // 不带小数秒这一路是这次补上的：原来只试带小数秒的那个，
