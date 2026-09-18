@@ -51,6 +51,17 @@
       ],
       "number": "7"
     },
+    "_mac": {
+      "hero_title": ["Your home search.", "With a wider view."],
+      "hero_body": ["Every listing, map and alert.", "A calmer way to find your place."],
+      "proof": ["platforms", "one workspace"],
+      "number": "7",
+      "tagline": "A desktop view for a faster search.",
+      "02-Map": {"title": ["See the market.", "Around you."], "body": ["Every listing, mapped to the places that matter."], "footer": "Map the possibilities."},
+      "03-Calendar": {"title": ["Plan the move.", "See it clearly."], "body": ["Every move-in date, in one view."], "footer": "Plan with context."},
+      "04-Alerts": {"title": ["Never miss.", "A new listing."], "body": ["Fresh matches, right when they appear."], "footer": "Stay one step ahead."},
+      "05-Stats": {"title": ["Know the market.", "Move with confidence."], "body": ["Signals that make the next decision easier."], "footer": "The details, at a glance."}
+    },
     "03-Notify": {
       "lead": "The moment it's listed",
       "head": "it's on your phone"
@@ -106,6 +117,17 @@
         "一处掌握"
       ],
       "number": "7"
+    },
+    "_mac": {
+      "hero_title": ["找房这件事，", "在 Mac 上看得更清楚。"],
+      "hero_body": ["房源、地图和提醒，", "一处查看。"],
+      "proof": ["个平台", "一处掌握"],
+      "number": "7",
+      "tagline": "桌面够宽，找房从容。",
+      "02-Map": {"title": ["看懂市场。", "就在身边。"], "body": ["把房源放到真正重要的地点上。"], "footer": "在地图上找可能。"},
+      "03-Calendar": {"title": ["安排入住。", "一眼看清。"], "body": ["所有起租日，集中查看。"], "footer": "带着上下文做计划。"},
+      "04-Alerts": {"title": ["不错过。", "每个新房源。"], "body": ["匹配出现，及时提醒。"], "footer": "总是快一步。"},
+      "05-Stats": {"title": ["看懂市场。", "更有把握地决定。"], "body": ["让下一步选择更简单的数据。"], "footer": "细节，一眼看完。"}
     },
     "03-Notify": {
       "lead": "房源一上线",
@@ -163,6 +185,17 @@
       ],
       "number": "7"
     },
+    "_mac": {
+      "hero_title": ["找房這件事，", "在 Mac 上看得更清楚。"],
+      "hero_body": ["房源、地圖和提醒，", "一處查看。"],
+      "proof": ["個平台", "一處掌握"],
+      "number": "7",
+      "tagline": "桌面夠寬，找房從容。",
+      "02-Map": {"title": ["看懂市場。", "就在身邊。"], "body": ["把房源放到真正重要的地點上。"], "footer": "在地圖上找可能。"},
+      "03-Calendar": {"title": ["安排入住。", "一眼看清。"], "body": ["所有起租日，集中查看。"], "footer": "帶著上下文做計畫。"},
+      "04-Alerts": {"title": ["不錯過。", "每個新房源。"], "body": ["匹配出現，及時提醒。"], "footer": "總是快一步。"},
+      "05-Stats": {"title": ["看懂市場。", "更有把握地決定。"], "body": ["讓下一步選擇更簡單的數據。"], "footer": "細節，一眼看完。"}
+    },
     "03-Notify": {
       "lead": "房源一上線",
       "head": "手機就響"
@@ -219,6 +252,17 @@
       ],
       "number": "7"
     },
+    "_mac": {
+      "hero_title": ["Jouw zoektocht.", "Met meer overzicht."],
+      "hero_body": ["Woningen, kaarten en meldingen.", "Alles op één plek."],
+      "proof": ["platforms", "één werkplek"],
+      "number": "7",
+      "tagline": "Meer ruimte voor een betere zoektocht.",
+      "02-Map": {"title": ["Ken de markt.", "Dichtbij."], "body": ["Elke woning op de plekken die ertoe doen."], "footer": "Ontdek wat mogelijk is."},
+      "03-Calendar": {"title": ["Plan je verhuizing.", "Zie het helder."], "body": ["Elke ingangsdatum in één overzicht."], "footer": "Plan met context."},
+      "04-Alerts": {"title": ["Mis niets.", "Geen nieuwe woning."], "body": ["Nieuwe matches zodra ze verschijnen."], "footer": "Altijd een stap voor."},
+      "05-Stats": {"title": ["Ken de markt.", "Kies met vertrouwen."], "body": ["Signalen voor je volgende beslissing."], "footer": "De details in één oogopslag."}
+    },
     "03-Notify": {
       "lead": "Zodra het online staat",
       "head": "weet jij het"
@@ -274,6 +318,17 @@
         "Un solo lugar."
       ],
       "number": "7"
+    },
+    "_mac": {
+      "hero_title": ["Tu búsqueda.", "Con más perspectiva."],
+      "hero_body": ["Anuncios, mapas y avisos.", "Todo en un solo lugar."],
+      "proof": ["plataformas", "un espacio"],
+      "number": "7",
+      "tagline": "Más espacio para buscar mejor.",
+      "02-Map": {"title": ["Conoce el mercado.", "Más cerca."], "body": ["Cada vivienda en los lugares que importan."], "footer": "Descubre las posibilidades."},
+      "03-Calendar": {"title": ["Planifica la mudanza.", "Míralo claro."], "body": ["Cada fecha de entrada, en una vista."], "footer": "Planifica con contexto."},
+      "04-Alerts": {"title": ["No te pierdas.", "Ningún anuncio nuevo."], "body": ["Nuevos matches en cuanto aparecen."], "footer": "Siempre un paso por delante."},
+      "05-Stats": {"title": ["Conoce el mercado.", "Decide con confianza."], "body": ["Señales para decidir mejor."], "footer": "Los detalles, de un vistazo."}
     },
     "03-Notify": {
       "lead": "En cuanto se publica",

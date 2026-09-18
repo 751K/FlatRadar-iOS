@@ -10,7 +10,7 @@ import argparse
 import json
 import pathlib
 import numpy as np
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 from scipy.ndimage import distance_transform_edt
 
 HERE = pathlib.Path(__file__).parent
@@ -19,6 +19,12 @@ DEVICES = {
     "iphone61": {"size": (1206, 2622), "display_type": "APP_IPHONE_61", "island": True, "bezel": .0224},
     "ipad13": {"size": (2064, 2752), "display_type": "APP_IPAD_PRO_3GEN_129", "island": False, "bezel": .0436},
     "ipad13l": {"size": (2752, 2064), "display_type": "APP_IPAD_PRO_3GEN_129", "island": False, "bezel": .0327},
+    # macOS screenshots are already complete desktop-window captures.  There is
+    # no simulated device frame; the poster only adds editorial space around
+    # the real window.  2560x1600 is the largest ASC Mac canvas and matches the
+    # output of run-mac.sh on the local/Xcode Cloud Retina host.
+    "mac": {"size": (2560, 1600), "display_type": "APP_DESKTOP", "island": False,
+            "kind": "mac"},
 }
 PLAN = [
     {"out": "00-Alerts", "src": "05-Notifications"},
@@ -27,6 +33,20 @@ PLAN = [
     {"out": "03-Notify", "src": "05-Notifications"},
     {"out": "04-Views", "src": ["01-Dashboard", "02-Listings", "03-Map", "04-Calendar"]},
     {"out": "05-Calendar", "src": "04-Calendar"},
+]
+
+# Mac UI tests use their own names and order.  Keep this separate from the
+# iOS plan so a Mac directory cannot accidentally be treated as iPhone input.
+MAC_PLAN = [
+    {"out": "00-Overview", "src": "01-Listings"},
+    # The right-hand page is a continuation of the same hero window.  The
+    # sign-in capture is intentionally left out of the store sequence; the
+    # five product surfaces make a stronger first impression.
+    {"out": "01-Listings", "src": "01-Listings"},
+    {"out": "02-Map", "src": "02-Map"},
+    {"out": "03-Calendar", "src": "03-Calendar"},
+    {"out": "04-Alerts", "src": "04-Alerts"},
+    {"out": "05-Stats", "src": "05-Stats"},
 ]
 # Ink, paper and mint form one visual identity across the sequence.
 #
@@ -379,6 +399,171 @@ def _resize_fit(dev, max_w, max_h):
                       Image.Resampling.LANCZOS)
 
 
+def _mac_crop(shot):
+    """Trim the white canvas around a Mac window capture.
+
+    ``run-mac.sh`` deliberately writes an ASC-sized white canvas around the
+    window.  Keeping that canvas and shrinking it again makes the actual UI
+    unreadably small in a poster.  The crop is derived from the pixels rather
+    than from a hard-coded window frame, so it also works for the 1280/1440
+    hosts accepted by App Store Connect.
+    """
+    image = shot.convert("RGBA")
+    # Some xcparse versions preserve the screenshot's transparent outer
+    # pixels.  Flatten those onto the same white canvas used by
+    # `MacScreenshotTests.compose`; otherwise transparent pixels convert to
+    # black and the crop would incorrectly include the whole canvas.
+    if image.getchannel("A").getextrema()[0] < 255:
+        flattened = Image.new("RGBA", image.size, (255, 255, 255, 255))
+        flattened.alpha_composite(image)
+        image = flattened
+    rgb = image.convert("RGB")
+    white = Image.new("RGB", rgb.size, (255, 255, 255))
+    bbox = ImageChops.difference(rgb, white).getbbox()
+    if not bbox:
+        return image
+    w, h = image.size
+    pad = max(round(min(w, h) * .012), 8)
+    x0 = max(0, bbox[0] - pad)
+    y0 = max(0, bbox[1] - pad)
+    x1 = min(w, bbox[2] + pad)
+    y1 = min(h, bbox[3] + pad)
+    return image.crop((x0, y0, x1, y1))
+
+
+def _mac_window(shot, max_w, max_h, radius=28):
+    """Return the real Mac window with no synthetic bezel or card border.
+
+    The capture already contains the native title bar and its rounded window
+    corners.  Adding a second white frame made the desktop screenshots look
+    like a device mockup, so the poster only applies a clipping mask; the
+    shared ``_place`` helper supplies the restrained shadow.
+    """
+    crop = _mac_crop(shot)
+    window = _resize_fit(crop, max_w, max_h)
+    rr = min(round(radius), round(min(window.size) * .07))
+    window.putalpha(_rounded_mask(window.size, max(10, rr)))
+    return window
+
+
+def _mac_background(size, idx, hero=False):
+    """Quiet desktop canvas: one large panel and a low-contrast radar arc."""
+    W, H = size
+    _, _, accent, surface = THEMES[idx % len(THEMES)]
+    # Mac pages need a wider, calmer field than the phone pages.  Keep the
+    # existing palette but lift the paper so the native window remains legible.
+    paper = (247, 248, 246) if idx != 2 else (239, 246, 243)
+    canvas = Image.new("RGBA", size, paper + (255,))
+    d = ImageDraw.Draw(canvas)
+    U = min(W, H)
+    if hero:
+        panel = (round(W * .42), round(H * .10), round(W * .985), round(H * .98))
+    else:
+        panel = (round(W * .36), round(H * .14), round(W * .97), round(H * .94))
+    d.rounded_rectangle(panel, radius=round(U * .055), fill=surface + (235,))
+    cx, cy = W * (.79 if not hero else .73), H * .58
+    ring = tuple(round(surface[i] * .72 + accent[i] * .28) for i in range(3))
+    for factor in (.30, .47, .64):
+        r = U * factor
+        d.ellipse((round(cx - r), round(cy - r), round(cx + r), round(cy + r)),
+                  outline=ring + (95,), width=max(2, round(U * .0012)))
+    return canvas
+
+
+def build_mac_hero_pair(strings, src, dev_spec, cjk):
+    """Create a two-page Mac cover from one continuous desktop window."""
+    W, H = dev_spec["size"]
+    U = min(W, H)
+    ink, accent = (18, 45, 57), (38, 82, 200)
+    muted = (100, 108, 122)
+    canvas = _mac_background((2 * W, H), 0, hero=True)
+    with Image.open(src / "01-Listings.png") as shot:
+        card = _mac_window(shot.convert("RGB"), round(W * 1.52), round(H * .82),
+                           radius=38)
+    # The window crosses the seam by about one quarter of its width.  It is
+    # large enough to read, while the first page still has a clean text column.
+    x = round(W * .75)
+    y = round(H * .13)
+    _place(canvas, card, x, y, W, H)
+
+    left = round(W * .095)
+    width = round(W * .57)
+    hero = strings.get("_mac", {})
+    title = hero.get("hero_title", ["Your next home.", "Starts here."])
+    body = hero.get("hero_body", [])
+    side = round(U * .068)
+    brand_y = round(H * .065)
+    icon = _logo(0, side)
+    if icon:
+        canvas.alpha_composite(icon, (left, brand_y))
+    _label(canvas, "FlatRadar for Mac", left + side + U * .020, brand_y + U * .014,
+           U * .040, width - side, False, True, ink)
+
+    title_size = min(_fit(line, round(U * .135), width, cjk, True).size for line in title)
+    yy = H * .245
+    for i, line in enumerate(title):
+        height = _label(canvas, line, left, yy, title_size, width, cjk, True,
+                        ink if i == 0 else accent)
+        yy += height + U * .028
+    yy += U * .028
+    for line in body:
+        height = _label(canvas, line, left, yy, U * .032, width, cjk, False, muted)
+        yy += height + U * .014
+
+    line_y = H * .68
+    ImageDraw.Draw(canvas).line((left, round(line_y - U * .045), left + round(width * .83),
+                                 round(line_y - U * .045)), fill=(207, 212, 221), width=2)
+    number = hero.get("number", "7")
+    _label(canvas, number, left, line_y, U * .17, U * .20, False, True, accent)
+    proof = hero.get("proof", ["platforms", "one view"])
+    for i, line in enumerate(proof[:2]):
+        _label(canvas, line, left + U * .15, line_y + U * (.04 + i * .048),
+               U * .035, width - U * .15, cjk, i == 1, ink)
+    _label(canvas, hero.get("tagline", "Made for a wider view."), left, H * .88,
+           U * .025, width, cjk, False, muted)
+    _label(canvas, "FLATRADAR  /  DESKTOP", left, H * .925, U * .017,
+           width, False, True, muted)
+    return [canvas.crop((0, 0, W, H)).convert("RGB"),
+            canvas.crop((W, 0, 2 * W, H)).convert("RGB")]
+
+
+def build_mac_page(spec, copy, src, idx, dev_spec, cjk):
+    """Compose one Mac poster with a readable desktop window on the right."""
+    W, H = dev_spec["size"]
+    U = min(W, H)
+    canvas = _mac_background((W, H), idx)
+    hero = copy.get("_mac", {})
+    item = hero.get(spec["out"], {})
+    margin = round(U * .085)
+    _, ink, accent, _ = THEMES[idx % len(THEMES)]
+    _brand(canvas, idx, margin, U, ink, accent)
+    title = item.get("title", [spec["out"], ""])
+    width = round(W * .27)
+    yy = H * .22
+    for i, line in enumerate(title[:2]):
+        if not line:
+            continue
+        height = _label(canvas, line, margin, yy, U * (.080 if i == 0 else .105),
+                        width, cjk, i == 1, ink if i == 0 else accent)
+        yy += height + U * .022
+    for line in item.get("body", []):
+        height = _label(canvas, line, margin, yy + U * .018, U * .027,
+                        width, cjk, False, (100, 108, 122))
+        yy += height + U * .010
+    source = spec["src"]
+    with Image.open(src / f"{source}.png") as shot:
+        card = _mac_window(shot.convert("RGB"), round(W * .62), round(H * .69),
+                           radius=34)
+    x = round(W * .34)
+    y = round(H * .19)
+    _place(canvas, card, x, y, W, H)
+    footer = item.get("footer", "")
+    if footer:
+        _label(canvas, footer, margin, H * .86, U * .024, width, cjk, False,
+               (100, 108, 122))
+    return canvas.convert("RGB")
+
+
 def build(spec, copy, src, idx, dev_spec, cjk, device_key, badges=None):
     W, H = dev_spec["size"]
     U, land = min(W, H), W > H
@@ -591,9 +776,19 @@ def main():
     if args.lang not in copy or args.lang.startswith("_"):
         ap.error(f"文案语言不存在：{args.lang}")
     strings = copy[args.lang]
+    dev_spec = DEVICES[args.device]
+    is_mac = dev_spec.get("kind") == "mac"
+    plan = MAC_PLAN if is_mac else PLAN
     # Preflight the whole sequence so missing inputs cannot silently produce a partial set.
-    for spec in PLAN:
-        if spec["out"] not in strings:
+    for spec in plan:
+        # The Mac hero is a continuous two-page spread, so its first two
+        # filenames intentionally have no per-page copy.  The remaining pages
+        # use the locale's `_mac` block.
+        if is_mac:
+            if spec["out"] not in ("00-Overview", "01-Listings") \
+                    and spec["out"] not in strings.get("_mac", {}):
+                ap.error(f"缺少 Mac 文案：{spec['out']}")
+        elif spec["out"] not in strings:
             ap.error(f"缺少文案：{spec['out']}")
         names = spec["src"] if isinstance(spec["src"], list) else [spec["src"]]
         for name in names:
@@ -605,17 +800,24 @@ def main():
         ap.error("预览必须放在上传目录外，以免被当作商店截图")
     args.out.mkdir(parents=True, exist_ok=True)
     images = []
-    dev_spec = DEVICES[args.device]
-    pair = build_hero_pair(strings, args.src, dev_spec, args.lang.startswith("zh"), args.device)
-    for idx, spec in enumerate(PLAN):
-        image = pair[idx] if idx < 2 else build(
-            spec, strings[spec["out"]], args.src, idx, dev_spec,
-            args.lang.startswith("zh"), args.device, strings.get("_badges"))
+    pair = (build_mac_hero_pair(strings, args.src, dev_spec, args.lang.startswith("zh"))
+            if is_mac else
+            build_hero_pair(strings, args.src, dev_spec, args.lang.startswith("zh"), args.device))
+    for idx, spec in enumerate(plan):
+        if idx < 2:
+            image = pair[idx]
+        elif is_mac:
+            image = build_mac_page(spec, strings, args.src, idx, dev_spec,
+                                   args.lang.startswith("zh"))
+        else:
+            image = build(spec, strings[spec["out"]], args.src, idx, dev_spec,
+                          args.lang.startswith("zh"), args.device, strings.get("_badges"))
         assert image.size == dev_spec["size"] and image.mode == "RGB"
         image.save(args.out / f"{spec['out']}.png")
         images.append(image)
     if args.preview:
         contact_sheet(images, args.preview)
+        spread_preview(images, args.preview.with_name(args.preview.stem + "-spread.png"))
     print(f"✓ {args.lang}/{args.device}: {len(images)} 张 → {args.out} "
           f"({dev_spec['size'][0]}x{dev_spec['size'][1]})")
     return 0

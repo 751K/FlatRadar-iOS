@@ -1,6 +1,6 @@
 # App Store 截图海报
 
-把模拟器素屏排成六张海报，前两张组成连续跨页封面。保留真实 UI、设备遮罩和输出尺寸；使用大标题与统一边距。封面用暖白底与钴蓝强调色，左侧为品牌、两行主标题和一个平台数字，右侧为跨过接缝的仪表盘设备，低对比雷达圆环连接两页；后四张保留单页版式。
+把模拟器素屏排成六张海报，前两张组成连续跨页封面。iPhone/iPad 保留真实 UI、设备遮罩和输出尺寸；Mac 保留真实桌面窗口，不套模拟设备边框。所有设备共用大标题与统一边距；封面用暖白底与钴蓝强调色，左侧为品牌、两行主标题和一个平台数字，右侧为跨过接缝的主视图，低对比雷达圆环连接两页；后四张保留单页版式。
 
 ## 运行
 
@@ -24,15 +24,35 @@ python3 tools/screenshots/poster/poster.py \
 | iphone61 | 1206 × 2622 |
 | ipad13 | 2064 × 2752 |
 | ipad13l | 2752 × 2064 |
+| mac | 2560 × 1600 |
 
 素屏应与选择的设备及横竖方向一致。程序不会翻译 UI，也不会修改截图中的时间、数据和状态栏。
 
+Mac 素屏由 `tools/screenshots/run-mac.sh` 生成，放在同一个目录下并命名为
+`00-SignIn.png`、`01-Listings.png`、`02-Map.png`、`03-Calendar.png`、
+`04-Alerts.png`、`05-Stats.png`。Mac 海报会自动裁掉截图四周的白色画布，保留
+原生窗口内容，不额外套设备边框，只保留原生圆角和轻微阴影；前两张用 `01-Listings.png` 做连续跨页。
+登录页素材会被保留在输入目录，但不会放进商店序列；六张成品顺序是跨页封面两张、地图、日历、提醒、统计。
+
+```bash
+python3 tools/screenshots/poster/poster.py \
+  --src ~/Desktop/flatradar-screenshots/mac/en-US \
+  --lang en-US \
+  --device mac \
+  --out screenshots/poster/en-US/mac \
+  --preview screenshots/poster/preview-en-US-mac.png
+```
+
 ## 内容与调整
+
+### iPhone / iPad
 
 输出顺序：跨页封面左页、跨页封面右页、地图、仪表盘、四视图、日历。前两张从同一张双宽画布按精确像素切开，上传时保持文件名顺序。需要 `01-Dashboard.png`、`02-Listings.png`、`03-Map.png`、`04-Calendar.png`、`05-Notifications.png`。
 
 - `copy.json`：五种语言的两行标题；`_hero` 定义跨页标题、简介、数字说明和页脚；`_badges` 第一条提供平台数量。`01-Inbox` 文案保留用于单页构图，跨页右页不叠加标题。
 - `poster.py` 的 `THEMES`：底色、正文色、强调色、设备衬底色。
+- Mac 使用 `build_mac_hero_pair` 和 `build_mac_page`，不套用 iPhone/iPad 的设备遮罩，也不额外叠加 Mac 边框。
+- Mac 输出顺序为 `00-Overview`、`01-Listings`、`02-Map`、`03-Calendar`、`04-Alerts`、`05-Stats`；Mac 文案集中在各语言的 `_mac` 节点。
 - `build_hero_pair`：跨页设备、文字安全区域及切图。
 - `_headline` / `build`：标题比例、边距、设备及四视图排版。
 - `masks/`：现有设备屏幕遮罩，抠自 CoreSimulator 的 framebufferMask。
