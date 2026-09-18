@@ -2,7 +2,7 @@ import Foundation
 import Network
 import SwiftUI
 
-public enum Role: String, Sendable {
+public nonisolated enum Role: String, Sendable {
     case guest
     case user
     case admin
@@ -94,6 +94,36 @@ public final class AuthStore {
     /// 改成**这里**广播：会话在哪儿结束都从这两处出去（``logout()`` 和
     /// ``deleteAccount()`` 成功那一支），宿主只要听一次，不用知道是谁发起的。
     public static let sessionEndedNotification = Notification.Name("AuthStore.sessionEnded")
+
+    /// 会话开始了：登录、注册、恢复成功、以游客进入。
+    ///
+    /// 和 ``sessionEndedNotification`` 配对。需要它是因为有一种换人**不经过登出**：
+    /// 游客在设置里注册。那一刻 `isAuthenticated` 从 true 到 true，挂在它上面的
+    /// 反应一个都不会触发——Mac 上实时通知流因此一直没连上（代码审查 P2）。
+    public static let sessionBeganNotification = Notification.Name("AuthStore.sessionBegan")
+
+    /// 这个会话是**谁**。没登录是 `nil`；游客、某个用户、管理员各不相同。
+    ///
+    /// 原先的问题
+    /// ----------
+    /// 宿主拿 `isAuthenticated` 当"换人了没有"的信号，可游客和正式用户都是 true。
+    /// 游客在设置里注册成功，角色变了、账号变了，而这个布尔值没动：以它为 id 的
+    /// 任务不重跑（SSE 不连），主窗口不重建（继续显示游客时期的数据）。
+    ///
+    /// 要回答"是不是换了一个人"，就得用一个**真的会随人变**的值。
+    public var sessionIdentity: String? {
+        Self.sessionIdentity(isAuthenticated: isAuthenticated, role: role, userName: userInfo?.name)
+    }
+
+    /// 上面那个值的纯函数版，拆出来是为了能测。
+    nonisolated static func sessionIdentity(isAuthenticated: Bool, role: Role,
+                                            userName: String?) -> String? {
+        guard isAuthenticated else { return nil }
+        switch role {
+        case .guest: return "guest"
+        case .user, .admin: return "\(role.rawValue):\(userName ?? "")"
+        }
+    }
 
     @ObservationIgnored private var authFailureObserver: (any NSObjectProtocol)?
 
@@ -390,6 +420,7 @@ public final class AuthStore {
         isAuthenticated = true
         userInfo = nil
         pendingBiometricCredential = nil
+        NotificationCenter.default.post(name: Self.sessionBeganNotification, object: self)
     }
 
     /// 编辑 filter 保存后调用——把 ``userInfo.listingFilter`` 同步成后端
@@ -533,6 +564,7 @@ public final class AuthStore {
         isAuthenticated = true
         role = Role(rawValue: me.role) ?? .guest
         userInfo = me.user
+        NotificationCenter.default.post(name: Self.sessionBeganNotification, object: self)
     }
 
     public var isAdmin: Bool { role == .admin }

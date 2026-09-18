@@ -94,6 +94,7 @@ final class AppFeed {
     // MARK: - 会话结束 → 清账户数据
 
     @ObservationIgnored private var sessionEndObserver: (any NSObjectProtocol)?
+    @ObservationIgnored private var sessionBeginObserver: (any NSObjectProtocol)?
 
     /// 装一个「会话结束」的监听，终身一份。
     ///
@@ -119,6 +120,19 @@ final class AppFeed {
             queue: .main
         ) { [weak self] _ in
             Task { @MainActor in self?.signedOut() }
+        }
+        // 会话**开始**时重新判断 SSE。
+        //
+        // 窗口里的 `RootView` 也会做同一件事，但菜单栏常驻、一个窗口都没有的时候
+        // 它不存在——而游客正好可能在只开着设置窗口时注册。`syncStream` 幂等，
+        // 两处都调没关系。
+        sessionBeginObserver = NotificationCenter.default.addObserver(
+            forName: AuthStore.sessionBeganNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let auth = note.object as? AuthStore else { return }
+            Task { @MainActor in self?.syncStream(auth: auth) }
         }
     }
 

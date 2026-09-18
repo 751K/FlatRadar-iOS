@@ -127,7 +127,7 @@ extension Error {
     /// `nonisolated`：纯判定，不碰任何状态。工程默认 actor 隔离是 MainActor，
     /// 不写这个的话它会跟着变成 MainActor 隔离——store 里调没问题（它们本来就在
     /// 主 actor 上），但从 detached task 或测试的 autoclosure 里就调不动了。
-    nonisolated var isCancellation: Bool {
+    public nonisolated var isCancellation: Bool {
         if self is CancellationError { return true }
         if let urlError = self as? URLError, urlError.code == .cancelled { return true }
         if let apiError = self as? APIError, case .network(let underlying) = apiError {

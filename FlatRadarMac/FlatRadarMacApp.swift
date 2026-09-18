@@ -450,7 +450,12 @@ private struct RootView: View {
             if auth.isRestoringSession {
                 SessionRestorePane()
             } else if auth.isAuthenticated {
-                MainWindow()
+                // 按**会话身份**重建，不按 `isAuthenticated`：游客在设置里注册之后
+                // 这个布尔值还是 true，主窗口原先就不重建，排序、筛选、选中项、已
+                // 加载的房源全是游客时期的。换了人就该是一个新窗口状态——`.id`
+                // 一变，`BrowseModel` 和窗口级的几个 store 全部重新来过，`.task`
+                // 重新取数（这回带着新账号的 token 和个人筛选）。
+                MainWindow().id(auth.sessionIdentity)
             } else {
                 SignInPane()
             }
@@ -478,8 +483,15 @@ private struct RootView: View {
             // 恢复回来的会话盖掉，于是 `UI_TEST_SHOW_LOGIN` 那条拍出来是主界面。
             ScreenshotMode.applyIdentity(auth)
         }
-        // 登录态一变就重新判断一次 SSE 该不该活着（登录进来要连，登出要断）。
-        .task(id: auth.isAuthenticated) {
+        // 会话一换就重新判断一次 SSE 该不该活着（登录进来要连，登出要断）。
+        //
+        // 以前 id 是 `auth.isAuthenticated`。游客注册成正式用户时它从 true 到 true，
+        // 这个任务不重跑，实时通知流就一直没连上（代码审查 P2）。换成
+        // ``AuthStore/sessionIdentity``，"换了一个人"就一定会变。
+        //
+        // 没有窗口时这里不存在（`RootView` 在窗口里），那种情况由 ``AppFeed``
+        // 在应用级听 `sessionBeganNotification` 兜住。
+        .task(id: auth.sessionIdentity) {
             feed.syncStream(auth: auth)
             // 登录之前暂存的那条链接，现在能执行了。
             if auth.isAuthenticated, let url = pendingDeepLink {

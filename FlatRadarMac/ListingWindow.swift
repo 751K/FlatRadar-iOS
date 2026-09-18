@@ -30,6 +30,9 @@ struct ListingWindow: View {
     /// 没能反序列化。给一句明确的话，不留一个空窗。
     let id: Listing.ID?
 
+    @Environment(AuthStore.self) private var auth
+    @Environment(\.openWindow) private var openWindow
+
     @State private var store = SingleListingStore()
     @State private var thumbnails = MapThumbnailStore()
 
@@ -45,17 +48,88 @@ struct ListingWindow: View {
             // ⌘` 和 Mission Control 里全靠它区分两个详情窗口。
             .navigationTitle(store.listing?.name ?? "Listing")
             .navigationSubtitle(store.listing.map(ListingText.subtitle) ?? "")
-            .task(id: id) {
-                guard let id else { return }
-                await store.load(id)
+            // 按**房源 + 会话身份**加载，不只按房源。
+            //
+            // 原先只认 id，完全不看认证状态（代码审查 P2）：
+            // - 退出之后窗口照旧显示那套房的详情；
+            // - 换了账号不清也不重载，旧账号取回来的那份一直挂着；
+            // - 系统在启动时**恢复窗口**，那一刻会话恢复还没跑完、请求不带 token，
+            //   取不到就停在一个错误上，会话恢复好了也不会再试。
+            // 身份一变（含恢复完成、登出、换号）这个任务就重跑，见 ``gate``。
+            .task(id: LoadKey(listing: id, session: auth.sessionIdentity,
+                              restoring: auth.isRestoringSession)) {
+                switch Self.gate(listing: id, isRestoringSession: auth.isRestoringSession,
+                                 sessionIdentity: auth.sessionIdentity) {
+                case .load(let key): await store.load(key)
+                case .signedOut: store.clear()
+                case .waitingForSession, .lostListing: break
+                }
             }
+    }
+
+    /// `task(id:)` 的 id。三样东西任何一样变了都要重新判断一次。
+    private struct LoadKey: Equatable {
+        let listing: Listing.ID?
+        let session: String?
+        let restoring: Bool
+    }
+
+    /// 这个窗口此刻该干什么。拆成纯函数是为了能测——尤其是"恢复中不许取数"那条，
+    /// 它只在系统恢复窗口的那几百毫秒里成立，手测很难撞上。
+    enum Gate: Equatable {
+        /// 系统恢复窗口时会话还没恢复完：先等，**不发请求**。
+        case waitingForSession
+        /// 没登录（从来没登过，或者刚登出）：不显示任何房源数据。
+        case signedOut
+        /// 恢复窗口时 id 没能反序列化。
+        case lostListing
+        case load(SingleListingStore.Key)
+    }
+
+    static func gate(listing: Listing.ID?, isRestoringSession: Bool,
+                     sessionIdentity: String?) -> Gate {
+        if isRestoringSession { return .waitingForSession }
+        guard let session = sessionIdentity else { return .signedOut }
+        guard let listing else { return .lostListing }
+        return .load(.init(id: listing, session: session))
     }
 
     @ViewBuilder
     private var content: some View {
-        if id == nil {
+        switch Self.gate(listing: id, isRestoringSession: auth.isRestoringSession,
+                         sessionIdentity: auth.sessionIdentity) {
+        case .waitingForSession:
+            ProgressView("Signing in…")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        case .signedOut:
+            signedOut
+        case .lostListing:
             unavailable("This window lost track of which listing it was showing.")
-        } else if let l = store.listing {
+        case .load:
+            loaded
+        }
+    }
+
+    /// 退出之后这个窗口里**不能再有房源数据**——那是上一个会话取回来的。
+    /// 不自动关窗：它可能是用户特意摆在旁边的，重新登录之后按上面的 `task` 会
+    /// 自己重新加载回来。
+    private var signedOut: some View {
+        ContentUnavailableView {
+            Label("Signed Out", systemImage: "person.crop.circle.badge.xmark")
+        } description: {
+            Text("Sign in to FlatRadar to see this listing.")
+        } actions: {
+            Button("Open FlatRadar") {
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: FlatRadarMacApp.mainWindowID)
+            }
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    @ViewBuilder
+    private var loaded: some View {
+        if let l = store.listing {
             detail(l)
         } else if store.isLoading {
             ProgressView("Loading…")
@@ -132,8 +206,10 @@ struct ListingWindow: View {
         } description: {
             Text(message)
         } actions: {
-            if let id {
-                Button("Try Again") { Task { await store.load(id, force: true) } }
+            if case .load(let key) = Self.gate(listing: id,
+                                               isRestoringSession: auth.isRestoringSession,
+                                               sessionIdentity: auth.sessionIdentity) {
+                Button("Try Again") { Task { await store.load(key, force: true) } }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -154,27 +230,69 @@ struct ListingWindow: View {
 @Observable
 final class SingleListingStore {
 
+    /// 取的是**哪个会话里的哪套房**。同一套房换个账号要重新取——旧账号那份不能留着。
+    struct Key: Equatable {
+        let id: Listing.ID
+        let session: String
+    }
+
     private(set) var listing: Listing?
     private(set) var isLoading = false
     private(set) var failure: String?
 
-    /// 已经取到的是哪一条。`task(id:)` 在窗口恢复、切 Space 之类的场合会重跑，
-    /// 有它就不会为同一条房源重复发请求。
-    private var loadedID: Listing.ID?
+    /// 已经取到的是哪一份。`task(id:)` 在切 Space 之类的场合会重跑，
+    /// 有它就不会为同一份重复发请求。
+    @ObservationIgnored private var loadedKey: Key?
 
-    func load(_ id: Listing.ID, force: Bool = false) async {
-        if !force, loadedID == id, listing != nil { return }
-        guard !isLoading else { return }
+    /// 最近一次**要**的是哪一份。请求回来时和它比：不一样就说明期间换了人 / 登出了，
+    /// 这份结果作废，什么都不碰。
+    @ObservationIgnored private var requestedKey: Key?
+
+    /// 发请求那一步。默认走 `APIClient`；测试换成能扣住请求的闭包——这里的 bug
+    /// 全是"旧请求在新请求之后回来"，真网络上摆不出那个顺序。
+    @ObservationIgnored var fetch: (Listing.ID) async throws -> Listing = {
+        try await APIClient.shared.getListing(id: $0)
+    }
+
+    /// 取一份。
+    ///
+    /// 原先开头是 `guard !isLoading else { return }`。换号时 `task(id:)` 重跑，旧请求
+    /// 还在收尾、`isLoading` 还是 true，**新请求被这一句直接挡掉**；旧请求随后以
+    /// "已取消"结束，窗口停在一个错误上。和列表翻页那把锁是同一类问题，同一个修法：
+    /// 过期的请求什么都不碰，"正在加载"归最新那一次。
+    func load(_ key: Key, force: Bool = false) async {
+        if !force, loadedKey == key, listing != nil { return }
+        if isLoading, requestedKey == key { return }
+        // 换了人：旧账号取回来的那份**立刻**撤掉，不等新的回来。
+        if loadedKey?.session != key.session {
+            listing = nil
+            loadedKey = nil
+        }
+        requestedKey = key
         isLoading = true
         failure = nil
         do {
-            listing = try await APIClient.shared.getListing(id: id)
-            loadedID = id
+            let result = try await fetch(key.id)
+            guard requestedKey == key else { return }
+            listing = result
+            loadedKey = key
         } catch {
-            listing = nil
-            loadedID = nil
-            failure = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            guard requestedKey == key else { return }
+            if !error.isCancellation {
+                listing = nil
+                loadedKey = nil
+                failure = (error as? APIError)?.errorDescription ?? error.localizedDescription
+            }
         }
+        isLoading = false
+    }
+
+    /// 登出：清掉这个窗口里上一个会话的一切，在途的请求回来也不许再写。
+    func clear() {
+        requestedKey = nil
+        loadedKey = nil
+        listing = nil
+        failure = nil
         isLoading = false
     }
 }
