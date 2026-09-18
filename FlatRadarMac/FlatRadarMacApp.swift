@@ -177,7 +177,7 @@ struct FlatRadarMacApp: App {
             // 场景之后，后者实测排在 **Settings… 上面**（About → Sign Out → Settings…），
             // 登出跑到了设置前头。
             CommandGroup(before: .systemServices) {
-                SignOutCommand(auth: auth, push: push, feed: feed)
+                SignOutCommand(auth: auth, push: push)
                 Divider()
             }
             // 侧栏那五屏的键盘入口，落在系统自动生成的 View 菜单里——
@@ -451,7 +451,18 @@ private struct RootView: View {
         // ⌘N 开第二个窗口就会再恢复一次会话。移进 ``AppFeed`` 之后无论开几个窗口
         // 都只跑一遍，见 ``AppFeed/restoreSessionOnce(_:)``。
         .task {
-            await feed.restoreOnce { await auth.restoreSession() }
+            await feed.restoreOnce {
+                // 401 / 403 → 自动登出。iOS 一直有这一条，Mac 端漏了：token 被
+                // 服务器撤销、别的设备改了密码、会话到期之后，界面仍然显示登录着，
+                // 之后每个操作都失败，而用户看不出为什么。
+                //
+                // 放在恢复**之前**：恢复本身的那次 `getMe` 401 由 `restoreSession`
+                // 自己处理（那时 `isAuthenticated` 还是 false，监听里那道门会放过）。
+                // 放进 `restoreOnce`，一个进程只装一次；`observeAuthFailures` 自己
+                // 也是幂等的，两道保险。
+                auth.observeAuthFailures()
+                await auth.restoreSession()
+            }
             // 截图模式的身份要**等恢复跑完再设**。顺序不能反：CI 上钥匙串是空的、
             // 恢复必然失败，反过来在本地这台机器是登录着的，先设身份会被随后
             // 恢复回来的会话盖掉，于是 `UI_TEST_SHOW_LOGIN` 那条拍出来是主界面。
@@ -599,20 +610,16 @@ private struct SignOutCommand: View {
 
     let auth: AuthStore
     let push: PushStore
-    let feed: AppFeed
 
     var body: some View {
         Button("Sign Out") {
             // 先解绑设备再登出，顺序的理由见 ``SessionActions``——设置页的
             // Sign Out 走的是同一个函数。
-            Task {
-                await SessionActions.signOut(auth: auth, push: push)
-                // 风险 6：「任何窗口登出……都统一断流、**清空所有窗口的账户数据**」。
-                // 通知数据现在是共享的一份，所以在这里清一次就覆盖了所有窗口——
-                // 这正是把它提到应用级换来的好处：原先一窗一份时，这条判据要求
-                // 遍历所有窗口去清，而"只清当前可见窗口不算完成"。
-                feed.signedOut()
-            }
+            // 账户数据（通知、未读、最新房源、桌面小组件）**不在这里清**：
+            // `AuthStore.logout()` 会广播会话结束，``AppFeed`` 听着那一声统一清。
+            // 原先这一条是唯一手动清的登出路径，设置页和删号那两条都漏了——
+            // 见 ``AppFeed/init()``。
+            Task { await SessionActions.signOut(auth: auth, push: push) }
         }
         // 访客态也给它：`enterAsGuest()` 同样把 `isAuthenticated` 置真，
         // 没有这一条的话「以访客进来」就成了单程票。

@@ -81,9 +81,28 @@ public final class AuthStore {
         UserDefaults.standard.string(forKey: "server_url") ?? APIClient.defaultServerHost
     }
 
+    /// 会话结束了：登出、删号成功、或者 401 自动登出（它走的也是 ``logout()``）。
+    ///
+    /// 为什么要有这个广播
+    /// ------------------
+    /// 会话结束时要清掉的不只是这里的状态——宿主 app 还攥着通知、未读数、最新房源、
+    /// 桌面小组件，全是**上一个账号的数据**。原先靠每个调用点自己记得去清，结果 Mac
+    /// 上三条登出路径只有一条清了：设置页的 Sign Out、Delete Account 都没清，
+    /// 退出后进游客模式还能看到上一个账号的通知；401 自动登出那条更是连接都没接。
+    ///
+    /// 改成**这里**广播：会话在哪儿结束都从这两处出去（``logout()`` 和
+    /// ``deleteAccount()`` 成功那一支），宿主只要听一次，不用知道是谁发起的。
+    public static let sessionEndedNotification = Notification.Name("AuthStore.sessionEnded")
+
+    @ObservationIgnored private var authFailureObserver: (any NSObjectProtocol)?
+
     /// Listen for global auth failures from any API call and auto-logout.
+    ///
+    /// **幂等**：装第二次什么都不做。装两个的话一次 401 会登出两遍——而 Mac 上
+    /// 调它的地方挂在窗口的 `.task` 里，哪一层保证"只跑一次"都不该靠调用方记得。
     public func observeAuthFailures() {
-        NotificationCenter.default.addObserver(
+        guard authFailureObserver == nil else { return }
+        authFailureObserver = NotificationCenter.default.addObserver(
             forName: APIClient.authFailedNotification,
             object: nil,
             queue: .main
@@ -266,6 +285,7 @@ public final class AuthStore {
         isAuthenticated = false
         userInfo = nil
         errorMessage = nil
+        NotificationCenter.default.post(name: Self.sessionEndedNotification, object: self)
     }
 
     // MARK: - Delete Account
@@ -341,6 +361,7 @@ public final class AuthStore {
             role = .guest
             isAuthenticated = false
             userInfo = nil
+            NotificationCenter.default.post(name: Self.sessionEndedNotification, object: self)
         } catch {
             #if DEBUG
             print("[AuthStore] deleteAccount error: \(error)")

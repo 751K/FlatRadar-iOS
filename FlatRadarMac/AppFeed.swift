@@ -91,6 +91,37 @@ final class AppFeed {
     var matchCount: Int? { recent.total > 0 ? recent.total : nil }
     var matchIsFiltered: Bool { recent.isFiltered }
 
+    // MARK: - 会话结束 → 清账户数据
+
+    @ObservationIgnored private var sessionEndObserver: (any NSObjectProtocol)?
+
+    /// 装一个「会话结束」的监听，终身一份。
+    ///
+    /// 风险 6：「任何窗口登出、会话失效……都统一断流、清空所有窗口的账户数据」。
+    ///
+    /// 原先这件事是**调用点**做的：应用菜单那个 Sign Out 在 `logout()` 之后手动调
+    /// ``signedOut()``。可登出不止那一条路——设置页的 Sign Out、Delete Account、
+    /// 401 自动登出——另外三条都没调，于是退出之后进游客模式，Alerts 里还是上一个
+    /// 账号的通知和未读数（游客那边请求通知会失败，而失败不清旧数据）。
+    ///
+    /// 改成听 ``AuthStore/sessionEndedNotification``：会话在哪儿结束都一样，
+    /// 以后再加一条登出路径也不用记得来这儿。
+    ///
+    /// 为什么挂在这一层而不是某个窗口的 `.onChange`
+    /// -----------------------------------------
+    /// 菜单栏常驻现在默认开，**一个窗口都没有**是常态。token 被撤销、下一次后台
+    /// 请求 401 → 自动登出，那一刻可能没有任何视图在场；挂在窗口上的监听不会跑，
+    /// SSE 也就没人断。
+    init() {
+        sessionEndObserver = NotificationCenter.default.addObserver(
+            forName: AuthStore.sessionEndedNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.signedOut() }
+        }
+    }
+
     // MARK: - 一次性的启动动作
 
     private var didRestore = false
