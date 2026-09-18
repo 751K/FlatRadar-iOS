@@ -132,6 +132,101 @@ final class MenuBarPanelRenderTests: XCTestCase {
                        "筛选串再长也不能把面板撑宽——那一行是 lineLimit(1) + 尾部截断")
     }
 
+    // MARK: - 菜单栏上那一格
+
+    /// 房子、数字、未读菱形三样东西在竖直方向上**居中对齐**。
+    ///
+    /// 上一版在真菜单栏上量的（2x 像素）：房子 17–43、数字 19–37——中心差 2px，
+    /// 而且上面只多出 2px、下面多出 6px，看起来就是房子往下掉了一截。那是
+    /// `MenuBarExtra` 把 `HStack` 拆给 `NSStatusBarButton` 各排各的结果（见
+    /// ``MenuBarGlyph``）。现在整格画成一张图，对齐是我们自己的事，所以要钉住。
+    ///
+    /// 比的是**中心**，不是底边
+    /// ----------------------
+    /// 第一版这条测试比的是"房子底边落在数字基线上"，跑出来差 5px、红了。但那是
+    /// 标准写错了：SF Symbol 插进 `Text` 之后是按**中线**和文字配对的——符号比
+    /// 大写字母高，所以上下各出头一点（这里是 4px / 5px）。菜单栏里图标配文字的
+    /// 惯例也是这样（电池图标配 `100%`）。上一版的毛病不是"出头"，是**不对称**。
+    ///
+    /// 量法和在真菜单栏上量的一样：按列切出墨迹段，比每段的上下沿。
+    func test_菜单栏字形里房子数字和菱形在同一条中线上() throws {
+        let runs = try glyphRuns(newToday: 36, hasUnread: true, name: "07-glyph-unread")
+        _ = try glyphRuns(newToday: 36, hasUnread: false, name: "07-glyph-plain")
+
+        // 房子 + "3" + "6" + 菱形 = 4 段
+        XCTAssertEqual(runs.count, 4, "应当是房子、两个数字、菱形四段墨迹，实际 \(runs)")
+        guard runs.count == 4 else { return }
+        let house = runs[0], digit = runs[1], mark = runs[3]
+        print("› [glyph] house \(house)  digit \(digit)  mark \(mark)")
+
+        XCTAssertLessThanOrEqual(abs(house.center - digit.center), 1,
+                                 "房子和数字的中线要重合（±1px @2x）。上一版在菜单栏上差 2px、"
+                                 + "而且上下出头 2px / 6px，看着像房子掉下去了。")
+        XCTAssertLessThanOrEqual(abs((digit.top - house.top) - (house.bottom - digit.bottom)), 2,
+                                 "房子比数字高出来的部分要上下对称——不对称正是上一版的样子")
+        XCTAssertLessThanOrEqual(abs(mark.center - digit.center), 1,
+                                 "未读菱形要在数字的视觉中线上，不能坐在基线上")
+    }
+
+    /// 交给系统的那张图，墨迹**上下贴边**。
+    ///
+    /// `NSStatusBarButton` 按图的中心摆。图里上下的空白不一样多，这一格就会
+    /// 整体偏上或偏下——没裁之前是上空 4px、下空 2px，在菜单栏里比系统图标低
+    /// 1.5px。这条测的是真正交出去的那张 `MenuBarGlyph.image(...)`，不是视图。
+    func test_交给菜单栏的那张图上下没有空白() throws {
+        for unread in [false, true] {
+            let image = MenuBarGlyph.image(newToday: 36, hasUnread: unread)
+            XCTAssertTrue(image.isTemplate, "要是 template，菜单栏深浅和点开高亮才对")
+            var rect = NSRect(origin: .zero, size: image.size)
+            let cg = try XCTUnwrap(image.cgImage(forProposedRect: &rect, context: nil, hints: nil))
+            let bitmap = NSBitmapImageRep(cgImage: cg)
+            let w = bitmap.pixelsWide, h = bitmap.pixelsHigh
+            func rowHasInk(_ y: Int) -> Bool {
+                (0..<w).contains { (bitmap.colorAt(x: $0, y: y)?.alphaComponent ?? 0) > 0 }
+            }
+            XCTAssertTrue(rowHasInk(0), "第一行就该有墨迹（unread=\(unread)）")
+            XCTAssertTrue(rowHasInk(h - 1), "最后一行就该有墨迹（unread=\(unread)）")
+        }
+    }
+
+    private struct InkRun: CustomStringConvertible {
+        let left: Int, right: Int, top: Int, bottom: Int
+        var center: Double { Double(top + bottom) / 2 }
+        var description: String { "x\(left)–\(right) y\(top)–\(bottom)" }
+    }
+
+    /// 画一张菜单栏字形，按列切出墨迹段，返回每段的包围盒（2x 像素）。
+    private func glyphRuns(newToday: Int?, hasUnread: Bool, name: String) throws -> [InkRun] {
+        var rendered: NSImage?
+        NSAppearance(named: .aqua)?.performAsCurrentDrawingAppearance {
+            let renderer = ImageRenderer(content: MenuBarGlyph(newToday: newToday,
+                                                               hasUnread: hasUnread))
+            renderer.scale = 2
+            rendered = renderer.nsImage
+        }
+        let image = try XCTUnwrap(rendered)
+        let bitmap = try XCTUnwrap(NSBitmapImageRep(data: image.tiffRepresentation ?? Data()))
+        if let png = bitmap.representation(using: .png, properties: [:]) {
+            dump(png, name: name, path: "(glyph)")
+        }
+
+        let w = bitmap.pixelsWide, h = bitmap.pixelsHigh
+        func ink(_ x: Int, _ y: Int) -> Bool { (bitmap.colorAt(x: x, y: y)?.alphaComponent ?? 0) > 0.5 }
+
+        var runs: [InkRun] = []
+        var start: Int?
+        for x in 0...w {
+            let hasInk = x < w && (0..<h).contains { ink(x, $0) }
+            if hasInk, start == nil { start = x }
+            if !hasInk, let s = start {
+                let rows = (0..<h).filter { y in (s..<x).contains { ink($0, y) } }
+                runs.append(InkRun(left: s, right: x - 1, top: rows.first!, bottom: rows.last!))
+                start = nil
+            }
+        }
+        return runs
+    }
+
     // MARK: - 工具
 
     private struct RenderedSize { let width: Int; let height: Int }

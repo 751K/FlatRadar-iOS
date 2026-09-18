@@ -649,7 +649,7 @@ private struct MenuRow: View {
 /// （红点＝有未读）」，而理由和面板锚点那条是同一个：匹配数是个几百的存量，
 /// 挂在菜单栏上一整天都不动一下，占着那块地方却不构成任何"该看一眼了"的信号。
 ///
-/// 红点只在**有未读**时出现，而且和面板里那枚胶囊是同一个数、同一条访客规则。
+/// 未读标记只在**有未读**时出现，和面板里那枚胶囊是同一个数、同一条访客规则。
 struct MenuBarStatusLabel: View {
 
     let feed: AppFeed
@@ -660,17 +660,127 @@ struct MenuBarStatusLabel: View {
     }
 
     var body: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "house")
-            if let n = feed.summary.newToday {
-                Text("\(n)").monospacedDigit()
-            }
-            if unread > 0 {
-                Diamond()
-                    .fill(Theme.unread)
-                    .frame(width: 5, height: 5)
-                    .accessibilityLabel(StatusWording.unread)
-            }
-        }
+        Image(nsImage: MenuBarGlyph.image(newToday: feed.summary.newToday,
+                                          hasUnread: unread > 0))
+            .accessibilityLabel(accessibilityText)
+    }
+
+    private var accessibilityText: String {
+        var parts = ["FlatRadar"]
+        if let n = feed.summary.newToday { parts.append("\(n) \(StatusWording.newLower)") }
+        if unread > 0 { parts.append("\(unread) \(StatusWording.unreadLower)") }
+        return parts.joined(separator: ", ")
+    }
+}
+
+/// 菜单栏那一格的字形——**整个画成一张 template 图**交给系统。
+///
+/// 为什么不直接写 `HStack { Image; Text }`
+/// ------------------------------------
+/// 上一版就是那么写的，房子比数字低了一截。量出来（2x 像素，菜单栏 48px 高）：
+///
+/// | | 上沿 | 下沿 | 高 |
+/// |---|---|---|---|
+/// | 🏠 | 17 | **43** | 27 |
+/// | `36` | 19 | **37** | 19 |
+///
+/// 房子底边比数字基线低 3pt。原因不在这边的代码：`MenuBarExtra` 会把 label
+/// 拆开交给 `NSStatusBarButton`——`Image` 进 `image`、`Text` 进 `title`，
+/// AppKit 各排各的，图按按钮高度居中、字按自己的基线放，**两者之间没有任何
+/// 对齐关系**。在 SwiftUI 这边写什么 `alignment` / `baselineOffset` 都会在这次
+/// 转换里丢掉。同一次转换还会丢掉一切不是 `Image` / `Text` 的东西——上一版那颗
+/// 未读菱形是个自定义 `Shape`，**从来没被画出来过**。
+///
+/// 画成一张图之后排版就全在我们手里了。房子用 SF Symbol **插进 `Text`**：
+/// 那样它按字体度量坐在基线上、高度跟着字号走——SF Symbols 设计时就是这么和
+/// 文字对齐的，不用自己算偏移。
+///
+/// 为什么是 template
+/// ----------------
+/// 菜单栏的深浅跟**壁纸**走，不跟 app 的外观走；点开时那一格还会反色高亮。
+/// template 图只留 alpha，由系统上色，这几种情况全对。代价是**不能有颜色**：
+/// 稿子里那颗红菱形在这里是和数字同色的实心菱形——靠"有没有"区分未读，
+/// 不靠红。要红就得出一张非 template 图，并且自己判断菜单栏此刻是深是浅，
+/// 那一步判断错了整格就会在某些壁纸上消失。
+struct MenuBarGlyph: View {
+
+    let newToday: Int?
+    let hasUnread: Bool
+
+    /// 和系统给状态栏标题用的是同一个字体，数字的样子和上一版完全一样——
+    /// 这次要动的只是房子，不是字。
+    static var font: Font { Font(NSFont.menuBarFont(ofSize: 0)) }
+
+    var body: some View {
+        Text("\(Image(systemName: "house"))\(number)\(unreadMark)")
+            .font(Self.font)
+            .monospacedDigit()
+            .foregroundStyle(.black)
+            .fixedSize()
+    }
+
+    /// 前面带一个空格，和房子隔开。没拿到数时整段省略，只剩房子。
+    private var number: String {
+        newToday.map { " \($0)" } ?? ""
+    }
+
+    /// 小一号的实心菱形，抬到数字的**视觉中线**上。
+    ///
+    /// 小字号的符号默认坐在基线上，比数字的中线低；`baselineOffset` 把它抬上去。
+    /// 抬多少是渲染出来量的（`MenuBarPanelRenderTests` 那条对齐测试钉着）。
+    private var unreadMark: Text {
+        guard hasUnread else { return Text(verbatim: "") }
+        let diamond = Text(Image(systemName: "diamond.fill"))
+            .font(.system(size: 7, weight: .bold))
+            .baselineOffset(Self.markLift)
+        // 插值而不是 `Text + Text`：后者在这一代 SDK 上已经标了弃用。
+        return Text(" \(diamond)")
+    }
+
+    static let markLift: CGFloat = 2
+
+    /// 画成图。菜单栏那一格每次数变了就重画一次——一行字，代价可以忽略。
+    ///
+    /// ⚠️ 画完要**上下裁到墨迹为止**
+    /// ------------------------------
+    /// `Text` 的包围盒是整个行框：上面留着上伸部的空间、下面留着下伸部的空间，
+    /// 两边不一样多。实测这张图 35px 高，墨迹上面空 4px、下面空 2px——墨迹中心比
+    /// 图中心低 1px。`NSStatusBarButton` 按**图**的中心放，于是整格在菜单栏里比
+    /// 旁边的系统图标低了一截（量的：旁边图标中心 29.5，这一格 31）。
+    ///
+    /// 裁到墨迹之后图中心就是字形的视觉中心，和系统图标一样居中。顺带一个好处：
+    /// 房子永远是最高的那个字形，裁出来的高度就是房子的高度，数字从 `7` 变成 `36`
+    /// 这一格不会上下跳。
+    @MainActor
+    static func image(newToday: Int?, hasUnread: Bool) -> NSImage {
+        let scale = NSScreen.main?.backingScaleFactor ?? 2
+        let renderer = ImageRenderer(content: MenuBarGlyph(newToday: newToday,
+                                                           hasUnread: hasUnread))
+        renderer.scale = scale
+        guard let drawn = renderer.cgImage else { return NSImage() }
+        let trimmed = trimmedToInk(drawn) ?? drawn
+        let image = NSImage(cgImage: trimmed,
+                            size: NSSize(width: CGFloat(trimmed.width) / scale,
+                                         height: CGFloat(trimmed.height) / scale))
+        image.isTemplate = true
+        return image
+    }
+
+    /// 上下裁掉没有墨迹的行，左右不动（左右的空白是字距，裁了会贴边）。
+    nonisolated static func trimmedToInk(_ image: CGImage) -> CGImage? {
+        let w = image.width, h = image.height
+        guard let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8,
+                                  bytesPerRow: w * 4,
+                                  space: CGColorSpaceCreateDeviceRGB(),
+                                  bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue),
+              let _ = Optional(ctx.draw(image, in: CGRect(x: 0, y: 0, width: w, height: h))),
+              let data = ctx.data
+        else { return nil }
+        // 位图上下文的内存按行从**上**往下排，和 `cropping(to:)` 的坐标系一致。
+        let px = data.bindMemory(to: UInt8.self, capacity: w * h * 4)
+        func hasInk(_ row: Int) -> Bool { (0..<w).contains { px[(row * w + $0) * 4 + 3] > 0 } }
+        guard let top = (0..<h).first(where: hasInk),
+              let bottom = (0..<h).last(where: hasInk) else { return nil }
+        return image.cropping(to: CGRect(x: 0, y: top, width: w, height: bottom - top + 1))
     }
 }
