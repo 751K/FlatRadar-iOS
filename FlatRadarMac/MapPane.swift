@@ -49,7 +49,10 @@ struct MapPane: View {
 
     /// 顶栏**右端**那三个按钮（刷新 / 钉住 / inspector）占的宽度。实测它们的 frame
     /// 从 1282 排到 1396，靠右留 4pt，取 150 留一点余量。
-    private static let toolbarTrailing: CGFloat = 150
+    ///
+    /// `nonisolated`：它在 `onGeometryChange` 的 `of:` 闭包里读，那个闭包是
+    /// `@Sendable`、不在主线程隔离里。一个常数不需要主线程保护。
+    nonisolated private static let toolbarTrailing: CGFloat = 150
 
     @State private var camera: MapCameraPosition = .automatic
     /// 缩放落在哪一档：画不画城市团、显不显示 POI。

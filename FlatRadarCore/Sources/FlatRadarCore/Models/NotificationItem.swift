@@ -229,9 +229,10 @@ public extension NotificationItem {
     }
 
     /// 兼容旧调用点：直接返回预计算好的 ``parsedDate``（零解析）。
-    /// `public` 是为 Mac 端的通知流开的：它要按天分组、按 2 小时分桶画柱状图，
-    /// 两件事都得拿到解析好的日期。`parsedDate` 本身留在包内（decode 时算一次）。
-    public nonisolated var createdDate: Date? { parsedDate }
+    /// 对外公开（所在的是 `public extension`，不用再写 `public`）是为 Mac 端的
+    /// 通知流开的：它要按天分组、按 2 小时分桶画柱状图，两件事都得拿到解析好的
+    /// 日期。`parsedDate` 本身留在包内（decode 时算一次）。
+    nonisolated var createdDate: Date? { parsedDate }
 
     /// 相对年龄串：`now` / `38m` / `5h` / `2d`。
     ///

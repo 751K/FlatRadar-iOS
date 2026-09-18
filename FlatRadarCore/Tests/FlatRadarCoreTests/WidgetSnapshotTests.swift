@@ -309,6 +309,24 @@ final class SnapshotCompatibilityTests: XCTestCase {
         XCTAssertNil(snap.totalListings)
     }
 
+    /// 字段在、但类型不对（比如哪一版把布尔写成了字符串），同样退默认值。
+    ///
+    /// 这条靠的是每行的 `try?`：少了它，`decodeIfPresent` 的类型错误会让整份解码抛出。
+    func test_字段类型不对_退默认值_不抛错() throws {
+        let odd = """
+        {"matchCount":193,"isFiltered":"yes","unreadAlerts":"3","dailyNew":"x",
+         "unreadKinds":7,"lastScrape":12,"capturedAt":780000000}
+        """
+        let snap = try JSONDecoder().decode(WidgetSnapshot.self, from: Data(odd.utf8))
+
+        XCTAssertEqual(snap.matchCount, 193)
+        XCTAssertFalse(snap.isFiltered)
+        XCTAssertEqual(snap.unreadAlerts, 0)
+        XCTAssertEqual(snap.dailyNew, [])
+        XCTAssertEqual(snap.unreadKinds, .none)
+        XCTAssertEqual(snap.lastScrape, "")
+    }
+
     /// 唯一不能缺的是采集时间：没有它就判断不了新鲜度，
     /// 而「旧了要改口」是这份数据最要紧的一条规矩。
     func test_缺采集时间就该解码失败() {

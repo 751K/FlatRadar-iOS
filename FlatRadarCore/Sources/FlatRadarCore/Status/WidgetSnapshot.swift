@@ -135,21 +135,24 @@ public nonisolated struct WidgetSnapshot: Codable, Sendable, Equatable {
     /// 解不出来，于是升级之后那一格会空着，直到 app 下一次跑起来重写——而"下一次
     /// 跑起来"可能是几天后。和 ``MonitorStatus`` 那份宽容解码同一个理由：
     /// 少一个字段的显示，比整格空掉好。
+    ///
+    /// `try?` 会把 `decodeIfPresent` 的可选压平成一层，所以 `(try? …) ?? 默认值`
+    /// 一句同时兜住「缺键」和「类型不对」，不需要再 `as? T`（那是空转换，编译器会警告）。
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         newToday      = try? c.decodeIfPresent(Int.self, forKey: .newToday)
-        dailyNew      = (try? c.decodeIfPresent([Int].self, forKey: .dailyNew)) as? [Int] ?? []
+        dailyNew      = (try? c.decodeIfPresent([Int].self, forKey: .dailyNew)) ?? []
         totalListings = try? c.decodeIfPresent(Int.self, forKey: .totalListings)
         statusChanges = try? c.decodeIfPresent(Int.self, forKey: .statusChanges)
         newThisWeek   = try? c.decodeIfPresent(Int.self, forKey: .newThisWeek)
         matchCount    = try? c.decodeIfPresent(Int.self, forKey: .matchCount)
-        isFiltered    = (try? c.decodeIfPresent(Bool.self, forKey: .isFiltered)) as? Bool ?? false
-        unreadAlerts  = (try? c.decodeIfPresent(Int.self, forKey: .unreadAlerts)) as? Int ?? 0
-        showsUnread   = (try? c.decodeIfPresent(Bool.self, forKey: .showsUnread)) as? Bool ?? false
-        newest        = (try? c.decodeIfPresent([WidgetListing].self, forKey: .newest)) as? [WidgetListing] ?? []
-        unreadKinds   = (try? c.decodeIfPresent(UnreadBreakdown.self, forKey: .unreadKinds)) as? UnreadBreakdown ?? .none
-        moveIns       = (try? c.decodeIfPresent([MoveInDay].self, forKey: .moveIns)) as? [MoveInDay] ?? []
-        lastScrape    = (try? c.decodeIfPresent(String.self, forKey: .lastScrape)) as? String ?? ""
+        isFiltered    = (try? c.decodeIfPresent(Bool.self, forKey: .isFiltered)) ?? false
+        unreadAlerts  = (try? c.decodeIfPresent(Int.self, forKey: .unreadAlerts)) ?? 0
+        showsUnread   = (try? c.decodeIfPresent(Bool.self, forKey: .showsUnread)) ?? false
+        newest        = (try? c.decodeIfPresent([WidgetListing].self, forKey: .newest)) ?? []
+        unreadKinds   = (try? c.decodeIfPresent(UnreadBreakdown.self, forKey: .unreadKinds)) ?? .none
+        moveIns       = (try? c.decodeIfPresent([MoveInDay].self, forKey: .moveIns)) ?? []
+        lastScrape    = (try? c.decodeIfPresent(String.self, forKey: .lastScrape)) ?? ""
         // 只有这一条不能退默认值：没有采集时间就判断不了新鲜度，
         // 而"旧了要改口"正是这份数据最要紧的一条规矩。
         capturedAt    = try c.decode(Date.self, forKey: .capturedAt)
