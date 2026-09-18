@@ -37,6 +37,7 @@ struct InspectorPane: View {
     @State private var hoveredRow: String?
 
     @Environment(AuthStore.self) private var auth
+    @Environment(\.openWindow) private var openWindow
 
     /// 正在问坐标。按钮变成 `Locating…` 并禁用，免得连点发多次请求。
     @State private var locating = false
@@ -81,6 +82,8 @@ struct InspectorPane: View {
                 // 恰好还留着上次选中的东西"。
                 if let chart = model.statsChart {
                     chartBreakdown(chart)
+                } else if let alert = model.focusedAlertRow {
+                    alertListing(alert)
                 } else {
                     body(for: model.focused)
                 }
@@ -393,6 +396,41 @@ struct InspectorPane: View {
             }
 
             whyYouGotThis.padding(.top, 14)
+        }
+    }
+
+    /// 通知下面接的那套房。**按这条通知自己的房源 id 取，不读 `model.focused`。**
+    ///
+    /// 上半段（``alertDetail(_:)``）判断"下面有没有房源"用的也是这个 id，两半
+    /// 从同一个键出发，就不会再出现上面说 A、下面画 B——原先下半段读的是
+    /// `focused`，而房源不在已加载那批里时 `focused` 还停在上一套（代码审查 P2）。
+    ///
+    /// 不在已加载那批里的：上半段已经把名字、状态、平台说了，这里给两条路——
+    /// 独立窗口按 id 取完整详情，或者直接去平台上看。
+    @ViewBuilder
+    private func alertListing(_ row: AlertRow) -> some View {
+        if let l = model.listing(row.listingID) {
+            detail(l)
+        } else if !row.listingID.isEmpty {
+            VStack(alignment: .leading, spacing: 0) {
+                Text("This listing isn’t in the list loaded in this window.")
+                    .font(.subheadline)
+                    .foregroundStyle(.tertiary)
+                HStack(spacing: 7) {
+                    ListingActionButton(title: "Open Listing", prominent: true) {
+                        openWindow(id: FlatRadarMacApp.listingWindowID, value: row.listingID)
+                    }
+                    if let url = URL(string: row.url), !row.url.isEmpty {
+                        ListingActionButton(
+                            title: "Open on \(row.source.map(Platform.displayName) ?? "Platform")",
+                            prominent: false) {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                }
+                .padding(.top, 12)
+            }
         }
     }
 

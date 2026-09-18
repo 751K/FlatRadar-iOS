@@ -28,6 +28,11 @@ struct MainWindow: View {
     @State private var statsStore = StatsModel()
     @State private var showInspector = true
 
+    /// 推送 / deep link 的待去往信箱，见 ``RouteInbox``。
+    @Environment(RouteInbox.self) private var routes
+    /// 这个窗口已经接过的最后一个路由序号。
+    @State private var appliedRoute = 0
+
     /// 窗口内容区的宽度。地图那两块浮层要靠它判断自己有没有顶到窗口右边缘
     /// （见 `MapPane` 里 `atWindowTrailingEdge` 的注释）。
     ///
@@ -129,20 +134,20 @@ struct MainWindow: View {
         // 快照旧了那行小字自己会改口，见 `WidgetSnapshot.footnote(at:)`。
         .onChange(of: feed.alerts.unreadCount) { feed.publishWidgetSnapshot(auth: auth) }
         .focusedSceneValue(\.browseModel, model)
-        // 点了推送通知 → 切到 Alerts 屏，新来的那条就在最上面。
+        // ⌘R 刷的是这个窗口**当前这一屏**，和工具栏按钮同一个动作。见 ``SectionReloader``。
+        .focusedSceneValue(\.sectionReload, SectionReloadAction(
+            section: model.section,
+            isLoading: sectionIsLoading,
+            run: { [reloader, section = model.section] in await reloader.reload(section) }))
+        // 点了推送通知 → Alerts 屏；`h2smonitor://map/<id>` → 地图屏并定位过去。
         //
-        // 只切屏、不定位到具体哪一条：payload 里给的是 `listing_id` 不是通知 id，
-        // 同一套房可能有好几条通知。App 没在运行时点通知，系统会先把它拉起来，
-        // 这时窗口还没出现、这里还没订阅，那一次点击就只是打开 App。
-        .onReceive(NotificationCenter.default.publisher(for: .flatRadarOpenAlerts)) { _ in
-            model.section = .alerts
-        }
-        // `h2smonitor://map/<id>` —— 切到地图屏并定位过去，和右键菜单的
-        // 「Show on Map」走同一条路。
-        .onReceive(NotificationCenter.default.publisher(for: .flatRadarLocateOnMap)) { note in
-            guard let id = note.userInfo?["listing_id"] as? String else { return }
-            model.locateOnMap(id: id)
-        }
+        // 两条都从 ``RouteInbox`` 取件。原先是 `NotificationCenter` 广播、这里
+        // `.onReceive`：广播发完即忘，这个窗口还没挂上（冷启动、会话还在恢复）或者
+        // 根本没开着（只剩菜单栏）时，那次点击就丢了（代码审查 P2）。
+        //
+        // 刚出现时取一次（接住挂上之前投进来的），之后每有新投递再取。
+        .task { takeRoute(justAppeared: true) }
+        .onChange(of: routes.seq) { takeRoute(justAppeared: false) }
         // 日历数据**按需**拉，不跟着启动一起发。
         //
         // 它是四屏里最少打开的一屏，而 `/calendar` 实测回 691 条、211 KB——
@@ -190,6 +195,50 @@ struct MainWindow: View {
         }
     }
 
+    // MARK: - 路由
+
+    private func takeRoute(justAppeared: Bool) {
+        let (route, seq) = routes.claim(after: appliedRoute, justAppeared: justAppeared)
+        appliedRoute = seq
+        switch route {
+        case .alerts?:
+            model.section = .alerts
+        case .locateOnMap(let id)?:
+            // 和右键菜单的「Show on Map」走同一条路。
+            model.locateOnMap(id: id)
+        case nil:
+            break
+        }
+    }
+
+    // MARK: - 刷新
+
+    /// 各屏的刷新动作。房源、地图、统计是**这个窗口的**，日历和通知在应用级
+    /// （``AppFeed``）——所以只能在这里拼，菜单命令那一层两边都够不着。
+    private var reloader: SectionReloader {
+        SectionReloader(
+            listings: { [model] in await model.reload() },
+            // 直接 `refresh()`，不走 `MapPane` 里那个 `load()`：后者只在还没有数据时
+            // 才取，正是"刷新了还是旧数据"的原因。相机不动，用户正看着的那块不跳走。
+            map: { [mapStore] in await mapStore.refresh() },
+            calendar: { [feed] in await feed.calendar.refresh() },
+            alerts: { [feed] in await feed.alerts.refresh() },
+            stats: { [statsStore] in await statsStore.load(force: true) },
+            shared: { [feed, auth] in await feed.refreshShared(auth: auth) })
+    }
+
+    /// 当前这一屏正在取数。刷新按钮据此置灰——原先看的永远是房源列表的
+    /// `isLoading`，在地图屏上它和眼前的东西毫无关系。
+    private var sectionIsLoading: Bool {
+        switch model.section {
+        case .listings: model.listings.isLoading
+        case .map:      mapStore.isLoading
+        case .calendar: feed.calendar.isLoading
+        case .alerts:   feed.alerts.isLoading
+        case .stats:    statsStore.isLoading
+        }
+    }
+
     // MARK: - 工具栏
 
     @ToolbarContentBuilder
@@ -201,17 +250,15 @@ struct MainWindow: View {
         // 显式写出这个间隔，位置就不再依赖"标题恰好有多宽"这种隐性副作用。
         ToolbarSpacer(.flexible)
         ToolbarItem {
+            // 刷的是**当前这一屏**，不再固定是房源列表。见 ``SectionReloader``。
             Button {
-                Task {
-                    async let a: Void = model.reload()
-                    async let b: Void = feed.refreshShared(auth: auth)
-                    _ = await (a, b)
-                }
+                let section = model.section
+                Task { await reloader.reload(section) }
             } label: {
                 Label("Reload", systemImage: "arrow.clockwise")
             }
-            .disabled(model.listings.isLoading)
-            .help("Reload listings (⌘R)")
+            .disabled(sectionIsLoading)
+            .help("Reload \(model.section.label) (⌘R)")
         }
         ToolbarItem {
             Button {

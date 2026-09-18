@@ -659,10 +659,21 @@ struct MenuBarStatusLabel: View {
         auth.isGuest ? 0 : feed.alerts.unreadCount
     }
 
+    @Environment(\.openWindow) private var openWindow
+    @Environment(RouteInbox.self) private var routes
+
     var body: some View {
         Image(nsImage: MenuBarGlyph.image(newToday: feed.summary.newToday,
                                           hasUnread: unread > 0))
             .accessibilityLabel(accessibilityText)
+            // 一个窗口都没开过、只有菜单栏这一格的启动形态下（系统按"零窗口"恢复），
+            // 这是进程里唯一挂着的视图。在这儿也登记一份开窗动作，点通知才开得出窗口。
+            .onAppear {
+                routes.registerWindowOpener { [openWindow] in
+                    NSApp.activate(ignoringOtherApps: true)
+                    openWindow(id: FlatRadarMacApp.mainWindowID)
+                }
+            }
     }
 
     private var accessibilityText: String {

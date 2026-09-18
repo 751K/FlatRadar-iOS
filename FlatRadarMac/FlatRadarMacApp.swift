@@ -164,13 +164,14 @@ struct FlatRadarMacApp: App {
                 .environment(feed)
                 .environment(coffee)
                 .environment(review)
+                .environment(RouteInbox.shared)
         }
         // 设计稿画的就是 1440×900。三栏加起来的下限：侧栏 196 + 表格九列约 620
         // + inspector 300 ≈ 1120，再窄就得先收 inspector。
         .defaultSize(width: 1440, height: 900)
         .commands {
             // 命令读的是**当前聚焦那个窗口**的 model（focusedSceneValue），
-            // 所以将来开多窗口时 ⌘R 刷新的是你正在看的那一个。
+            // 所以开多窗口时 ⌘R 刷新的是你正在看的那一个窗口、那一屏。
             CommandGroup(after: .toolbar) {
                 BrowseCommands()
             }
@@ -277,6 +278,7 @@ struct FlatRadarMacApp: App {
             MenuBarStatusView(feed: feed, auth: auth)
         } label: {
             MenuBarStatusLabel(feed: feed, auth: auth)
+                .environment(RouteInbox.shared)
         }
         .menuBarExtraStyle(.window)
     }
@@ -329,6 +331,7 @@ private struct RootView: View {
     @Environment(AppFeed.self) private var feed
     @Environment(\.openURL) private var openURL
     @Environment(\.openWindow) private var openWindow
+    @Environment(RouteInbox.self) private var routes
 
     /// 还没登录就点进来的那条 deep link。
     ///
@@ -417,11 +420,12 @@ private struct RootView: View {
         case "map":
             // 地图那一路要有个浏览窗口才有地方落。没有就先开一个，
             // `openWindow(id:)` 对已开着的主窗口是"激活"，不会堆第二个。
+            //
+            // 去处投进 ``RouteInbox`` 而不是广播：刚开的窗口要等会话恢复完才挂上
+            // `MainWindow`，广播那一刻还没人接，这一跳就丢了。
             NSApp.activate(ignoringOtherApps: true)
             openWindow(id: FlatRadarMacApp.mainWindowID)
-            NotificationCenter.default.post(name: .flatRadarLocateOnMap,
-                                            object: nil,
-                                            userInfo: ["listing_id": id])
+            routes.post(.locateOnMap(listingID: id))
         default:
             break
         }
@@ -522,6 +526,19 @@ private struct RootView: View {
             guard let url = activity.webpageURL else { return }
             handleUniversalLink(url)
         }
+        // 向路由信箱报到：有几个浏览窗口开着，以及"没窗口时怎么开一个"。
+        //
+        // 开窗的动作只能从视图环境里拿（`openWindow`），所以每个窗口出现时都
+        // 登记一遍；窗口关掉之后这个动作照样能用，它开的是整个 `WindowGroup`
+        // 的新窗口，不依赖登记它的那个窗口还在（`RouteInboxTests` 里实测过）。
+        .onAppear {
+            routes.browserWindowAppeared()
+            routes.registerWindowOpener { [openWindow] in
+                NSApp.activate(ignoringOtherApps: true)
+                openWindow(id: FlatRadarMacApp.mainWindowID)
+            }
+        }
+        .onDisappear { routes.browserWindowDisappeared() }
         // 外观要在主窗口一出现就套上，不能等用户打开设置窗口才生效。
         .task(id: appearance) { AppearancePreference(rawValue: appearance)?.apply() }
         // 登录态一变就重新判断一次：冷启动恢复会话、登录、注册、从访客转正
@@ -716,11 +733,18 @@ private struct PaneCommands: View {
 /// 菜单命令。放在单独的 `Commands` 里才拿得到 `@FocusedValue`。
 private struct BrowseCommands: View {
     @FocusedValue(\.browseModel) private var model
+    @FocusedValue(\.sectionReload) private var reload
 
     var body: some View {
-        Button("Reload Listings") { Task { await model?.reload() } }
-            .keyboardShortcut("r")
-            .disabled(model == nil)
+        // 刷的是当前窗口**当前这一屏**，标题跟着屏走（Reload Map / Reload Stats…）。
+        // 原先写死 `Reload Listings` + `model.reload()`：站在地图屏按 ⌘R，重拉的是
+        // 一张看不见的表，地图纹丝不动（代码审查 P2）。见 ``SectionReloader``。
+        Button(reload?.title ?? "Reload") {
+            guard let reload else { return }
+            Task { await reload.run() }
+        }
+        .keyboardShortcut("r")
+        .disabled(reload == nil || reload?.isLoading == true)
         Button("Filter…") { model?.requestSearchFocus() }
             .keyboardShortcut("f")
             .disabled(model == nil)

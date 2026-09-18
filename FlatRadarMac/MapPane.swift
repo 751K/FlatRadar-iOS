@@ -116,14 +116,30 @@ struct MapPane: View {
 
     @ViewBuilder
     private var content: some View {
-        if store.isLoading && store.listings.isEmpty {
+        switch MapPaneState.resolve(isLoading: store.isLoading,
+                                    errorMessage: store.errorMessage,
+                                    hasListings: !store.listings.isEmpty,
+                                    hasVisibleBuildings: !buildings.isEmpty) {
+        case .loading:
             centered { ProgressView("Loading map…") }
-        } else if let err = store.errorMessage, store.listings.isEmpty {
+        case .failed(let err):
             centered { loadFailure(err) }
-        } else if buildings.isEmpty {
-            centered { noMatches }
-        } else {
-            mapBody
+        case .noCoordinates:
+            centered { noCoordinates }
+        case .map(let filteredOut):
+            // 筛到一条不剩时**地图照画**，说明卡盖在上面。
+            //
+            // 原先这种情况整屏换成空状态，而「All filters」按钮、筛选 token、Reset
+            // 全都长在地图的浮层里——地图一没，它们跟着没，筛选却还存在窗口的
+            // store 里，切屏回来还是这张空卡。用户把自己筛进了一个出不来的地方
+            // （代码审查 P2）。现在浮层一直在，卡上也直接给了两条退路。
+            mapBody.overlay {
+                if filteredOut {
+                    MapFilteredOutCard(breakdown: store.emptyBreakdown,
+                                       onShowEverything: { store.showEverything() },
+                                       onReset: { store.resetFilters() })
+                }
+            }
         }
     }
 
@@ -1002,15 +1018,122 @@ struct MapPane: View {
         }
     }
 
-    private var noMatches: some View {
+    /// 一条带坐标的房源都没有。这时筛选改变不了什么，整屏说明就够了——
+    /// 「筛到零条」那种情况不走这里，见 ``MapFilteredOutCard``。
+    private var noCoordinates: some View {
         ContentUnavailableView("Nothing on the Map",
                                systemImage: "mappin.slash",
-                               description: Text(store.listings.isEmpty
-                                                 ? "No listings have coordinates yet."
-                                                 : "No listing matches the current filters."))
+                               description: Text("No listings have coordinates yet."))
     }
 
     private func centered<C: View>(@ViewBuilder _ c: () -> C) -> some View {
         c().frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - 这一屏画什么
+
+/// 地图屏的四种形态。拆成纯函数是为了能单独测那一条：**有房源、只是被筛光了，
+/// 地图不能被换掉**——筛选入口全长在地图的浮层上，地图一换掉就再也回不去。
+nonisolated enum MapPaneState: Equatable {
+    case loading
+    case failed(String)
+    /// 一条带坐标的房源都没有，筛选帮不上忙。
+    case noCoordinates
+    /// 画地图。`filteredOut` = 有房源，但当前筛选一条都没放过。
+    case map(filteredOut: Bool)
+
+    static func resolve(isLoading: Bool, errorMessage: String?,
+                        hasListings: Bool, hasVisibleBuildings: Bool) -> Self {
+        // 已经有数据时，刷新中 / 刷新失败都继续画手上那批，不退回整屏状态。
+        if !hasListings {
+            if isLoading { return .loading }
+            if let errorMessage { return .failed(errorMessage) }
+            // 深链兜底的那一条（`focusExtra`）可能让没有列表时也有东西可画。
+            return hasVisibleBuildings ? .map(filteredOut: false) : .noCoordinates
+        }
+        return .map(filteredOut: !hasVisibleBuildings)
+    }
+}
+
+/// 筛到一套不剩时盖在地图上的那张卡。
+///
+/// 原因**从实际数据算**（``MapStore/emptyBreakdown``），和 iOS 那张同一个口径：
+/// 各状态档各藏了几套，状态之外还有几套是被城市 / 平台 / 租金 / 面积挡掉的。
+///
+/// 两个按钮对应 store 上两个不同的动作，别混：
+/// - **Show All** = 五档状态全开、其余条件全清（``MapStore/showEverything()``）
+/// - **Reset Filters** = 回到默认（终态默认关，``MapStore/resetFilters()``），
+///   和「All filters」浮层里那个 Reset 是同一个
+struct MapFilteredOutCard: View {
+
+    let breakdown: MapStore.EmptyBreakdown
+    let onShowEverything: () -> Void
+    let onReset: () -> Void
+
+    var body: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "line.3.horizontal.decrease")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .accessibilityHidden(true)
+
+            VStack(spacing: 4) {
+                Text("No listings match these filters")
+                    .font(.headline)
+                Text("\(breakdown.total) hidden by the current filters")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            }
+
+            if !breakdown.byStatus.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(breakdown.byStatus.prefix(3), id: \.status) { item in
+                        HStack(spacing: 5) {
+                            Circle()
+                                .fill(Theme.statusColor(item.status))
+                                .frame(width: 7, height: 7)
+                            Text("\(item.count)")
+                                .fontWeight(.semibold)
+                                .monospacedDigit()
+                            Text(Theme.shortStatusLabel(item.status) ?? item.status.label)
+                                .foregroundStyle(.secondary)
+                        }
+                        .font(.caption)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Color.primary.opacity(0.06), in: Capsule())
+                    }
+                }
+            }
+
+            // 状态之外还有别的条件在起作用时才提——不提的话，用户会以为
+            // 只要把那几档打开就够了。
+            if breakdown.byOtherFilters > 0 {
+                Text("\(breakdown.byOtherFilters) more excluded by city, platform, rent or area")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack(spacing: 8) {
+                Button("Reset Filters", action: onReset)
+                Button("Show All \(breakdown.total)", action: onShowEverything)
+                    .buttonStyle(.borderedProminent)
+            }
+            .controlSize(.regular)
+            .padding(.top, 2)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 18)
+        .frame(width: 320)
+        // 不用玻璃，和 iOS 那张同一个理由：一整张说明卡糊在地图上，玻璃的折射会把
+        // 卡片自己的字也搅浑。这里要的是把地图挡住、把字读清楚。
+        .background(.thickMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .strokeBorder(Color.primary.opacity(0.08)))
+        .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
     }
 }

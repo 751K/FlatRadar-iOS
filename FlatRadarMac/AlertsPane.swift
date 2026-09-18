@@ -277,15 +277,8 @@ struct AlertsPane: View {
 
     /// 选中一条 = 右栏显示它，并把它标成已读。
     private func select(_ id: Int?) {
-        model.focusedAlert = id
-        let row = id.flatMap { i in rows.first { $0.id == i } }
-        model.focusedAlertRow = row
-        // 详情焦点也跟过去：右栏上半是这条通知，下半是它说的那套房。
-        // 不跟的话下半段还停在列表屏选中的那条，上下两截对不上。
-        // 房源不在已加载的那批里就保持不动——总比清空好，至少不是空白。
-        if let listingID = row?.listingID, model.listing(listingID) != nil {
-            model.focused = listingID
-        }
+        // 详情焦点跟着一起换，换不过去就清空——见 ``BrowseModel/focusAlert(_:)``。
+        model.focusAlert(id.flatMap { i in rows.first { $0.id == i } })
         guard let id,
               let item = store.notifications.first(where: { $0.id == id }),
               !item.isRead

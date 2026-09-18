@@ -57,6 +57,19 @@ struct StatsPane: View {
     var body: some View {
         content
             .task { await stats.load() }
+            // 换了时间窗、新数据落地之后，右栏那张图的明细也要换成新窗的。
+            //
+            // `StatsSelection` 存的是**整份数据**（见它的注释），不会自己跟着变。
+            // 不补这一步的话，左边图已经是 7 天，右栏还在列 30 天的数字。
+            .onChange(of: stats.chartsWindow) { _, _ in
+                guard let chart = model.statsChart else { return }
+                if let entries = stats.charts[chart.key], !entries.isEmpty {
+                    model.statsChart = StatsSelection(key: chart.key, title: chart.title,
+                                                      entries: entries)
+                } else {
+                    model.statsChart = nil
+                }
+            }
     }
 
     @ViewBuilder
@@ -120,6 +133,11 @@ struct StatsPane: View {
                     .foregroundStyle(.secondary)
             }
             Spacer(minLength: 8)
+            // 换窗之后、新数据回来之前，屏上还是上一个窗的图。给个"在取"的信号，
+            // 标题那边则照实写旧窗（见 `headline`）。
+            if stats.isLoading, !stats.charts.isEmpty {
+                ProgressView().controlSize(.small)
+            }
             Picker("", selection: Binding(get: { stats.days },
                                           set: { stats.days = $0 })) {
                 ForEach(StatsModel.Window.allCases) { w in
@@ -133,10 +151,13 @@ struct StatsPane: View {
         .padding(.bottom, 2)
     }
 
+    /// 按**屏上这批数据所属的窗**写，不按 Picker 当前选的写：两者在换窗的那一小段
+    /// 时间里不相等，照 Picker 写就是在 30 天的数字上标"最近 7 天"。
     private var headline: String {
         let n = stats.sampleSize
-        guard n > 0 else { return "Last \(stats.days.rawValue) days" }
-        return "\(n) listing\(n == 1 ? "" : "s") in the last \(stats.days.rawValue) days"
+        let window = (stats.chartsWindow ?? stats.days).rawValue
+        guard n > 0 else { return "Last \(window) days" }
+        return "\(n) listing\(n == 1 ? "" : "s") in the last \(window) days"
     }
 
     // MARK: - 一张图

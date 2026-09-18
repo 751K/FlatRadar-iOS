@@ -152,7 +152,11 @@ struct SidebarView: View {
     @ViewBuilder
     private func pinnedRow(id: Listing.ID, listing: Listing?) -> some View {
         Button {
-            if listing != nil { model.focused = id }
+            guard listing != nil else { return }
+            // 通知屏上点钉住的那套：右栏下半按选中那条通知的房源画（见
+            // ``InspectorPane``），不先放掉那条通知，点了看不出任何变化。
+            model.focusAlert(nil)
+            model.focused = id
         } label: {
             HStack(spacing: 9) {
                 // 和表格行首同一个标记：6px 墨色菱形。

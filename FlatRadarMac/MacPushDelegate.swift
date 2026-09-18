@@ -116,35 +116,17 @@ final class MacPushDelegate: NSObject, NSApplicationDelegate,
 
     /// 用户点了通知：切到 Alerts 屏。
     ///
-    /// 投递到主线程再 post——`.onReceive` 的闭包在 **post 的那条线程**上同步执行，
-    /// 在后台线程 post 等于在后台改 SwiftUI 状态。
+    /// 投进 ``RouteInbox``，不再广播：原先 post 一次 `NotificationCenter` 就算完，
+    /// 接收者在 `MainWindow` 里——关掉所有窗口只剩菜单栏时、冷启动窗口还没挂上时，
+    /// 这次点击都没人接（代码审查 P2）。信箱会留着这条直到有窗口取走，没窗口就开一个。
+    ///
+    /// 回主线程再投：信箱是主 actor 的，这个回调不是（理由见上面那个 `willPresent`）。
     nonisolated func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
-        let listingID = response.notification.request.content.userInfo["listing_id"] as? String
-        DispatchQueue.main.async {
-            NotificationCenter.default.post(
-                name: .flatRadarOpenAlerts,
-                object: nil,
-                userInfo: listingID.map { ["listing_id": $0] })
-        }
+        Task { @MainActor in RouteInbox.shared.post(.alerts) }
         completionHandler()
     }
-}
-
-extension Notification.Name {
-    /// 点了推送通知之后发。`userInfo["listing_id"]` 可能有，可能没有。
-    ///
-    /// 不和 iOS 共用 `flatRadarOpenListing` 这个名字：iOS 是直接打开那套房的详情，
-    /// Mac 这边打开的是 Alerts 屏——语义不同，名字一样只会让人以为行为也一样。
-    static let flatRadarOpenAlerts = Notification.Name("FlatRadarOpenAlerts")
-
-    /// `h2smonitor://map/<id>` 点进来之后发。`userInfo["listing_id"]` 必有。
-    ///
-    /// 走通知中心而不是直接改 model：deep link 是在 `App` 那一层接到的
-    /// （`.onOpenURL` 挂在 `RootView` 上），而 `BrowseModel` 是**窗口级**的，
-    /// 场景那一层够不着。和上面那条是同一个理由。
-    static let flatRadarLocateOnMap = Notification.Name("FlatRadarLocateOnMap")
 }

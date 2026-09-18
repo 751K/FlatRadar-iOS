@@ -96,6 +96,21 @@ final class BrowseModel {
     /// 而不是存 `Date` 是同一个理由。由 ``AlertsPane`` 在选中时写进来。
     var focusedAlertRow: AlertRow?
 
+    /// 选中一条通知：右栏上半是这条通知，下半是它说的那套房。
+    ///
+    /// **详情焦点跟着换过去；换不过去就清空，不能留着。** 原先房源不在已加载的
+    /// 那批里时 `focused` 保持不动，理由是"总比空白好"——结果右栏上半是新通知、
+    /// 下半是上一套房的价格、详情和操作按钮，⌘D / Open on Platform 也还作用在
+    /// 那套旧房上（代码审查 P2）。上下两截说的不是同一套房，比空白糟得多。
+    ///
+    /// 不在已加载那批里的，右栏下半给「Open Listing」按 id 单独开窗去取，
+    /// 见 ``InspectorPane``。系统通知没有房源，`focused` 同样清空。
+    func focusAlert(_ row: AlertRow?) {
+        focusedAlert = row?.id
+        focusedAlertRow = row
+        focused = row.flatMap { listing($0.listingID)?.id }
+    }
+
     /// 表格列头的排序状态。
     ///
     /// ⚠️ 这里的 comparator **不排序**，只是个标签——真正的排序在服务端做
