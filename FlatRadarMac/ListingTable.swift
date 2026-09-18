@@ -24,8 +24,6 @@ struct ListingTable: View {
     /// 表格要不要接键盘。由外层的 `@FocusState` 给。
     var isFocused: Bool
 
-    @State private var hoveredID: Listing.ID?
-
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
@@ -39,44 +37,20 @@ struct ListingTable: View {
         ScrollViewReader { proxy in
             List {
                 ForEach(model.rows) { listing in
-                    ListingTableRow(listing: listing,
-                                    isSelected: model.selection.contains(listing.id),
-                                    isHovered: hoveredID == listing.id,
-                                    isPinned: model.pinned.contains(listing.id))
+                    // 悬停状态**放在行里**，不放在整张表上。
+                    //
+                    // 原先是这张表的 `@State hoveredID`：鼠标每跨一行它变一次，整张表的
+                    // body 跟着重算、`model.rows` 重读、两千行的 ForEach 重新比对——只为了
+                    // 让两行换个底色（代码审查 P2）。放进行里之后，跨行只重画进出的那两行。
+                    HoverableListingRow(
+                        listing: listing,
+                        isSelected: model.selection.contains(listing.id),
+                        isPinned: model.pinned.contains(listing.id),
+                        onClick: { click(listing, modifiers: $0) },
+                        onOpenWindow: { openInNewWindow(listing) },
+                        onPin: { model.togglePin(listing.id) },
+                        onOpenPlatform: { openOnPlatform(listing) })
                         .id(listing.id)
-                        // 点击 / 双击 / 拖出去 / **悬停**全交给 AppKit，
-                        // 理由见 ``ListingRowMouse``。它盖在行上，但不碰右键——
-                        // `.contextMenu` 照常。
-                        //
-                        // 悬停原先是这里的 `.onHover`，被这层 NSView 挡掉了：
-                        // 实测整行的悬停态直接不亮了。鼠标的事归一处管。
-                        .overlay {
-                            ListingRowMouse(
-                                listing: listing,
-                                onClick: { click(listing, modifiers: $0) },
-                                onDoubleClick: { openInNewWindow(listing) },
-                                onDragOutside: { openInNewWindow(listing) },
-                                onHoverChange: { inside in
-                                    if inside {
-                                        hoveredID = listing.id
-                                    } else if hoveredID == listing.id {
-                                        hoveredID = nil
-                                    }
-                                })
-                        }
-                        // 快捷动作排在鼠标层**之后**，否则被那层 NSView 盖住，
-                        // 按钮点不动。见 ``RowQuickActions``。
-                        .overlay(alignment: .trailing) {
-                            if hoveredID == listing.id {
-                                RowQuickActions(
-                                    listing: listing,
-                                    isSelected: model.selection.contains(listing.id),
-                                    isPinned: model.pinned.contains(listing.id),
-                                    onPin: { model.togglePin(listing.id) },
-                                    onOpenWindow: { openInNewWindow(listing) },
-                                    onOpenPlatform: { openOnPlatform(listing) })
-                            }
-                        }
                         .contextMenu { rowMenu(listing) }
                         // 行自己画背景和圆角，所以 List 那套默认 chrome 全关掉。
                         .listRowInsets(EdgeInsets(top: 0, leading: 8, bottom: 0, trailing: 8))
@@ -476,5 +450,58 @@ private struct ListingTableRow: View {
                                              : AnyShapeStyle(.secondary))
                 .monospacedDigit()
         }
+    }
+}
+
+// MARK: - 一行 + 它自己的悬停
+
+/// 表格的一行，连同它自己的悬停状态和悬停时浮出来的快捷按钮。
+///
+/// 拆成独立视图就是为了让 `isHovered` 成为**这一行的** `@State`：鼠标跨行时
+/// 只有进出的两行重画，``ListingTable`` 的 body 不动。见那边 ForEach 的注释。
+private struct HoverableListingRow: View {
+
+    let listing: Listing
+    let isSelected: Bool
+    let isPinned: Bool
+    let onClick: (NSEvent.ModifierFlags) -> Void
+    let onOpenWindow: () -> Void
+    let onPin: () -> Void
+    let onOpenPlatform: () -> Void
+
+    @State private var isHovered = false
+
+    var body: some View {
+        ListingTableRow(listing: listing,
+                        isSelected: isSelected,
+                        isHovered: isHovered,
+                        isPinned: isPinned)
+            // 点击 / 双击 / 拖出去 / **悬停**全交给 AppKit，
+            // 理由见 ``ListingRowMouse``。它盖在行上，但不碰右键——
+            // `.contextMenu` 照常。
+            //
+            // 悬停原先是这里的 `.onHover`，被这层 NSView 挡掉了：
+            // 实测整行的悬停态直接不亮了。鼠标的事归一处管。
+            .overlay {
+                ListingRowMouse(
+                    listing: listing,
+                    onClick: onClick,
+                    onDoubleClick: onOpenWindow,
+                    onDragOutside: onOpenWindow,
+                    onHoverChange: { isHovered = $0 })
+            }
+            // 快捷动作排在鼠标层**之后**，否则被那层 NSView 盖住，
+            // 按钮点不动。见 ``RowQuickActions``。
+            .overlay(alignment: .trailing) {
+                if isHovered {
+                    RowQuickActions(
+                        listing: listing,
+                        isSelected: isSelected,
+                        isPinned: isPinned,
+                        onPin: onPin,
+                        onOpenWindow: onOpenWindow,
+                        onOpenPlatform: onOpenPlatform)
+                }
+            }
     }
 }

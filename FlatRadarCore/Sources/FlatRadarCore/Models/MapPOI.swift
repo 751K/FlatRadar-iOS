@@ -53,6 +53,12 @@ public nonisolated enum MapPOI {
     /// 两端共用这一个判断，而不是各写一个 `span <= 0.05 ? ... : ...`——
     /// 阈值和"跨过阈值之后做什么"是同一件事，拆开就是留了个漂移的口子。
     public static func categories(atSpan span: Double) -> PointOfInterestCategories {
-        isVisible(atSpan: span) ? .including(categories) : .excludingAll
+        categories(visible: isVisible(atSpan: span))
+    }
+
+    /// 已经判断过"该不该显示"时用这个。Mac 地图把跨度量化成档位之后，手上只剩
+    /// 那个布尔（见 `MapZoomBand`）；"显示的是哪几类"仍然只有这里一处。
+    public static func categories(visible: Bool) -> PointOfInterestCategories {
+        visible ? .including(categories) : .excludingAll
     }
 }

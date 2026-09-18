@@ -43,7 +43,6 @@ struct AlertsPane: View {
     /// 类型筛选。`nil` = 全部。
     @State private var kindFilter: NotificationItem.Kind?
     @State private var unreadOnly = false
-    @State private var hoveredID: Int?
 
     var body: some View {
         VStack(spacing: 0) {
@@ -60,23 +59,23 @@ struct AlertsPane: View {
 
     // MARK: - 派生
 
-    private var allRows: [AlertRow] {
-        store.notifications.map { AlertFeed.row($0, platforms: Platform.knownKeys) }
+    /// 解析结果和当前筛选下的分组，按输入缓存，见 ``AlertsDerived``。
+    @State private var derived = AlertsDerived()
+
+    private var parsed: AlertsDerived.Parsed { derived.parsed(store.notifications) }
+
+    private var presented: AlertsDerived.Presented {
+        derived.presented(store.notifications, kind: kindFilter, unreadOnly: unreadOnly, now: Date())
     }
 
-    private var rows: [AlertRow] {
-        allRows.filter { row in
-            (kindFilter == nil || row.kind == kindFilter) && (!unreadOnly || !row.isRead)
-        }
-    }
+    private var allRows: [AlertRow] { parsed.rows }
+    private var rows: [AlertRow] { presented.rows }
+    private var days: [AlertDay] { presented.days }
+    private var totals: (today: Int, week: Int) { presented.totals }
 
-    private var days: [AlertDay] { AlertFeed.days(rows) }
-    private var totals: (today: Int, week: Int) { AlertFeed.totals(allRows) }
-
-    /// 筛选条上每个 chip 的计数。**永远按全集算**，不跟着当前筛选变——
-    /// 否则点了 `Status` 之后其它 chip 全变成 0，就没法用它们跳转了。
     private func count(_ kind: NotificationItem.Kind?) -> Int {
-        kind == nil ? allRows.count : allRows.filter { $0.kind == kind }.count
+        guard let kind else { return allRows.count }
+        return parsed.counts[kind] ?? 0
     }
 
     // MARK: - 统计带
@@ -99,7 +98,7 @@ struct AlertsPane: View {
             }
 
             VStack(alignment: .leading, spacing: 5) {
-                BucketChart(values: AlertFeed.buckets(allRows))
+                BucketChart(values: presented.buckets)
                     .frame(width: 200, height: 46)
                 Text("Last 24 hours, 2-hour buckets")
                     .font(.caption)
@@ -207,17 +206,9 @@ struct AlertsPane: View {
                 ForEach(days) { day in
                     Section {
                         ForEach(day.rows) { row in
-                            AlertRowView(row: row,
-                                         selected: model.focusedAlert == row.id,
-                                         hovered: hoveredID == row.id)
+                            // 悬停状态在行自己手里（见 ``AlertRowView``），跨行不重算整页。
+                            AlertRowView(row: row, selected: model.focusedAlert == row.id)
                                 .id(row.id)
-                                .onHover { inside in
-                                    if inside {
-                                        hoveredID = row.id
-                                    } else if hoveredID == row.id {
-                                        hoveredID = nil
-                                    }
-                                }
                                 .onTapGesture { select(row.id) }
                                 .listRowInsets(EdgeInsets(top: 0, leading: 8,
                                                           bottom: 0, trailing: 8))
@@ -348,7 +339,10 @@ private struct AlertRowView: View {
 
     let row: AlertRow
     let selected: Bool
-    let hovered: Bool
+
+    /// 悬停是**这一行的**状态。原先放在 `AlertsPane` 上：鼠标每跨一行，整页 body
+    /// 重算一次，而那一页读的是全部通知的解析结果。放进行里，跨行只重画两行。
+    @State private var hovered = false
 
     var body: some View {
         HStack(spacing: 10) {
@@ -388,6 +382,7 @@ private struct AlertRowView: View {
         // 选中走液态玻璃，悬停整行浮起。
         .modifier(RowSurface(isSelected: selected, isHovered: hovered))
         .contentShape(Rectangle())
+        .onHover { hovered = $0 }
     }
 
     /// `Reserved → ● Book`。旧状态用灰的中性胶囊，新状态用它自己的状态色——

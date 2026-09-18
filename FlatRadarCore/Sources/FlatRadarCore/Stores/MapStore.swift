@@ -114,6 +114,32 @@ public final class MapStore {
     /// 通过筛选的条数（不含兜底那条——它不属于「当前视图里有几套」）。
     public var visibleCount: Int { listings.filter(passes).count }
 
+    /// 决定 ``visibleListings`` 的**全部**输入。两个键相等，可见的那批就一定相同。
+    ///
+    /// Mac 地图拿它当楼盘分组的缓存键：分组两千条要十几毫秒，而一次界面更新里
+    /// 会被读好几遍，悬停、相机移动也会触发更新。
+    ///
+    /// ⚠️ 和 ``passes(_:)`` 放在一起是故意的：**给 `passes` 加一个条件，这里就得
+    /// 加一项**，否则缓存认不出筛选变了，地图会停在旧结果上。
+    /// `MapVisibilityKeyTests` 逐项钉住了现有的每一个输入。
+    public nonisolated struct VisibilityKey: Equatable, Sendable {
+        let listings: [MapListing]
+        let activeStatuses: Set<ListingStatus>
+        let cityFilter: String
+        let sourceFilter: String
+        let maxRentText: String
+        let minAreaText: String
+        let focusID: String?
+        let focusExtra: MapListing?
+    }
+
+    public var visibilityKey: VisibilityKey {
+        VisibilityKey(listings: listings, activeStatuses: activeStatuses,
+                      cityFilter: cityFilter, sourceFilter: sourceFilter,
+                      maxRentText: maxRentText, minAreaText: minAreaText,
+                      focusID: focusID, focusExtra: focusExtra)
+    }
+
     private func passes(_ l: MapListing) -> Bool {
         // 深链指定的那一套无条件保留：用户是点着它过来的，被默认筛选
         // （比如「已租出」默认关）挡掉会变成「点了没反应」。

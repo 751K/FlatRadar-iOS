@@ -61,26 +61,17 @@ struct CalendarPane: View {
 
     // MARK: - 派生
 
-    private var monthGrid: CalendarMonthGrid {
-        CalendarGrid.month(containing: anchor, listingsByDay: store.listingsByDay)
-    }
+    /// 月网格、可订数、下一个入住日、排除统计——全部按输入缓存，见 ``CalendarDerived``。
+    @State private var derived = CalendarDerived()
 
-    /// 这个月里**真正能动手**的那些：可订 + 抽签。
-    ///
-    /// 单独数出来是因为实测 691 条里有 609 条是 Occupied（88%）——它们的
-    /// `available_from` 是未来的退租日，不是「现在能订」。不把这两个数分开的话，
-    /// 「这个月 237 条」会被读成「237 套可以抢」，差了一个数量级。
-    private var actionable: Int {
-        monthGrid.weeks
-            .flatMap(\.days)
-            .filter(\.isInMonth)
-            .flatMap(\.items)
-            .filter { l in
-                let k = ListingStatus.from(l.status)
-                return k == .book || k == .lottery
-            }
-            .count
+    /// 今天（服务端时区）。过了零点，"今天"那一格和"下一个入住日"要跟着变。
+    private var today: Date { CalendarGrid.startOfDay(Date()) }
+
+    private var month: CalendarDerived.MonthSummary {
+        derived.month(anchor: anchor, store: store, today: today)
     }
+    private var monthGrid: CalendarMonthGrid { month.grid }
+    private var actionable: Int { month.actionable }
 
     private var window: (first: Date, last: Date) { CalendarGrid.window() }
 
@@ -152,15 +143,7 @@ struct CalendarPane: View {
     /// 从今天起，第一个有条目的日子。整个数据集里找，不限当前翻到的月份——
     /// 翻到一个空月份时它仍然要能指路。
     private var nextMoveIn: (date: Date, count: Int)? {
-        let today = CalendarGrid.startOfDay(Date())
-        let upcoming = store.listingsByDay
-            .compactMap { key, items -> (Date, Int)? in
-                guard let d = items.first?.date, CalendarGrid.startOfDay(d) >= today else { return nil }
-                _ = key
-                return (CalendarGrid.startOfDay(d), items.count)
-            }
-            .min { $0.0 < $1.0 }
-        return upcoming.map { (date: $0.0, count: $0.1) }
+        derived.nextMoveIn(store: store, today: today)
     }
 
     private var metrics: some View {
@@ -392,7 +375,9 @@ struct CalendarPane: View {
         .padding(.vertical, 7)
     }
 
-    private var excluded: Int { CalendarGrid.excludedCount(store.listings) }
+    private var excluded: Int {
+        derived.excluded(store: store, thisMonth: CalendarGrid.startOfMonth(Date()))
+    }
 
     private static let longDate: DateFormatter = {
         let f = DateFormatter()

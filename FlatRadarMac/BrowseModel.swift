@@ -224,9 +224,31 @@ final class BrowseModel {
     // MARK: - 派生
 
     /// 表格实际显示的行。
+    ///
+    /// **按输入缓存**：房源、筛选条件、搜索词三者都没变，就直接还上次的结果。
+    /// 原先每读一次都全量过滤一遍，而表格、空状态、底栏计数、键盘浏览、选中对齐
+    /// 各读一次；悬停换行也会让表格重读（代码审查：2000 条下搜索一次约 24ms，
+    /// 类型 + 能效 + 面积组合筛选约 47ms，还没算行绘制）。见 ``Memo``。
     var rows: [Listing] {
-        let all = query.isEmpty ? listings.listings : listings.listings.filter(query.matches)
-        let q = searchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let key = RowsKey(listings: listings.listings, query: query,
+                          search: searchText.trimmingCharacters(in: .whitespacesAndNewlines))
+        return rowsMemo.value(for: key) { Self.filter(key) }
+    }
+
+    private struct RowsKey: Equatable {
+        let listings: [Listing]
+        let query: ListingQuery
+        let search: String
+    }
+
+    @ObservationIgnored private let rowsMemo = Memo<RowsKey, [Listing]>()
+
+    /// `rows` 里 `rowsMemo` 算了几次。测试用。
+    var rowsComputeCount: Int { rowsMemo.computeCount }
+
+    private static func filter(_ key: RowsKey) -> [Listing] {
+        let all = key.query.isEmpty ? key.listings : key.listings.filter(key.query.matches)
+        let q = key.search
         guard !q.isEmpty else { return all }
         return all.filter {
             $0.name.localizedCaseInsensitiveContains(q)

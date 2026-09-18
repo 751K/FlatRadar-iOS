@@ -222,3 +222,73 @@ enum AlertFeed {
         return f
     }()
 }
+
+// MARK: - 缓存
+
+/// 通知屏的派生数据，按输入缓存（见 ``Memo``）。
+///
+/// 原先 ``AlertsPane`` 的 `allRows` 是计算属性，每读一次就把整批通知的正文、
+/// 价格、来源重新解析一遍——五个筛选 chip 各读一次，统计带、按天分组又各读一次；
+/// 悬停、选中一条也会触发重读（代码审查：2000 条下光五个计数就约 46ms）。
+@MainActor
+final class AlertsDerived {
+
+    /// 第一层：解析。只跟通知本身有关——`NotificationItem` 按全部字段比较，
+    /// 已读状态变了也算变。
+    struct Parsed {
+        let rows: [AlertRow]
+        /// 筛选条上每个 chip 的计数。**永远按全集算**，不跟着当前筛选变——
+        /// 否则点了 `Status` 之后其它 chip 全变成 0，就没法用它们跳转了。
+        let counts: [NotificationItem.Kind: Int]
+    }
+
+    /// 第二层：当前筛选下的行、按天分组，以及统计带那几个数。
+    struct Presented {
+        let rows: [AlertRow]
+        let days: [AlertDay]
+        let buckets: [Int]
+        let totals: (today: Int, week: Int)
+    }
+
+    private struct PresentedKey: Equatable {
+        let items: [NotificationItem]
+        let kind: NotificationItem.Kind?
+        let unreadOnly: Bool
+        /// **当前整点。** 柱状图按整 2 小时分桶、"Today / Yesterday"按天分——精确到
+        /// 小时就够让它们在时间走过去之后跟着变，又不会每次重读都重算。
+        let hour: Date
+    }
+
+    private let parsedMemo = Memo<[NotificationItem], Parsed>()
+    private let presentedMemo = Memo<PresentedKey, Presented>()
+
+    /// 各自真正算了几次。测试用。
+    var computeCounts: (parsed: Int, presented: Int) {
+        (parsedMemo.computeCount, presentedMemo.computeCount)
+    }
+
+    func parsed(_ items: [NotificationItem]) -> Parsed {
+        parsedMemo.value(for: items) {
+            let rows = items.map { AlertFeed.row($0, platforms: Platform.knownKeys) }
+            var counts: [NotificationItem.Kind: Int] = [:]
+            for row in rows { counts[row.kind, default: 0] += 1 }
+            return Parsed(rows: rows, counts: counts)
+        }
+    }
+
+    func presented(_ items: [NotificationItem], kind: NotificationItem.Kind?,
+                   unreadOnly: Bool, now: Date) -> Presented {
+        let hour = AlertFeed.calendar.dateInterval(of: .hour, for: now)?.start ?? now
+        let key = PresentedKey(items: items, kind: kind, unreadOnly: unreadOnly, hour: hour)
+        return presentedMemo.value(for: key) {
+            let all = parsed(items).rows
+            let rows = all.filter { row in
+                (kind == nil || row.kind == kind) && (!unreadOnly || !row.isRead)
+            }
+            return Presented(rows: rows,
+                             days: AlertFeed.days(rows, now: now),
+                             buckets: AlertFeed.buckets(all, now: now),
+                             totals: AlertFeed.totals(all, now: now))
+        }
+    }
+}

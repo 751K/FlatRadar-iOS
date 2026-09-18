@@ -193,16 +193,21 @@ enum CalendarGrid {
     /// 和地图上 ``MapBuilding/leadStatus`` 同一个判据——格子里只放得下 3 条，
     /// 被挤掉的必须是最不值得看的那些，不能按到货顺序砍。
     static func sorted(_ items: [CalendarListing]) -> [CalendarListing] {
-        items.sorted { a, b in
-            let pa = ListingStatus.from(a.status).priority
-            let pb = ListingStatus.from(b.status).priority
-            if pa != pb { return pa < pb }
-            // 同状态按价格，便宜的在前；解析不出价格的沉底。
-            let va = PriceText.parse(a.priceRaw) ?? .greatestFiniteMagnitude
-            let vb = PriceText.parse(b.priceRaw) ?? .greatestFiniteMagnitude
-            if va != vb { return va < vb }
-            return a.id < b.id
+        guard items.count > 1 else { return items }
+        // 排序键**先算好**再排。原先在比较器里现算：n 条要解析 n·log n 次价格、
+        // 映射 n·log n 次状态——一天几百条时这就是建月网格的大头。顺序规则不变。
+        let keyed = items.map { item in
+            (item: item,
+             priority: ListingStatus.from(item.status).priority,
+             // 同状态按价格，便宜的在前；解析不出价格的沉底。
+             price: PriceText.parse(item.priceRaw) ?? .greatestFiniteMagnitude)
         }
+        return keyed.sorted { a, b in
+            if a.priority != b.priority { return a.priority < b.priority }
+            if a.price != b.price { return a.price < b.price }
+            return a.item.id < b.item.id
+        }
+        .map(\.item)
     }
 
     private static let keyFormatter: DateFormatter = {
@@ -213,4 +218,92 @@ enum CalendarGrid {
         f.dateFormat = "yyyy-MM-dd"
         return f
     }()
+}
+
+// MARK: - 缓存
+
+/// 日历屏的派生数据，按输入缓存（见 ``Memo``）。
+///
+/// 原先在 ``CalendarPane`` 里全是计算属性：标题、统计带、网格、状态栏各读一次
+/// `monthGrid`，每读一次就把整个月重建一遍、每天的房源重排一遍；状态栏的"排除了
+/// 几条"每次还要把全部日期重新解析一遍（代码审查：2000 条集中在一个月时，建一次
+/// 月网格约 68ms，排除统计另要约 77ms）。
+///
+/// 键里放 `store.listings` 而不是 `listingsByDay`：两者在 store 里总是一起换
+/// （`fetch` / `clear`），而数组能先比存储地址，没变时几乎不花时间。
+@MainActor
+final class CalendarDerived {
+
+    /// 一个月的网格，连同由它算出来的可订数——两者总是一起用。
+    struct MonthSummary {
+        let grid: CalendarMonthGrid
+        /// 这个月里**真正能动手**的那些：可订 + 抽签。
+        ///
+        /// 单独数出来是因为实测 691 条里有 609 条是 Occupied（88%）——它们的
+        /// `available_from` 是未来的退租日，不是「现在能订」。不把这两个数分开的话，
+        /// 「这个月 237 条」会被读成「237 套可以抢」，差了一个数量级。
+        let actionable: Int
+    }
+
+    private struct MonthKey: Equatable {
+        let anchor: Date
+        let listings: [CalendarListing]
+        /// "今天"那一格的高亮取决于它。
+        let today: Date
+    }
+
+    private struct DataKey: Equatable {
+        let listings: [CalendarListing]
+        /// 天或月，按用途取：下一个入住日看"今天"，排除统计看"这个月"（窗口按月推）。
+        let now: Date
+    }
+
+    private let monthMemo = Memo<MonthKey, MonthSummary>()
+    private let nextMoveInMemo = Memo<DataKey, (date: Date, count: Int)?>()
+    private let excludedMemo = Memo<DataKey, Int>()
+
+    /// 各自真正算了几次。测试用。
+    var computeCounts: (month: Int, nextMoveIn: Int, excluded: Int) {
+        (monthMemo.computeCount, nextMoveInMemo.computeCount, excludedMemo.computeCount)
+    }
+
+    func month(anchor: Date, store: CalendarStore, today: Date) -> MonthSummary {
+        let key = MonthKey(anchor: CalendarGrid.startOfMonth(anchor), listings: store.listings,
+                           today: today)
+        return monthMemo.value(for: key) {
+            let grid = CalendarGrid.month(containing: key.anchor,
+                                          listingsByDay: store.listingsByDay,
+                                          now: today)
+            let actionable = grid.weeks
+                .flatMap(\.days)
+                .filter(\.isInMonth)
+                .flatMap(\.items)
+                .filter { l in
+                    let k = ListingStatus.from(l.status)
+                    return k == .book || k == .lottery
+                }
+                .count
+            return MonthSummary(grid: grid, actionable: actionable)
+        }
+    }
+
+    /// 从今天起，第一个有条目的日子。
+    func nextMoveIn(store: CalendarStore, today: Date) -> (date: Date, count: Int)? {
+        nextMoveInMemo.value(for: DataKey(listings: store.listings, now: today)) {
+            store.listingsByDay
+                .compactMap { _, items -> (date: Date, count: Int)? in
+                    guard let d = items.first?.date, CalendarGrid.startOfDay(d) >= today
+                    else { return nil }
+                    return (CalendarGrid.startOfDay(d), items.count)
+                }
+                .min { $0.date < $1.date }
+        }
+    }
+
+    /// 落在窗口外的条数。窗口按"这个月"前后推，所以键里放的是本月 1 号。
+    func excluded(store: CalendarStore, thisMonth: Date) -> Int {
+        excludedMemo.value(for: DataKey(listings: store.listings, now: thisMonth)) {
+            CalendarGrid.excludedCount(store.listings, now: thisMonth)
+        }
+    }
 }

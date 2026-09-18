@@ -1,6 +1,8 @@
 import Foundation
 
-public nonisolated struct NotificationItem: Decodable, Identifiable, Sendable {
+/// `Equatable` 是给 Mac 通知屏的缓存用的：整批通知当键，内容没变就不重新解析
+/// （见 FlatRadarMac 的 `Memo`）。按全部字段比，已读状态变了也算变。
+public nonisolated struct NotificationItem: Decodable, Identifiable, Equatable, Sendable {
     public let id: Int
     let createdAt: String
     public let type: String

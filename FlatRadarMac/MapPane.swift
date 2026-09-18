@@ -21,6 +21,9 @@ import FlatRadarCore
 private final class CameraTrack {
     var region: MKCoordinateRegion?
     var camera: MapCamera?
+    /// 当前纬度跨度。**不是界面状态**：缩放时每帧都在变，而画面只关心它落在
+    /// 哪一档（见 ``MapZoomBand``）。放这里，写它不会触发 body 重算。
+    var span: CLLocationDegrees = 1
 }
 
 struct MapPane: View {
@@ -49,8 +52,18 @@ struct MapPane: View {
     private static let toolbarTrailing: CGFloat = 150
 
     @State private var camera: MapCameraPosition = .automatic
-    /// 当前缩放对应的纬度跨度，用来决定画楼盘还是画城市团。
-    @State private var span: CLLocationDegrees = 1
+    /// 缩放落在哪一档：画不画城市团、显不显示 POI。
+    ///
+    /// 原先这里存的是连续的 `span`，`.continuous` 相机回调每帧写一次，于是缩放时
+    /// 每一帧都整个重算 body——楼盘分组、城市聚合、空状态判断、计数全跟着重来
+    /// （代码审查：2000 条下约 34ms 一次，缩放掉帧）。而画面真正随缩放变化的只有
+    /// 这两个开关，所以界面状态只存档位，连续值记在 ``CameraTrack/span``。
+    @State private var zoomBand = MapZoomBand(span: 1)
+
+    /// 楼盘分组和城市聚合的缓存。键是决定"哪些房源画在图上"的全部输入
+    /// （``MapStore/VisibilityKey``），悬停、相机移动这些都不在里面。见 ``Memo``。
+    @State private var buildingMemo = Memo<MapStore.VisibilityKey, [MapBuilding]>()
+    @State private var clusterMemo = Memo<MapStore.VisibilityKey, [MapCluster]>()
 
     /// 最近一次的相机 / 可视区域。
     ///
@@ -145,24 +158,30 @@ struct MapPane: View {
 
     // MARK: - 派生数据
 
-    private var buildings: [MapBuilding] { MapBuilding.group(store.visibleListings) }
-    private var clusters: [MapCluster] { MapCluster.group(buildings) }
+    /// 数据或筛选没变就直接用上次的分组。一次 body 里空状态判断、标记、计数
+    /// 各读一遍，原先是各分组一遍。
+    private var buildings: [MapBuilding] {
+        buildingMemo.value(for: store.visibilityKey) { MapBuilding.group(store.visibleListings) }
+    }
+    private var clusters: [MapCluster] {
+        clusterMemo.value(for: store.visibilityKey) { MapCluster.group(buildings) }
+    }
 
-    /// 缩到多远就改画城市团。
-    ///
-    /// 判据用**纬度跨度**而不是 Leaflet 那种整数 zoom level：SwiftUI 的
-    /// `MapCameraUpdateContext` 给的是 region，没有 zoom level，硬换算要引进
-    /// 一堆瓦片数学。0.5° ≈ 55km，正好是"看得见整个兰斯塔德"那一档。
-    private var showsClusters: Bool { span > 0.5 }
+    private var showsClusters: Bool { zoomBand.showsClusters }
 
     /// 当前缩放下显示哪些 POI。见 ``MapPOI``。
-    ///
-    /// 直接拿 `span` 比，不像 iOS 那样先量化：那边量化是因为它的 `currentRegion`
-    /// 本来就按 log2 桶更新（clustering 要用），顺手复用同一组桶而已。这边
-    /// `span` 是每次相机变化都刷的，而**跨度只在缩放时变、平移不变**，
-    /// 所以阈值附近不会来回抖——`showsClusters` 用的也是同一种裸比较。
     private var visiblePointsOfInterest: PointOfInterestCategories {
-        MapPOI.categories(atSpan: span)
+        MapPOI.categories(visible: zoomBand.showsPOI)
+    }
+
+    /// 记下当前跨度；**只有跨过档位时才动界面状态**。见 ``zoomBand``。
+    ///
+    /// 所有改跨度的地方都走这里（相机回调、+ / −、飞行前的预置），档位的判断
+    /// 只有 ``MapZoomBand`` 一处。
+    private func setSpan(_ value: CLLocationDegrees) {
+        track.span = value
+        let band = MapZoomBand(span: value)
+        if band != zoomBand { zoomBand = band }
     }
 
     // MARK: - 地图
@@ -195,7 +214,7 @@ struct MapPane: View {
         // 只画圈不画 POI，圈里是空的。
         .mapStyle(.standard(elevation: .flat, pointsOfInterest: visiblePointsOfInterest))
         .onMapCameraChange(frequency: .continuous) { context in
-            span = context.region.span.latitudeDelta
+            setSpan(context.region.span.latitudeDelta)
             // `MapCameraPosition` 读不出当前 region，+ / − 按钮要拿它算新跨度，
             // 所以每次相机变化都留一份最近值。
             track.region = context.region
@@ -905,8 +924,8 @@ struct MapPane: View {
         model.focused = b.units.first?.id
         withAnimation(.easeOut(duration: 0.25)) {
             camera = .region(MKCoordinateRegion(center: b.coordinate,
-                                                span: MKCoordinateSpan(latitudeDelta: max(span, 0.004),
-                                                                       longitudeDelta: max(span, 0.004))))
+                                                span: MKCoordinateSpan(latitudeDelta: max(track.span, 0.004),
+                                                                       longitudeDelta: max(track.span, 0.004))))
         }
     }
 
@@ -927,9 +946,9 @@ struct MapPane: View {
         let s = MKCoordinateSpan(latitudeDelta: lat, longitudeDelta: lat * ratio)
 
         zoomTarget = (lat, Date().addingTimeInterval(0.35))
-        // 和 `zoom(to:)` 同理：先把 `span` 推到目标，免得飞行途中穿过
+        // 和 `zoom(to:)` 同理：先把跨度推到目标，免得飞行途中穿过
         // `showsClusters` / POI 的阈值，标记整批换掉把动画掐断在半路。
-        span = lat
+        setSpan(lat)
         withAnimation(.easeOut(duration: 0.2)) {
             camera = .region(MKCoordinateRegion(center: region.center, span: s))
         }
@@ -962,7 +981,7 @@ struct MapPane: View {
         //
         // 反方向（`fitAll` 缩到全局）同样受益：提前切成城市团比在动画途中切更稳，
         // 而且缩出去的过程里本来就该看到团。
-        span = s.latitudeDelta
+        setSpan(s.latitudeDelta)
         // 动画 0.4s，留一点余量让布局也落定。
         flyingUntil = Date().addingTimeInterval(0.7)
         withAnimation(.easeOut(duration: 0.4)) {
@@ -1135,5 +1154,34 @@ struct MapFilteredOutCard: View {
         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
             .strokeBorder(Color.primary.opacity(0.08)))
         .shadow(color: .black.opacity(0.12), radius: 12, y: 4)
+    }
+}
+
+// MARK: - 缩放档位
+
+/// 缩放落在哪一档。地图画面随缩放变化的只有这两件事。
+///
+/// 拆出来是为了让"缩放时要不要重画"有一个能测的答案：同一档里的跨度变化
+/// 得到**相等**的档位，``MapPane`` 就不写界面状态、不重算 body。
+nonisolated struct MapZoomBand: Equatable {
+
+    /// 缩到多远就改画城市团。
+    ///
+    /// 判据用**纬度跨度**而不是 Leaflet 那种整数 zoom level：SwiftUI 的
+    /// `MapCameraUpdateContext` 给的是 region，没有 zoom level，硬换算要引进
+    /// 一堆瓦片数学。0.5° ≈ 55km，正好是"看得见整个兰斯塔德"那一档。
+    static let clusterSpan: Double = 0.5
+
+    let showsClusters: Bool
+    /// 阈值在包里（``MapPOI``），和 iOS 共用一份。
+    ///
+    /// 不像 iOS 那样先把跨度量化：那边量化是因为它的 `currentRegion` 本来就按
+    /// log2 桶更新（clustering 要用）。**跨度只在缩放时变、平移不变**，所以阈值
+    /// 附近不会来回抖。
+    let showsPOI: Bool
+
+    init(span: Double) {
+        showsClusters = span > Self.clusterSpan
+        showsPOI = MapPOI.isVisible(atSpan: span)
     }
 }
