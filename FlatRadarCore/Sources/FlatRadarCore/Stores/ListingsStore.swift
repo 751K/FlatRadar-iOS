@@ -11,7 +11,30 @@ public final class ListingsStore {
     /// （实测全量 822 条约 57 KB gzip、两个请求）。默认值保持 50，iOS 行为不变。
     public init(pageSize: Int = 50) {
         self.pageSize = pageSize
+        self.loadPage = { r in
+            try await APIClient.shared.getListings(
+                city: r.city, status: r.status, query: r.query,
+                limit: r.limit, offset: r.offset,
+                sources: r.sources, cities: r.cities, types: r.types,
+                contract: r.contract, energy: r.energy, sort: r.sort)
+        }
     }
+
+    /// 一页房源请求的全部参数。
+    nonisolated struct PageRequest: Equatable, Sendable {
+        var city: String?, status: String?, query: String?
+        var limit: Int, offset: Int
+        var sources: [String]?, cities: [String]?, types: [String]?
+        var contract: String?, energy: String?
+        var sort: ListingSort?
+    }
+
+    /// 真正发请求的那一步。默认走 ``APIClient``。
+    ///
+    /// 留成可换的闭包是给测试的：这个 store 的 bug 全是「两个请求**谁先回来**」
+    /// 的问题（翻页途中刷新、刷新途中又刷新），真网络上摆不出那个先后顺序。
+    /// 测试换成一个能把请求**扣住**、按指定顺序放行的闭包（`ListingsStorePagingTests`）。
+    @ObservationIgnored var loadPage: (PageRequest) async throws -> ListingsResponse
     public var listings: [Listing] = []
     public var total = 0
     public var isLoading = false
@@ -22,7 +45,6 @@ public final class ListingsStore {
     /// 最近一次成功 fetch 的本地时间戳 — 用于 ListingsView 顶部 "updated 2m ago" 心跳条。
     public var lastUpdated: Date?
 
-    private let client = APIClient.shared
     private let pageSize: Int
 
     // Current filter state
@@ -78,12 +100,17 @@ public final class ListingsStore {
         errorMessage = nil
         fetchGeneration &+= 1
         let myGen = fetchGeneration
+        // 正在飞的那一页属于**旧**结果集，它回来时会被代号挡掉、什么都不写
+        // （见 ``loadMore()``）。所以"正在翻页"这把锁在这里就交还给新结果集——
+        // 否则新结果集要等一个注定作废的请求回来才能翻页，而它要是一直不回来
+        // （超时 60s），这段时间里新结果集一页都翻不了。
+        isLoadingMore = false
         do {
-            let resp = try await client.getListings(
+            let resp = try await loadPage(PageRequest(
                 city: city, status: status, query: query,
                 limit: pageSize, offset: 0,
                 sources: sources, cities: cities, types: types,
-                contract: contract, energy: energy, sort: self.sort)
+                contract: contract, energy: energy, sort: self.sort))
             // 期间又被 fetch 一次 → 当前响应已过期，整体丢弃，不写 state。
             guard myGen == fetchGeneration else { return }
             // 第一页重置去重表——换排序 / 换筛选就是一份全新的结果集。
@@ -104,25 +131,44 @@ public final class ListingsStore {
         if myGen == fetchGeneration { isLoading = false }
     }
 
+    /// 下一页。
+    ///
+    /// 原先的问题
+    /// ----------
+    /// 翻页请求在飞的时候刷新或换排序，这页回来时代号已经变了，走
+    /// `guard myGen == fetchGeneration else { return }` 提前返回——**跳过了最后那句
+    /// `isLoadingMore = false`**。锁就此永远挂着，之后每次 `loadMore()` 都被开头的
+    /// `!isLoadingMore` 挡回去：列表停在第一页，而且没有任何报错。
+    ///
+    /// 同一个过期响应还连带两件事：失败分支不看代号，一页过期请求**失败**了会把
+    /// 新结果集标成 `loadMoreFailed`；`loadAllPages()` 看到"这一轮没多出行"就退出，
+    /// 退出前同样把新结果集标成失败。
+    ///
+    /// 现在的规则只有一条：**过期的响应什么都不碰**——不写数据、不标失败、不动锁。
+    /// 锁在换结果集那一刻就已经由 ``fetch(city:status:query:sources:cities:types:contract:energy:sort:)``
+    /// 交还了，此时它很可能正被新结果集的翻页拿着，旧请求更不能去动它。
+    ///
+    /// `!isLoading`：第一页还没回来时不翻页。那时 `listings.count` 还是旧结果集的
+    /// 条数，拿它当 offset 去请求新结果集，拿回来的是新排序里错位的一页。
     public func loadMore() async {
-        guard hasMore, !isLoadingMore else { return }
+        guard hasMore, !isLoadingMore, !isLoading else { return }
         isLoadingMore = true
         let myGen = fetchGeneration   // load-more 不自增 generation；用 fetch 的代号
         do {
-            let resp = try await client.getListings(
+            let resp = try await loadPage(PageRequest(
                 city: currentCity, status: currentStatus, query: currentQuery,
                 limit: pageSize, offset: listings.count,
                 sources: currentSources.isEmpty ? nil : currentSources,
                 cities: currentCities.isEmpty ? nil : currentCities,
                 types: currentTypes.isEmpty ? nil : currentTypes,
-                contract: currentContract, energy: currentEnergy, sort: sort)
-            // load-more 期间 filter 改了 → 这批分页响应属于旧 filter，丢掉
+                contract: currentContract, energy: currentEnergy, sort: sort))
             guard myGen == fetchGeneration else { return }
             let fresh = resp.items.filter { seenIDs.insert($0.id).inserted }
             listings.append(contentsOf: fresh)
             total = resp.total
             loadMoreFailed = false
         } catch {
+            guard myGen == fetchGeneration else { return }
             if !error.isCancellation { loadMoreFailed = true }
         }
         isLoadingMore = false
@@ -136,10 +182,15 @@ public final class ListingsStore {
     /// `maxPages` 是防跑飞的闸：后端 total 若因为并发写入一直在涨，没有这个上限
     /// 循环不会停。到闸还没拉完就当分页失败处理，界面上要能看见。
     public func loadAllPages(maxPages: Int = 20) async {
+        let myGen = fetchGeneration
         var pages = 0
         while hasMore, !loadMoreFailed, pages < maxPages {
             let before = listings.count
             await loadMore()
+            // 翻到一半结果集换了（刷新 / 换排序 / 换筛选）：这一轮整个作废，
+            // **不**往下走到末尾那句"没翻完就标失败"——那会把新结果集标成失败。
+            // 新结果集自己的那一轮由触发刷新的那条路去跑。
+            guard myGen == fetchGeneration else { return }
             pages += 1
             // 一页下来一条没多——再循环就是死循环。
             if listings.count == before { break }
