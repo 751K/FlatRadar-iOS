@@ -133,7 +133,7 @@ struct FilterSettings: View {
             if loadingOptions && options.sources.isEmpty {
                 ProgressView().frame(maxWidth: .infinity)
             } else if options.sources.isEmpty {
-                Text(optionsError ?? "No platforms available").foregroundStyle(.secondary)
+                Text(optionsError ?? String(localized: "No platforms available")).foregroundStyle(.secondary)
             } else {
                 LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading),
                                     GridItem(.flexible(), alignment: .leading)],
@@ -318,7 +318,7 @@ struct FilterSettings: View {
                 errs.append("\(name): \"\(t)\" is not \(integer ? "a whole number" : "a number").")
                 return
             }
-            if v < 0 || (!allowZero && v == 0) { errs.append("\(name) must be greater than 0.") }
+            if v < 0 || (!allowZero && v == 0) { errs.append(String(localized: "\(name) must be greater than 0.")) }
         }
         check(maxRentText, "Max rent", allowZero: false)
         check(minAreaText, "Min area", allowZero: false)
@@ -354,7 +354,7 @@ struct FilterSettings: View {
         do {
             options = try await APIClient.shared.getFilterOptions()
         } catch {
-            optionsError = "Couldn't load options: \(error.localizedDescription)"
+            optionsError = String(localized: "Couldn't load options: \(error.localizedDescription)")
         }
     }
 

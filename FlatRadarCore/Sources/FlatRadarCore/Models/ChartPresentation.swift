@@ -201,11 +201,12 @@ nonisolated extension ListingStatus {
     /// 图表轴上用的短名。`label` 是给人读的完整说法，轴上放不下。
     var shortChartLabel: String {
         switch self {
-        case .book:     return "Book"
-        case .lottery:  return "Lottery"
-        case .reserved: return "Reserved"
-        case .occupied: return "Occupied"
-        case .other:    return "Other"
+        // 查表：这几个词是统计页状态分布图的轴标签，原先在任何语言下都是英文。
+        case .book:     return String(localized: "Book", bundle: .module)
+        case .lottery:  return String(localized: "Lottery", bundle: .module)
+        case .reserved: return String(localized: "Reserved", bundle: .module)
+        case .occupied: return String(localized: "Occupied", bundle: .module)
+        case .other:    return String(localized: "Other", bundle: .module)
         }
     }
 }

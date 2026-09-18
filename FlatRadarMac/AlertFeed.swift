@@ -122,7 +122,7 @@ enum AlertFeed {
         if let from, let to {
             // 同状态重复通知时后端也会发（例如抽签提醒），说「still X」比
             // 「X → X」清楚。设计稿里就有 `still ● Lottery` 这一行。
-            return from == to ? "Still \(to)" : "\(from) → \(to)"
+            return from == to ? String(localized: "Still \(to)") : "\(from) → \(to)"
         }
         if let to { return String(localized: "New listing · \(to)") }
         switch n.type {
@@ -215,10 +215,13 @@ enum AlertFeed {
 
     static let dayFormatter: DateFormatter = {
         let f = DateFormatter()
+        // 跟系统语言走，格式用模板而不是写死：原先锁在 en_US_POSIX，中文界面里
+        // 也是「Monday 21 September」。locale 先设，再设 calendar——反过来的话
+        // 设 locale 会把 calendar 换成那个 locale 的默认历法。
+        f.locale = .autoupdatingCurrent
         f.calendar = ServerTime.calendar
         f.timeZone = ServerTime.timeZone
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "EEEE d MMMM"
+        f.setLocalizedDateFormatFromTemplate("EEEEdMMMM")
         return f
     }()
 }

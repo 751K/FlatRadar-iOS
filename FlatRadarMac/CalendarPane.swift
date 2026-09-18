@@ -108,9 +108,11 @@ struct CalendarPane: View {
                 .tracking(-1.4)
                 .monospacedDigit()
                 .padding(.top, 2)
-            Text(monthGrid.buildingCount > 0
-                 ? "across \(monthGrid.buildingCount) building\(monthGrid.buildingCount == 1 ? "" : "s")"
-                 : "no building names on these")
+            // 单复数写成两个完整的 key，不在句尾拼 "s"：拼出来的 "s" 是个普通
+            // String 参数，别的语言的译文要么带着它、要么只能丢参数。
+            Text(monthGrid.buildingCount == 0 ? "no building names on these"
+                 : monthGrid.buildingCount == 1 ? "across 1 building"
+                 : "across \(monthGrid.buildingCount) buildings")
                 .font(.subheadline)
                 .foregroundStyle(.tertiary)
                 .padding(.top, 3)
@@ -130,7 +132,7 @@ struct CalendarPane: View {
                     .foregroundStyle(.secondary)
                 Text(Self.longDate.string(from: next.date))
                     .font(.headline)
-                Text("\(next.count) listing\(next.count == 1 ? "" : "s")")
+                Text(next.count == 1 ? "1 listing" : "\(next.count) listings")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -155,7 +157,7 @@ struct CalendarPane: View {
         .fixedSize()
     }
 
-    private func metric(_ title: String, _ value: Int, _ caption: String) -> some View {
+    private func metric(_ title: LocalizedStringKey, _ value: Int, _ caption: LocalizedStringKey) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(title)
                 .font(.subheadline)
@@ -356,8 +358,10 @@ struct CalendarPane: View {
             if let error = store.errorMessage {
                 Text(error).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
             } else {
-                Text("\(monthGrid.itemCount) dated item\(monthGrid.itemCount == 1 ? "" : "s") "
-                     + "in \(monthGrid.title) · \(actionable) bookable")
+                // 不用 `+` 拼：拼出来是普通 String，不查字符串表。
+                Text(monthGrid.itemCount == 1
+                     ? "1 dated item in \(monthGrid.title) · \(actionable) bookable"
+                     : "\(monthGrid.itemCount) dated items in \(monthGrid.title) · \(actionable) bookable")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
@@ -367,8 +371,7 @@ struct CalendarPane: View {
                 Text("\(excluded) with out-of-range dates not shown")
                     .font(.footnote)
                     .foregroundStyle(.tertiary)
-                    .help("Some platforms publish placeholder dates years in the past or future. "
-                        + "The calendar covers 12 months back to 24 months ahead.")
+                    .help("Some platforms publish placeholder dates years in the past or future. The calendar covers 12 months back to 24 months ahead.")
             }
         }
         .padding(.horizontal, 18)
@@ -381,10 +384,13 @@ struct CalendarPane: View {
 
     private static let longDate: DateFormatter = {
         let f = DateFormatter()
+        // 跟系统语言走，格式用模板而不是写死：原先锁在 en_US_POSIX，中文界面里
+        // 也是「Monday 21 September」。locale 先设，再设 calendar——反过来的话
+        // 设 locale 会把 calendar 换成那个 locale 的默认历法。
+        f.locale = .autoupdatingCurrent
         f.calendar = ServerTime.calendar
         f.timeZone = ServerTime.timeZone
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "EEEE d MMMM"
+        f.setLocalizedDateFormatFromTemplate("EEEEdMMMM")
         return f
     }()
 }

@@ -130,7 +130,12 @@ struct InspectorPane: View {
                     .tracking(-0.25)
                 // 时序图说「31 天」，分布图说「20 类」。对着一列日期写
                 // "31 categories" 是把实现词漏给了用户。
-                Text("\(chart.entries.count) \(ChartPresentation.axis(for: chart.key) == .time ? "days" : "categories") · \(chart.total) listings")
+                //
+                // 两句写全，不把 "days" / "categories" 当参数插进去：插进去的
+                // 是普通 String，不查字符串表，中文界面里会原样漏出英文单词。
+                Text(ChartPresentation.axis(for: chart.key) == .time
+                     ? "\(chart.entries.count) days · \(chart.total) listings"
+                     : "\(chart.entries.count) categories · \(chart.total) listings")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
@@ -238,9 +243,14 @@ struct InspectorPane: View {
             let k = ListingStatus.from($0.status)
             return k == .book || k == .lottery
         }.count
-        let head = "\(n) listing\(n == 1 ? "" : "s")"
-        return bookable == 0 ? "\(head) · none bookable yet"
-                             : "\(head) · \(bookable) bookable"
+        // 整句进字符串表。原先是 `"\(n) listing" + "s"` 拼出来的普通 String，
+        // 不查表，任何语言下都显示英文。
+        if bookable == 0 {
+            return n == 1 ? String(localized: "1 listing · none bookable yet")
+                          : String(localized: "\(n) listings · none bookable yet")
+        }
+        return n == 1 ? String(localized: "1 listing · \(bookable) bookable")
+                      : String(localized: "\(n) listings · \(bookable) bookable")
     }
 
     private func calendarRow(_ item: CalendarListing) -> some View {
@@ -332,10 +342,13 @@ struct InspectorPane: View {
 
     private static let longDate: DateFormatter = {
         let f = DateFormatter()
+        // 跟系统语言走，格式用模板而不是写死：原先锁在 en_US_POSIX，中文界面里
+        // 也是「Monday 21 September」。locale 先设，再设 calendar——反过来的话
+        // 设 locale 会把 calendar 换成那个 locale 的默认历法。
+        f.locale = .autoupdatingCurrent
         f.calendar = ServerTime.calendar
         f.timeZone = ServerTime.timeZone
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "EEEE d MMMM"
+        f.setLocalizedDateFormatFromTemplate("EEEEdMMMM")
         return f
     }()
 
@@ -479,8 +492,8 @@ struct InspectorPane: View {
         if let a = f.minArea { out.append("≥ \(Int(a)) m²") }
         // `minFloor` 为 0 等于**没有限制**，不是"至少 0 层"。列出来会让人以为
         // 自己设了一条根本不存在的条件。同理 maxRent / minArea 上面已经是可选。
-        if let fl = f.minFloor, fl > 0 { out.append("Floor ≥ \(fl)") }
-        if !f.allowedEnergy.isEmpty { out.append("\(f.allowedEnergy) or better") }
+        if let fl = f.minFloor, fl > 0 { out.append(String(localized: "Floor ≥ \(fl)")) }
+        if !f.allowedEnergy.isEmpty { out.append(String(localized: "\(f.allowedEnergy) or better")) }
         out.append(contentsOf: f.allowedCities.prefix(3))
         // 房型在后端存的是裸数字（`"1"` / `"2"`），直接显示就是两个孤零零的
         // 数字，读不出是房型还是别的什么。走 ``RoomType/display(_:)``，
@@ -492,10 +505,13 @@ struct InspectorPane: View {
 
     private static let longDateTime: DateFormatter = {
         let f = DateFormatter()
+        // 跟系统语言走，格式用模板而不是写死：原先锁在 en_US_POSIX，中文界面里
+        // 也是「Monday 21 September」。locale 先设，再设 calendar——反过来的话
+        // 设 locale 会把 calendar 换成那个 locale 的默认历法。
+        f.locale = .autoupdatingCurrent
         f.calendar = ServerTime.calendar
         f.timeZone = ServerTime.timeZone
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "d MMM 'at' HH:mm"
+        f.setLocalizedDateFormatFromTemplate("dMMMHHmm")
         return f
     }()
 
@@ -692,9 +708,8 @@ struct InspectorPane: View {
 
         let pct = Int(((price - median) / median * 100).rounded())
         return PeerComparison(
-            caption: "Price vs. \(RoomType.display(type)?.lowercased() ?? type) "
-                   + "in \(l.city) (\(peers.count) listings)",
-            deltaText: pct > 0 ? "+\(pct)%" : (pct == 0 ? "at median" : "\(pct)%"),
+            caption: String(localized: "Price vs. \(RoomType.display(type)?.lowercased() ?? type) in \(l.city) (\(peers.count) listings)"),
+            deltaText: pct > 0 ? "+\(pct)%" : (pct == 0 ? String(localized: "at median") : "\(pct)%"),
             medianText: "€\(Int(median.rounded()))")
     }
 
@@ -741,8 +756,7 @@ struct InspectorPane: View {
                 if !ok {
                     // 和小地图那处同一个口径：没坐标是"还没地理编码"，
                     // 不是"这套房不存在"。
-                    mapsFailure = "No coordinates for this listing yet — its address "
-                                + "has not been geocoded, so Maps cannot route to it."
+                    mapsFailure = String(localized: "No coordinates for this listing yet — its address has not been geocoded, so Maps cannot route to it.")
                 }
             }
         }

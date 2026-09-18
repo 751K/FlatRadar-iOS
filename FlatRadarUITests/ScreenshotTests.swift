@@ -307,6 +307,46 @@ final class ScreenshotTests: XCTestCase {
         return e.waitForExistence(timeout: timeout) ? e : nil
     }
 
+    /// 找 tab，**必要时翻 tab 栏的页**。
+    ///
+    /// iPad 横屏的浮动 tab 栏放不下六个 tab 时会分页，另一页上的 tab 不进无障碍
+    /// 树——`waitForTab` 等满也等不到。这不只是长语言的事：build 386 挂的是 es、
+    /// 388 是 nl、**390 是英文**（42 个字符，前几轮都放得下），App 已经停在
+    /// Settings 上、内容都渲染出来了，tab 栏却还显示着第一页。所以缩短译文只能
+    /// 降低概率，测试本身得会翻页。
+    ///
+    /// 翻页按钮**按位置认，不按文字认**：它的 label 是本地化的（Next Page /
+    /// Página siguiente / 下一页……），identifier 是空的；唯一稳定的特征是它和
+    /// `tab-*` 那排按钮在**同一行**。
+    ///
+    /// 先等 10 秒再翻：iPhone 上 identifier 是延迟出现的（见 ``tabButton``），
+    /// 一上来就找翻页键会在 tab 还没进树时误判。iPhone 没有翻页键，
+    /// `flipTabBarPage` 找不到就返回 false，接着按原来的 60 秒等。
+    private func findTab(_ tab: Tab) -> XCUIElement? {
+        if let b = waitForTab(tab, timeout: 10) { return b }
+        for _ in 0..<2 {
+            guard flipTabBarPage() else { break }
+            if let b = waitForTab(tab, timeout: 5) { return b }
+        }
+        return waitForTab(tab, timeout: 50)
+    }
+
+    /// 点一下 tab 栏的翻页按钮。找不到（iPhone、或者根本没分页）返回 false。
+    private func flipTabBarPage() -> Bool {
+        let tabs = app.buttons
+            .matching(NSPredicate(format: "identifier BEGINSWITH %@", "tab-"))
+            .allElementsBoundByIndex.filter { $0.exists }
+        guard let row = tabs.first?.frame, row.height > 0 else { return false }
+        let pager = app.buttons.allElementsBoundByIndex.first {
+            $0.exists && $0.identifier.isEmpty && $0.isHittable
+                && abs($0.frame.midY - row.midY) < row.height / 2
+        }
+        guard let pager else { return false }
+        XCTContext.runActivity(named: "tab 栏分页了，点「\(pager.label)」翻页") { _ in }
+        pager.tap()
+        return true
+    }
+
     /// 失败时打印的诊断。**必须短，而且要点在最前面。**
     ///
     /// 上一版打的是 `app.debugDescription.prefix(3000)`——iPhone 上那三千字符
@@ -364,18 +404,23 @@ final class ScreenshotTests: XCTestCase {
     /// 等按钮出现 → 没选中就点一下 → 再断言。断言留着不动，「点了但没落位」
     /// 仍然要红——点击是让它更可能对，不是替代验证。
     private func selectTab(_ tab: Tab, _ label: String) {
-        guard let button = waitForTab(tab) else {
+        guard let button = findTab(tab) else {
             XCTFail("找不到「\(label)」这个 tab（\(tab.id) / \(tab.symbol)）。"
                     + "当前按钮清单：\n" + buttonInventory())
             return
         }
         if !button.isSelected {
-            guard button.isHittable else {
-                XCTFail("「\(label)」这个 tab 在但点不到——多半在 tab bar 的另一页上。"
+            var target = button
+            // 在树里但点不到 = 在 tab 栏的另一页上。翻一页再取一次。
+            if !target.isHittable, flipTabBarPage(), let again = waitForTab(tab, timeout: 5) {
+                target = again
+            }
+            guard target.isHittable else {
+                XCTFail("「\(label)」这个 tab 在但点不到——翻页之后仍然不行。"
                         + "当前按钮清单：\n" + buttonInventory())
                 return
             }
-            button.tap()
+            target.tap()
         }
         assertTabSelected(tab, label)
     }
@@ -388,7 +433,7 @@ final class ScreenshotTests: XCTestCase {
     /// Dashboard 的图——尺寸正确、渲染完整，只有内容是错的。下游 verify 只查
     /// 张数和像素，查不出来。
     private func assertTabSelected(_ tab: Tab, _ label: String) {
-        guard let button = waitForTab(tab) else {
+        guard let button = findTab(tab) else {
             XCTFail("找不到「\(label)」这个 tab（\(tab.id) / \(tab.symbol)）。"
                     + "当前按钮清单：\n" + buttonInventory())
             return

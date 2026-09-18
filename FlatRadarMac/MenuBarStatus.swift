@@ -600,7 +600,7 @@ private struct SectionHeading: View {
 /// 否则三行里有一行的字重或间距会差一点。
 private struct MenuRowLabel: View {
 
-    let title: String
+    let title: LocalizedStringKey
     let shortcut: String
     var dimmed = false
 
@@ -623,7 +623,7 @@ private struct MenuRowLabel: View {
 
 private struct MenuRow: View {
 
-    let title: String
+    let title: LocalizedStringKey
     let shortcut: String
     var dimmed = false
     let action: () -> Void
@@ -678,8 +678,8 @@ struct MenuBarStatusLabel: View {
 
     private var accessibilityText: String {
         var parts = ["FlatRadar"]
-        if let n = feed.summary.newToday { parts.append("\(n) \(StatusWording.newLower)") }
-        if unread > 0 { parts.append("\(unread) \(StatusWording.unreadLower)") }
+        if let n = feed.summary.newToday { parts.append(String(localized: "\(n) new")) }
+        if unread > 0 { parts.append(String(localized: "\(unread) unread")) }
         return parts.joined(separator: ", ")
     }
 }

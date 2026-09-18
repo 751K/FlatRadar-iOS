@@ -104,7 +104,7 @@ struct ListingWindow: View {
         case .signedOut:
             signedOut
         case .lostListing:
-            unavailable("This window lost track of which listing it was showing.")
+            unavailable(String(localized: "This window lost track of which listing it was showing."))
         case .load:
             loaded
         }
@@ -135,7 +135,7 @@ struct ListingWindow: View {
             ProgressView("Loading…")
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         } else {
-            unavailable(store.failure ?? "This listing is no longer available.")
+            unavailable(store.failure ?? String(localized: "This listing is no longer available."))
         }
     }
 
@@ -182,8 +182,7 @@ struct ListingWindow: View {
                                                        thumbnails: thumbnails)
                         locating = false
                         if !ok {
-                            mapsFailure = "No coordinates for this listing yet — its address "
-                                        + "has not been geocoded, so Maps cannot route to it."
+                            mapsFailure = String(localized: "No coordinates for this listing yet — its address has not been geocoded, so Maps cannot route to it.")
                         }
                     }
                 }

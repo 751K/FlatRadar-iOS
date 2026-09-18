@@ -27,7 +27,7 @@ final class StatsModel {
     enum Window: Int, CaseIterable, Identifiable {
         case week = 7, twoWeeks = 14, month = 30, quarter = 90
         var id: Int { rawValue }
-        var label: String { "\(rawValue)d" }
+        var label: String { String(localized: "\(rawValue)d") }
     }
 
     var days: Window = .month {

@@ -144,24 +144,102 @@ def test_plan_targets_the_ui_test_target(plan):
             f"plan 引用的 target id {i} 在 pbxproj 里不是 {UI_TEST_TARGET}")
 
 
-def test_single_configuration_until_mac_is_localized(plan):
-    """Mac 端现在只跑一种语言，这是**有据的**，不是偷懒。
+IOS_PLAN = ROOT / "TestPlans" / "Screenshots.xctestplan"
 
-    FlatRadarMac 这个 target 没有字符串目录，构建产物
-    `FlatRadarMac.app/Contents/Resources/` 下**一个 .lproj 都没有**（只有
-    FlatRadarCore 那个 bundle 里有五个）。侧栏、工具栏、表头这些 Mac 专有文案
-    是硬写的英文，`Text(_ content: String)` 那个重载也不做本地化。
 
-    所以多配几个语言 configuration，只会跑出几套一模一样的英文截图——而张数和
-    尺寸全合格。iOS 那边正是这么浪费过一轮（见 ScreenshotTests 里 `launch` 的
-    注释：「五种语言跑出五套一模一样的英文截图」）。
+def _env(options: dict) -> dict[str, str]:
+    return {e["key"]: e["value"] for e in options.get("environmentVariableEntries", [])}
 
-    哪天 Mac 端做了本地化，把语言加进 plan，同时把这条测试改掉。
+
+def test_languages_match_the_ios_plan(plan):
+    """Mac 和 iOS 拍同一组语言，名字、language、region 逐个对齐。
+
+    ASC 上两个平台挂在同一组 localization 下（en-US / zh-Hans / zh-Hant /
+    nl-NL / es-ES）。少一种语言，那种语言的商店页上 Mac 截图就只能退回
+    en-US 那套；名字写岔了（比如 `nl` 对 `nl-NL`），提取脚本按 configuration
+    名分桶，会分进一个 ASC 不认的桶里。
+
+    2026-09-18 之前这里钉的是「只准 en-US 一个」，理由是 Mac target 没有
+    字符串目录、构建产物里一个 .lproj 都没有，多配语言只会跑出几套一样的英文
+    图。16b76c5 把 Localizable.xcstrings 挂进了 Mac target，那个前提不在了——
+    下面 test_mac_target_ships_the_string_catalog 钉住它不会再掉。
     """
-    names = [c["name"] for c in plan["configurations"]]
-    assert names == ["en-US"], (
-        f"Mac 截图 plan 现在有 {names}。多语言要等 FlatRadarMac 真的有字符串目录"
-        "之后再加，否则跑出来是几套一样的英文图。")
+    ios = json.loads(IOS_PLAN.read_text(encoding="utf-8"))
+    want = [(c["name"], c["options"]["language"], c["options"]["region"])
+            for c in ios["configurations"]]
+    got = [(c["name"], c["options"].get("language"), c["options"].get("region"))
+           for c in plan["configurations"]]
+    assert got == want, f"Mac 截图 plan 的语言 {got} 和 iOS 的 {want} 对不上"
+
+
+def test_every_configuration_declares_its_language(plan):
+    """每个 configuration 都用环境变量写明「这一轮该是什么语言」。
+
+    测试靠 `UI_TEST_LANGUAGE` 做两件事：显式把 `-AppleLanguages` 传给 app，
+    拍之前核对 app 真的用上了它（`assertLanguage`）。缺了这个变量，那一轮就
+    既不传也不验，按系统语言拍——拍出一套英文图，名字却是 zh-Hans，而且全绿。
+    """
+    for c in plan["configurations"]:
+        env = _env(c["options"])
+        assert env.get("UI_TEST_LANGUAGE") == c["options"]["language"], (
+            f"{c['name']} 的 UI_TEST_LANGUAGE 是 {env.get('UI_TEST_LANGUAGE')!r}，"
+            f"应该和它的 language {c['options']['language']!r} 一致")
+        assert re.fullmatch(r"[a-z]{2}_[A-Z]{2}", env.get("UI_TEST_LOCALE", "")), (
+            f"{c['name']} 的 UI_TEST_LOCALE 不是 ll_RR 形式：{env.get('UI_TEST_LOCALE')!r}")
+        assert env["UI_TEST_LOCALE"].endswith("_" + c["options"]["region"]), (
+            f"{c['name']} 的 UI_TEST_LOCALE 和 region 对不上")
+
+
+def test_mac_target_ships_the_string_catalog():
+    """Mac target 的 Resources 里有 Localizable.xcstrings。
+
+    没有它，app 包里就没有任何 .lproj，系统挑不到非英文的 localization，
+    五种语言全部退回英文——而测试端传的 `-AppleLanguages` 照样传了。
+    `assertLanguage` 会在云端抓住这一条，但那要等一整轮；这里在本地就红。
+    """
+    pbx = PBXPROJ.read_text(encoding="utf-8")
+    target = re.search(r"/\* FlatRadarMac \*/ = \{\s*isa = PBXNativeTarget;(.*?)\n\t\t\};", pbx, re.S)
+    assert target, "pbxproj 里没找到 FlatRadarMac 这个 target"
+    phase = re.search(r"(\w+) /\* Resources \*/,", target.group(1))
+    assert phase, "FlatRadarMac 没有 Resources build phase"
+    body = re.search(phase.group(1) + r" /\* Resources \*/ = \{(.*?)\};", pbx, re.S)
+    assert body and "Localizable.xcstrings in Resources" in body.group(1), (
+        "FlatRadarMac 的 Resources 里没有 Localizable.xcstrings——"
+        "Mac 截图的五种语言会全部退回英文")
+
+
+def test_post_clone_injects_credentials_into_every_configuration(tmp_path):
+    """凭据要写进**每个带了环境变量的 configuration**，不只是 defaultOptions。
+
+    configuration 里写了 environmentVariableEntries 之后，它和 defaultOptions
+    那份是合并还是整个覆盖，没有文档能钉死。要是覆盖，凭据只在默认那份里，
+    五种语言全都拿不到、全退回访客模式——构建照样绿，只是少了登录后那几屏。
+    这里真跑一遍脚本，看结果。
+    """
+    import os
+    import shutil
+    import subprocess
+
+    (tmp_path / "TestPlans").mkdir()
+    (tmp_path / "ci_scripts").mkdir()
+    for name in ("Screenshots.xctestplan", "MacScreenshots.xctestplan"):
+        shutil.copy(ROOT / "TestPlans" / name, tmp_path / "TestPlans" / name)
+    script = tmp_path / "ci_scripts" / "ci_post_clone.sh"
+    shutil.copy(ROOT / "ci_scripts" / "ci_post_clone.sh", script)
+    env = {**os.environ, "CI_PRIMARY_REPOSITORY_PATH": str(tmp_path),
+           "UI_TEST_USERNAME": "u", "UI_TEST_PASSWORD": "p"}
+    subprocess.run(["bash", str(script)], env=env, check=True,
+                   capture_output=True, timeout=60)
+
+    injected = json.loads((tmp_path / "TestPlans" / "MacScreenshots.xctestplan")
+                          .read_text(encoding="utf-8"))
+    assert _env(injected["defaultOptions"]).get("UI_TEST_USERNAME") == "u"
+    for c in injected["configurations"]:
+        env_c = _env(c["options"])
+        assert env_c.get("UI_TEST_USERNAME") == "u" and env_c.get("UI_TEST_PASSWORD") == "p", (
+            f"{c['name']} 没拿到凭据：{sorted(env_c)}")
+        assert env_c.get("UI_TEST_LANGUAGE") == c["options"]["language"], (
+            f"注入把 {c['name']} 原有的 UI_TEST_LANGUAGE 弄丢了")
 
 
 def test_ci_strips_exactly_the_profile_bound_entitlements():

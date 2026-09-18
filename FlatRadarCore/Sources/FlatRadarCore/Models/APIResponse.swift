@@ -221,7 +221,7 @@ public enum ServerTime {
 
     public nonisolated static func compactAge(since date: Date, now: Date) -> String {
         let interval = max(0, now.timeIntervalSince(date))
-        if interval < 60 { return "now" }
+        if interval < 60 { return String(localized: "now", bundle: .module) }
         if interval < 3600 { return "\(Int(interval / 60))m" }
         if interval < 86400 { return "\(Int(interval / 3600))h" }
         if interval < 86400 * 7 { return "\(Int(interval / 86400))d" }
@@ -249,10 +249,12 @@ public enum ServerTime {
     private nonisolated static func ago(seconds: TimeInterval) -> String {
         let secs = max(0, Int(seconds))
         switch secs {
-        case 0..<60: return "\(secs)s ago"
-        case 60..<3600: return "\(secs / 60)m ago"
-        case 3600..<86400: return "\(secs / 3600)h ago"
-        default: return "\(secs / 86400)d ago"
+        // 查 Core 的字符串表。英文结果不变（测试钉着 `4m ago` 这些）；原先是
+        // 裸字面量，侧栏底部的「scanned 5m ago」在中文界面里也是英文。
+        case 0..<60: return String(localized: "\(secs)s ago", bundle: .module)
+        case 60..<3600: return String(localized: "\(secs / 60)m ago", bundle: .module)
+        case 3600..<86400: return String(localized: "\(secs / 3600)h ago", bundle: .module)
+        default: return String(localized: "\(secs / 86400)d ago", bundle: .module)
         }
     }
 }

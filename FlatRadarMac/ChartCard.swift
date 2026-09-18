@@ -56,7 +56,10 @@ struct ChartCard: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(title), \(entries.count) \(axis == .time ? "days" : "categories")")
+        // 两句写全，理由同 InspectorPane 的标题行：插进去的单词不会被翻译。
+        .accessibilityLabel(axis == .time
+                            ? "\(title), \(entries.count) days"
+                            : "\(title), \(entries.count) categories")
         .accessibilityHint("Shows the full breakdown in the inspector")
     }
 

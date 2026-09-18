@@ -185,7 +185,7 @@ struct ListingsPane: View {
     /// 完成判据：空列表 / 加载失败要有明确状态**和重试入口**。
     private func loadFailure(_ message: String) -> some View {
         ContentUnavailableView {
-            Label(model.listings.lastError?.errorDescription ?? "Unable to Load",
+            Label(model.listings.lastError?.errorDescription ?? String(localized: "Unable to Load"),
                   systemImage: model.listings.lastError?.systemImage ?? "wifi.slash")
         } description: {
             Text(message)

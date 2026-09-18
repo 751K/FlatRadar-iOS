@@ -78,6 +78,12 @@ enum ScreenshotMode {
     /// inspector 被切掉半截。现在同一块屏给出 1280×692——宽度拿满，够用。
     static func windowSize(on screen: NSScreen?) -> NSSize? {
         guard let screen else { return nil }
+        // `-UI_TEST_WINDOW_SIZE 1280x800`：本地复现构建机的窗口。开发机的屏大，
+        // 按下面的规则会挑 1440×900，构建机上才出现的布局问题在本地就看不见。
+        if let raw = value("UI_TEST_WINDOW_SIZE") {
+            let parts = raw.split(separator: "x").compactMap { Double($0) }
+            if parts.count == 2 { return NSSize(width: parts[0], height: parts[1]) }
+        }
         // 藏了菜单栏就按**整块屏**算，不按 `visibleFrame`。
         //
         // `presentationOptions` 生效之后 `visibleFrame` 不保证立刻更新，读到旧值
@@ -189,6 +195,25 @@ enum ScreenshotMode {
     /// `.autoHideMenuBar` 必须和一个 Dock 选项一起给，单独给会被忽略。
     private static var didHideMenuBar = false
 
+    /// 把 app **实际用上的**界面语言写进窗口的 AX value，给截图测试核对。
+    ///
+    /// 五种语言各跑一轮，而「语言没传到 app」是一种**全绿的失败**：iOS 那边真的
+    /// 跑出过五套一模一样的英文截图，张数和尺寸全合格（见 iOS `ScreenshotTests`
+    /// 里 `launch` 的注释）。Mac 这边还多一种可能：app 包里压根没有那种语言的
+    /// `.lproj`，系统就退回英文——一样不报错。
+    ///
+    /// 报的是 `Bundle.main.preferredLocalizations.first`，也就是**系统在 app 包
+    /// 里挑中的那一份**，不是传进来的参数。两种失败都会让它和期望值对不上。
+    ///
+    /// 窗口的 AX value 平时没人用，写它不影响任何界面；只在截图模式下写。
+    /// 先比较再写：`pin` 会被重试八次。
+    static func reportLanguage(on window: NSWindow) {
+        let lang = Bundle.main.preferredLocalizations.first ?? ""
+        if (window.accessibilityValue() as? String) != lang {
+            window.setAccessibilityValue(lang)
+        }
+    }
+
     static func hideMenuBarOnce() {
         guard !didHideMenuBar, NSApp.isActive else { return }
         NSApp.presentationOptions = [.autoHideDock, .autoHideMenuBar]
@@ -226,6 +251,7 @@ enum ScreenshotMode {
         //
         // 尺寸不用靠它守——`WindowSizer` 那边有重试 + `minSize == maxSize` 的硬锁，
         // 而且启动参数里加了 `-ApplePersistenceIgnoreState YES`，压根不会去恢复。
+        reportLanguage(on: window)
         hideMenuBarOnce()
         let screen = window.screen ?? NSScreen.main
 

@@ -162,7 +162,7 @@ struct AccountSettings: View {
     @ViewBuilder
     private var adminSections: some View {
         Section("Account") {
-            LabeledContent("Signed in as", value: "Administrator")
+            LabeledContent("Signed in as", value: String(localized: "Administrator"))
             Button("Sign Out…") { showSignOutConfirm = true }
         }
     }
