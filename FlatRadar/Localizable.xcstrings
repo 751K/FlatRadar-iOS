@@ -2283,7 +2283,7 @@
         "nl": {
           "stringUnit": {
             "state": "translated",
-            "value": "Kalender"
+            "value": "Agenda"
           }
         },
         "zh-Hans": {
@@ -5031,7 +5031,7 @@
         "nl": {
           "stringUnit": {
             "state": "translated",
-            "value": "Advertenties"
+            "value": "Aanbod"
           }
         },
         "zh-Hans": {

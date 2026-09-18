@@ -19,12 +19,25 @@ struct StatsStrip: View {
     let listings: ListingsStore
 
     var body: some View {
+        // 宽度不够时**走势图先让**：左边的大数和右边三个数是读数，截了就读错；
+        // 曲线是装饰性的形状，窄一点照样看得出趋势。
+        //
+        // 原先曲线写死 248、右边三个数 `.fixedSize()`，整条带的最小宽度约 904 点。
+        // 13 寸的 1280 点屏上，扣掉侧栏和检视器，内容区只有 780–830 点——塞不下，
+        // 分栏视图就在「内容要更宽」和「窗口只有这么宽」之间来回改最小尺寸，
+        // 直到 AppKit 抛 "more Update Constraints in Window passes than there are
+        // views in the window" 把进程杀掉。build 387 的截图构建机（正是 1280×800）
+        // 上四种非英文语言的列表页全部这样崩；英文当时恰好卡在边上，本地同尺寸
+        // 复现也是崩的。
         HStack(alignment: .center, spacing: 26) {
             anchor
+                .layoutPriority(1)
             Sparkline(values: summary.sparkline)
-                .frame(width: 248, height: 64)
+                .frame(minWidth: 96, idealWidth: 248, maxWidth: 248)
+                .frame(height: 64)
             Spacer(minLength: 12)
             metrics
+                .layoutPriority(1)
         }
         .padding(.horizontal, 18)
         // 设计稿写的是 96。那是按它自己那套小一号的字量的——把字号归到 macOS
@@ -88,7 +101,10 @@ struct StatsStrip: View {
                    value: listings.total > 0 ? listings.total : nil,
                    caption: loadCaption)
         }
-        .fixedSize()
+        // 只在竖向钉理想尺寸。横向原先也钉（`.fixedSize()`），于是这三列的
+        // 文字一个字都不肯让，整条带的最小宽度被它们撑死——见 body 的注释。
+        // 现在横向靠 `layoutPriority` 优先拿到理想宽度，真不够时说明文字截断。
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private func metric(_ title: String, value: Int?, caption: String?) -> some View {
@@ -96,6 +112,7 @@ struct StatsStrip: View {
             Text(title)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
+                .lineLimit(1)
             Text(StatusWording.countText(value))
                 .font(.system(.title2, design: .monospaced).weight(.semibold))
                 .monospacedDigit()
@@ -104,6 +121,7 @@ struct StatsStrip: View {
                 Text(caption)
                     .font(.caption)
                     .foregroundStyle(.tertiary)
+                    .lineLimit(1)
                     .padding(.top, 1)
             }
         }

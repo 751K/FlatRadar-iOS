@@ -78,6 +78,12 @@ enum ScreenshotMode {
     /// inspector 被切掉半截。现在同一块屏给出 1280×692——宽度拿满，够用。
     static func windowSize(on screen: NSScreen?) -> NSSize? {
         guard let screen else { return nil }
+        // `-UI_TEST_WINDOW_SIZE 1280x800`：本地复现构建机的窗口。开发机的屏大，
+        // 按下面的规则会挑 1440×900，构建机上才出现的布局问题在本地就看不见。
+        if let raw = value("UI_TEST_WINDOW_SIZE") {
+            let parts = raw.split(separator: "x").compactMap { Double($0) }
+            if parts.count == 2 { return NSSize(width: parts[0], height: parts[1]) }
+        }
         // 藏了菜单栏就按**整块屏**算，不按 `visibleFrame`。
         //
         // `presentationOptions` 生效之后 `visibleFrame` 不保证立刻更新，读到旧值

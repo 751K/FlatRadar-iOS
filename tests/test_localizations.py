@@ -148,12 +148,17 @@ IPAD_TABS = ["Dashboard", "Listings", "Map", "Calendar", "Alerts", "Settings"]
 
 #: 六个标签加起来最多多少个字符还放得下。
 #:
-#: 来自 build 386 的 13 英寸 iPad 横屏实测：nl 合计 55 个字符，一行放下；es 是
-#: 58 个（`Panel de control` + `Configuración`），tab 栏被分成两页，Alerts 和
-#: Settings 落到第二页——截图测试找不到这两个 tab，真实的西语用户也得先点
-#: 「Página siguiente」才看得见它们。按字符数估是粗的，但方向对：只会在
-#: 「可能放不下」时红。
-IPAD_TAB_BUDGET = 55
+#: 13 英寸 iPad 横屏实测（Xcode Cloud 截图构建）：
+#:
+#:     es 58（Panel de control / Configuración） build 386 分页
+#:     nl 55（Advertenties / Instellingen）      build 386 放下、build 388 分页
+#:     en 42、es 改短后 41                        两轮都放下
+#:
+#: 分页时 Alerts 和 Settings 落到第二页——截图测试找不到这两个 tab，真实用户
+#: 也得先点「下一页」才看得见它们。55 已经证明是临界值（同一份文案两轮结果
+#: 不同，大概和 Alerts 上的未读角标有关），所以上限取改短后 nl 的 47，
+#: 留出余量。按字符数估是粗的，但方向对：只会在「可能放不下」时红。
+IPAD_TAB_BUDGET = 47
 
 
 def test_ipad_tab_labels_fit_on_one_page():
