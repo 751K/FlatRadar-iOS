@@ -12184,6 +12184,4306 @@
           }
         }
       }
+    },
+        "A JSON file with your account, filter, devices, and alert history.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un archivo JSON con tu cuenta, filtro, dispositivos e historial de alertas."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Een JSON-bestand met je account, filter, apparaten en meldingsgeschiedenis."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "包含账户、筛选条件、设备和提醒历史的 JSON 文件。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "包含賬戶、篩選條件、裝置和提醒歷史的 JSON 檔案。"
+          }
+        }
+      }
+    },
+    "A listing must match every condition to notify you.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un anuncio debe cumplir todas las condiciones para avisarte."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Een woning moet aan alle voorwaarden voldoen om je te melden."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "房源必须满足所有条件才会通知你。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "房源必須滿足所有條件才會通知你。"
+          }
+        }
+      }
+    },
+    "A one-time tip to support development. Does not unlock any features.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una contribución única para apoyar el desarrollo. No desbloquea ninguna función."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Een eenmalige donatie ter ondersteuning van de ontwikkeling. Hiermee worden geen functies vrijgespeeld."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一次性打赏以支持开发。不会解锁任何功能。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一次性打賞以支援開發。不會解鎖任何功能。"
+          }
+        }
+      }
+    },
+    "All conditions will be cleared. After you save, every new listing will notify you.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Se borrarán todas las condiciones. Después de guardar, recibirás avisos de cada anuncio nuevo."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle voorwaarden worden gewist. Na het opslaan krijg je een melding van elke nieuwe woning."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有条件将被清除。保存后每条新房源都会通知你。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "所有條件將被清除。儲存後每條新房源都會通知你。"
+          }
+        }
+      }
+    },
+    "All filters": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todos los filtros"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alle filters"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部筛选条件"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部篩選條件"
+          }
+        }
+      }
+    },
+    "Back to sign in": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volver a iniciar sesión"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Terug naar inloggen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "返回登录"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "返回登入"
+          }
+        }
+      }
+    },
+    "Bug Report": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Informe de errores"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bugrapport"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "错误报告"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "錯誤報告"
+          }
+        }
+      }
+    },
+    "By creating an account you agree to the": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Al crear una cuenta, aceptas las"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Door een account aan te maken, ga je akkoord met de"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建账户即表示你同意"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "建立賬戶即表示你同意"
+          }
+        }
+      }
+    },
+    "Change Password…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambiar contraseña…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wachtwoord wijzigen…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更改密码…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "更改密碼…"
+          }
+        }
+      }
+    },
+    "Clear": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Borrar"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wissen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "清除"
+          }
+        }
+      }
+    },
+    "Confirm password": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Confirmar contraseña"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wachtwoord bevestigen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "确认密码"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "確認密碼"
+          }
+        }
+      }
+    },
+    "Contact Support…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contactar con soporte…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Contact opnemen met support…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "联系支持…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "聯絡支援…"
+          }
+        }
+      }
+    },
+    "Continue as guest": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Continuar como invitado"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Doorgaan als gast"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以访客身份继续"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "以訪客身分繼續"
+          }
+        }
+      }
+    },
+    "Copy Link": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Copiar enlace"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Link kopiëren"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "复制链接"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "複製連結"
+          }
+        }
+      }
+    },
+    "Couldn't load the tips": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudieron cargar las propinas"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De fooien konden niet worden geladen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法加载打赏项目"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法載入打賞項目"
+          }
+        }
+      }
+    },
+    "Couldn’t load the map": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudo cargar el mapa"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De kaart kon niet worden geladen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法加载地图"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法載入地圖"
+          }
+        }
+      }
+    },
+    "Create an Account": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crear una cuenta"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Account aanmaken"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建账户"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "建立賬戶"
+          }
+        }
+      }
+    },
+    "Create an Account…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crear una cuenta…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Account aanmaken…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建账户…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "建立賬戶…"
+          }
+        }
+      }
+    },
+    "Create an account instead": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crear una cuenta en su lugar"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In plaats daarvan een account aanmaken"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "改为创建账户"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "改為建立賬戶"
+          }
+        }
+      }
+    },
+    "Create your account": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crea tu cuenta"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Maak je account aan"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "创建你的账户"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "建立你的賬戶"
+          }
+        }
+      }
+    },
+    "Dated items this month": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elementos con fecha este mes"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Items met een datum deze maand"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本月有日期的项目"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "本月有日期的項目"
+          }
+        }
+      }
+    },
+    "Dates come from the platforms and can shift without notice": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las fechas proceden de las plataformas y pueden cambiar sin aviso"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Datums komen van de platforms en kunnen zonder waarschuwing veranderen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日期来自各平台，可能随时变更"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "日期來自各平台，可能隨時變更"
+          }
+        }
+      }
+    },
+    "Delete Account…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar cuenta…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Account verwijderen…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除账户…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除賬戶…"
+          }
+        }
+      }
+    },
+    "Deleting your account removes it from the server and signs out every device.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Al eliminar tu cuenta se borra del servidor y se cierra la sesión en todos los dispositivos."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Als je je account verwijdert, wordt het van de server verwijderd en worden alle apparaten uitgelogd."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "删除账户会将其从服务器移除，并让所有设备退出登录。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "刪除賬戶會將其從伺服器移除，並讓所有裝置登出。"
+          }
+        }
+      }
+    },
+    "Deliver notifications to this Mac": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviar notificaciones a este Mac"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meldingen op deze Mac ontvangen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "将通知发送到这台 Mac"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "將通知傳送到這台 Mac"
+          }
+        }
+      }
+    },
+    "Diagnostics": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diagnóstico"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Diagnostiek"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "诊断"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "診斷"
+          }
+        }
+      }
+    },
+    "Edit…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Editar…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Bewerken…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "编辑…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "編輯…"
+          }
+        }
+      }
+    },
+    "Environment": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Entorno"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Omgeving"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "环境"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "環境"
+          }
+        }
+      }
+    },
+    "Everything below counts listings **first seen** in this window — not what is in stock right now.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todo lo que aparece abajo cuenta anuncios **vistos por primera vez** en este periodo, no el inventario actual."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alles hieronder telt woningen die in dit venster **voor het eerst zijn gezien**, niet wat nu beschikbaar is."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下面统计的是这段时间内**首次出现**的房源，不是当前库存。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下面統計的是這段時間內**首次出現**的房源，不是目前庫存。"
+          }
+        }
+      }
+    },
+    "Filter": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filtrar"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filteren"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "筛选"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "篩選"
+          }
+        }
+      }
+    },
+    "Filter…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filtrar…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filter…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "筛选…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "篩選…"
+          }
+        }
+      }
+    },
+    "Fit": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ajustar"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Passend"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "适配"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "適配"
+          }
+        }
+      }
+    },
+    "Full details load with the listings tab.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los detalles completos se cargan en la pestaña de anuncios."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De volledige details worden geladen in het tabblad Woningen."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完整详情会在房源标签页加载。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "完整詳情會在房源分頁載入。"
+          }
+        }
+      }
+    },
+    "General": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "General"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Algemeen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通用"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一般"
+          }
+        }
+      }
+    },
+    "Has a move-in date": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tiene fecha de entrada"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heeft een verhuisdatum"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有入住日期"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "有入住日期"
+          }
+        }
+      }
+    },
+    "Inspector": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inspector"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inspecteur"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "检查器"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "檢查器"
+          }
+        }
+      }
+    },
+    "It matched your saved filter.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Coincide con tu filtro guardado."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Het voldoet aan je opgeslagen filter."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "它符合你保存的筛选条件。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "它符合你儲存的篩選條件。"
+          }
+        }
+      }
+    },
+    "Keep me signed in on this Mac": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mantener mi sesión iniciada en este Mac"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingelogd blijven op deze Mac"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在这台 Mac 上保持登录"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在這台 Mac 上保持登入"
+          }
+        }
+      }
+    },
+    "Last 24 hours, 2-hour buckets": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Últimas 24 horas, intervalos de 2 horas"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afgelopen 24 uur, blokken van 2 uur"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "过去 24 小时，每 2 小时一个区间"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "過去 24 小時，每 2 小時一個區間"
+          }
+        }
+      }
+    },
+    "Listing Unavailable": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anuncio no disponible"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Woning niet beschikbaar"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "房源不可用"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "房源不可用"
+          }
+        }
+      }
+    },
+    "Menu Bar": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Barra de menús"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Menubalk"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "菜单栏"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選單列"
+          }
+        }
+      }
+    },
+    "New listings and status changes that match your filter.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nuevos anuncios y cambios de estado que coinciden con tu filtro."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nieuwe woningen en statuswijzigingen die aan je filter voldoen."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "符合筛选条件的新房源和状态变化。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "符合篩選條件的新房源和狀態變更。"
+          }
+        }
+      }
+    },
+    "Next Listing": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anuncio siguiente"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volgende woning"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下一套房源"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下一套房源"
+          }
+        }
+      }
+    },
+    "Next move-in": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Próxima entrada"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volgende verhuisdatum"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下一个入住日期"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下一個入住日期"
+          }
+        }
+      }
+    },
+    "No account yet? Continue, then choose Create account.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "¿Aún no tienes cuenta? Continúa y elige Crear una cuenta."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nog geen account? Ga door en kies Account aanmaken."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有账户？继续，然后选择创建账户。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "還沒有賬戶？繼續，然後選擇建立賬戶。"
+          }
+        }
+      }
+    },
+    "No listings have coordinates yet.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no hay anuncios con coordenadas."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Er zijn nog geen woningen met coördinaten."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还没有房源坐标。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "還沒有房源座標。"
+          }
+        }
+      }
+    },
+    "No listings match these filters": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ningún anuncio coincide con estos filtros"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geen woningen voldoen aan deze filters"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "没有房源符合这些筛选条件"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沒有房源符合這些篩選條件"
+          }
+        }
+      }
+    },
+    "Not signed in. Sign in or continue as a guest from the main window.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No has iniciado sesión. Inicia sesión o continúa como invitado desde la ventana principal."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niet ingelogd. Log in of ga als gast verder vanuit het hoofdvenster."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未登录。请在主窗口登录或以访客身份继续。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未登入。請在主視窗登入或以訪客身分繼續。"
+          }
+        }
+      }
+    },
+    "Notifications": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Notificaciones"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meldingen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通知"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通知"
+          }
+        }
+      }
+    },
+    "Notifications Are Off": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las notificaciones están desactivadas"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meldingen zijn uitgeschakeld"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通知已关闭"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通知已關閉"
+          }
+        }
+      }
+    },
+    "Notifications for FlatRadar are turned off in System Settings.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las notificaciones de FlatRadar están desactivadas en Ajustes del Sistema."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meldingen voor FlatRadar zijn uitgeschakeld in Systeeminstellingen."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统设置中已关闭 FlatRadar 的通知。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系統設定中已關閉 FlatRadar 的通知。"
+          }
+        }
+      }
+    },
+    "One account for every platform we track.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una cuenta para todas las plataformas que seguimos."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eén account voor elk platform dat we volgen."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一个账户覆盖我们追踪的所有平台。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一個賬戶涵蓋我們追蹤的所有平台。"
+          }
+        }
+      }
+    },
+    "One list for every Dutch housing platform.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Una lista para cada plataforma de vivienda neerlandesa."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eén overzicht voor elk Nederlands woningplatform."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一个列表汇总所有荷兰住房平台。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一個列表彙總所有荷蘭住房平台。"
+          }
+        }
+      }
+    },
+    "Open FlatRadar": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir FlatRadar"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FlatRadar openen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开 FlatRadar"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟 FlatRadar"
+          }
+        }
+      }
+    },
+    "Open System Settings": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir Ajustes del Sistema"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Systeeminstellingen openen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开系统设置"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟系統設定"
+          }
+        }
+      }
+    },
+    "Open in New Window": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir en una ventana nueva"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Openen in nieuw venster"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在新窗口中打开"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在新視窗中開啟"
+          }
+        }
+      }
+    },
+    "Open on Platform": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abrir en la plataforma"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Openen op platform"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在平台上打开"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在平台上開啟"
+          }
+        }
+      }
+    },
+    "Opens the App Store.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Abre el App Store."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opent de App Store."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "打开 App Store。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "開啟 App Store。"
+          }
+        }
+      }
+    },
+    "Other": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Otro"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Overig"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "其他"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "其他"
+          }
+        }
+      }
+    },
+    "Pick a listing on the left, or use ↑↓.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elige un anuncio a la izquierda o usa ↑↓."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kies links een woning of gebruik ↑↓."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选择左侧的房源，或使用 ↑↓。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選擇左側的房源，或使用 ↑↓。"
+          }
+        }
+      }
+    },
+    "Pick a name and a password. If the name is taken we will say so.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Elige un nombre y una contraseña. Te avisaremos si el nombre ya está ocupado."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Kies een naam en wachtwoord. We laten het weten als de naam al bezet is."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "设置用户名和密码。如果用户名已被占用，我们会提示你。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "設定使用者名稱和密碼。如果使用者名稱已被佔用，我們會提示你。"
+          }
+        }
+      }
+    },
+    "Pin for comparison": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fijar para comparar"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vastzetten om te vergelijken"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "固定以比较"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "釘選以比較"
+          }
+        }
+      }
+    },
+    "Previous Listing": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anuncio anterior"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Vorige woning"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上一套房源"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "上一套房源"
+          }
+        }
+      }
+    },
+    "Public listings only · no alerts, no saved filters": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo anuncios públicos · sin alertas ni filtros guardados"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alleen openbare woningen · geen meldingen en geen opgeslagen filters"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅浏览公开房源 · 无提醒、无保存的筛选条件"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "僅瀏覽公開房源 · 沒有提醒、沒有儲存的篩選條件"
+          }
+        }
+      }
+    },
+    "Recenter": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Volver a centrar"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opnieuw centreren"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新居中"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新置中"
+          }
+        }
+      }
+    },
+    "Reload": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recargar"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opnieuw laden"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新加载"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重新載入"
+          }
+        }
+      }
+    },
+    "Remind me when notifications are off": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Recordarme cuando las notificaciones estén desactivadas"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mij herinneren wanneer meldingen uitstaan"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通知关闭时提醒我"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "通知關閉時提醒我"
+          }
+        }
+      }
+    },
+    "Remove Stored Password": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Eliminar contraseña guardada"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opgeslagen wachtwoord verwijderen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除已存储的密码"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "移除已儲存的密碼"
+          }
+        }
+      }
+    },
+    "Reset All…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restablecer todo…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alles resetten…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部重置…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "全部重置…"
+          }
+        }
+      }
+    },
+    "Reset Filters": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Restablecer filtros"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Filters resetten"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重置筛选条件"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "重置篩選條件"
+          }
+        }
+      }
+    },
+    "Revert": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Revertir"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ongedaan maken"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "还原"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "還原"
+          }
+        }
+      }
+    },
+    "Save to Keychain and keep me signed in": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardar en el Llavero y mantener la sesión iniciada"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opslaan in de Keychain en ingelogd blijven"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "保存到钥匙串并保持登录"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "儲存至鑰匙圈並保持登入"
+          }
+        }
+      }
+    },
+    "Saved": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Guardado"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Opgeslagen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已保存"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已儲存"
+          }
+        }
+      }
+    },
+    "Search address or building": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Buscar dirección o edificio"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Adres of gebouw zoeken"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜索地址或楼栋"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "搜尋地址或大樓"
+          }
+        }
+      }
+    },
+    "Selected day": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Día seleccionado"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Geselecteerde dag"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "选中的日期"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "選取的日期"
+          }
+        }
+      }
+    },
+    "Send Feedback…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Enviar comentarios…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Feedback versturen…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "发送反馈…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "傳送意見…"
+          }
+        }
+      }
+    },
+    "Share…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Compartir…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Delen…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分享…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "分享…"
+          }
+        }
+      }
+    },
+    "Show FlatRadar in the menu bar": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar FlatRadar en la barra de menús"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FlatRadar in de menubalk tonen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在菜单栏显示 FlatRadar"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在選單列顯示 FlatRadar"
+          }
+        }
+      }
+    },
+    "Show in List": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar en la lista"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "In lijst tonen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在列表中显示"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在列表中顯示"
+          }
+        }
+      }
+    },
+    "Show on Map": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar en el mapa"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Op kaart tonen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在地图上显示"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "在地圖上顯示"
+          }
+        }
+      }
+    },
+    "Sign Out of Guest Mode…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar sesión del modo invitado…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uitloggen uit gastmodus…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退出访客模式…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退出訪客模式…"
+          }
+        }
+      }
+    },
+    "Sign Out…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cerrar sesión…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uitloggen…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "退出登录…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登出…"
+          }
+        }
+      }
+    },
+    "Sign in to FlatRadar": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Iniciar sesión en FlatRadar"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inloggen bij FlatRadar"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录 FlatRadar"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登入 FlatRadar"
+          }
+        }
+      }
+    },
+    "Sign in to FlatRadar to see this listing.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inicia sesión en FlatRadar para ver este anuncio."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log in bij FlatRadar om deze woning te bekijken."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录 FlatRadar 以查看此房源。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登入 FlatRadar 以查看此房源。"
+          }
+        }
+      }
+    },
+    "Sign in with an account to get new listings delivered to this Mac.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inicia sesión con una cuenta para recibir anuncios nuevos en este Mac."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Log in met een account om nieuwe woningen op deze Mac te ontvangen."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录账户即可将新房源发送到这台 Mac。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登入賬戶即可將新房源傳送到這台 Mac。"
+          }
+        }
+      }
+    },
+    "Signed Out": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesión cerrada"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uitgelogd"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已退出登录"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已登出"
+          }
+        }
+      }
+    },
+    "Signed in as": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sesión iniciada como"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ingelogd als"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登录身份"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "登入身分"
+          }
+        }
+      }
+    },
+    "Suggestion": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sugerencia"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suggestie"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "建议"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "建議"
+          }
+        }
+      }
+    },
+    "Suggestions and bug reports go straight to the developer.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las sugerencias y los informes de errores llegan directamente al desarrollador."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Suggesties en bugrapporten gaan rechtstreeks naar de ontwikkelaar."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "建议和错误报告会直接发送给开发者。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "建議和錯誤報告會直接傳送給開發者。"
+          }
+        }
+      }
+    },
+    "Support": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Soporte"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Support"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支持"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "支援"
+          }
+        }
+      }
+    },
+    "The two passwords do not match.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las dos contraseñas no coinciden."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De twee wachtwoorden komen niet overeen."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "两次输入的密码不一致。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "兩次輸入的密碼不一致。"
+          }
+        }
+      }
+    },
+    "This Mac": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este Mac"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deze Mac"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这台 Mac"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這台 Mac"
+          }
+        }
+      }
+    },
+    "This listing isn’t in the list loaded in this window.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Este anuncio no está en la lista cargada en esta ventana."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Deze woning staat niet in de lijst die in dit venster is geladen."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这套房源不在此窗口加载的列表中。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這套房源不在此視窗載入的列表中。"
+          }
+        }
+      }
+    },
+    "Toggle Sidebar": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Mostrar/ocultar barra lateral"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Navigatiekolom tonen/verbergen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切换侧边栏"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "切換側邊欄"
+          }
+        }
+      }
+    },
+    "Unable to Load Stats": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pueden cargar las estadísticas"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Statistieken kunnen niet worden geladen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法加载统计数据"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法載入統計資料"
+          }
+        }
+      }
+    },
+    "Unlocking": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desbloqueo"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ontgrendelen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "解锁"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "解鎖"
+          }
+        }
+      }
+    },
+    "Unpin": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消固定"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Losmaken"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消固定"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "取消釘選"
+          }
+        }
+      }
+    },
+    "Unread alerts": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alertas no leídas"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ongelezen meldingen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未读提醒"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未讀提醒"
+          }
+        }
+      }
+    },
+    "Unread only": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo no leídas"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alleen ongelezen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅未读"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "僅未讀"
+          }
+        }
+      }
+    },
+    "Unsaved changes": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambios sin guardar"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niet-opgeslagen wijzigingen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未保存的更改"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未儲存的變更"
+          }
+        }
+      }
+    },
+    "Version": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versión"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Versie"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "版本"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "版本"
+          }
+        }
+      }
+    },
+    "Why you got this": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Por qué lo recibiste"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waarom je dit kreeg"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你为什么会收到它"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你為什麼會收到它"
+          }
+        }
+      }
+    },
+    "Your Data": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tus datos"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Je gegevens"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你的数据"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你的資料"
+          }
+        }
+      }
+    },
+    "Zoom to All": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alejar para mostrar todo"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uitzoomen naar alles"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缩放至全部"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "縮放至全部"
+          }
+        }
+      }
+    },
+    "Zoom to This Building": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Acercar a este edificio"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Inzoomen op dit gebouw"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "缩放至此楼栋"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "縮放至此大樓"
+          }
+        }
+      }
+    },
+    "You'll need to type your password the next time you sign in.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "La próxima vez que inicies sesión tendrás que escribir tu contraseña."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De volgende keer dat je inlogt, moet je je wachtwoord invoeren."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下次登录时需要输入密码。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "下次登入時需要輸入密碼。"
+          }
+        }
+      }
+    },
+    "Your password is stored in this Mac's Keychain and unlocked with ": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu contraseña se guarda en el Llavero de este Mac y se desbloquea con "
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Je wachtwoord wordt opgeslagen in de Keychain van deze Mac en ontgrendeld met "
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密码保存在这台 Mac 的钥匙串中，并通过"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密碼儲存在這台 Mac 的鑰匙圈中，並透過"
+          }
+        }
+      }
+    },
+    "Still %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sigue %@"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nog steeds %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仍为 %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仍為 %@"
+          }
+        }
+      }
+    },
+    "New listing · %@": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nuevo anuncio · %@"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nieuwe woning · %@"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新房源 · %@"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "新房源 · %@"
+          }
+        }
+      }
+    },
+    "Scraper heartbeat": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Latido del scraper"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Heartbeat van scraper"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "抓取器心跳"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "擷取器心跳"
+          }
+        }
+      }
+    },
+    "Scraper error": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Error del scraper"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fout van scraper"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "抓取器错误"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "擷取器錯誤"
+          }
+        }
+      }
+    },
+    "Announcement": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Anuncio"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aankondiging"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "公告"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "公告"
+          }
+        }
+      }
+    },
+    "Yesterday": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ayer"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Gisteren"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "昨天"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "昨天"
+          }
+        }
+      }
+    },
+    "loading…": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "cargando…"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "laden…"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "加载中…"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "載入中…"
+          }
+        }
+      }
+    },
+    "of %lld in total": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "de %lld en total"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "van %lld in totaal"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共 %lld 条"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "共 %lld 條"
+          }
+        }
+      }
+    },
+    "Could not load alerts": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "No se pudieron cargar las alertas"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Meldingen konden niet worden geladen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "无法加载提醒"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "無法載入提醒"
+          }
+        }
+      }
+    },
+    "Everything here has been read.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Todo esto se ha leído."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alles hier is gelezen."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这里的内容都已读。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這裡的內容都已讀。"
+          }
+        }
+      }
+    },
+    "Not connected": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sin conexión"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Niet verbonden"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未连接"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "未連線"
+          }
+        }
+      }
+    },
+    "In-app only — notifications are blocked in System Settings": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo en la app — las notificaciones están bloqueadas en Ajustes del Sistema"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alleen in de app — meldingen zijn geblokkeerd in Systeeminstellingen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅在应用内显示 — 系统设置已阻止通知"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "僅在 App 內顯示 — 系統設定已封鎖通知"
+          }
+        }
+      }
+    },
+    "In-app only — delivery to this Mac is turned off": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Solo en la app — el envío a este Mac está desactivado"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alleen in de app — bezorging op deze Mac staat uit"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "仅在应用内显示 — 已关闭发送到这台 Mac"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "僅在 App 內顯示 — 已關閉傳送到這台 Mac"
+          }
+        }
+      }
+    },
+    "Also delivered to Notification Center": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "También se envía al Centro de notificaciones"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ook afgeleverd in Berichtencentrum"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "也会发送到通知中心"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "也會傳送到通知中心"
+          }
+        }
+      }
+    },
+    "Off in System Settings": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desactivado en Ajustes del Sistema"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uit in Systeeminstellingen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系统设置中已关闭"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "系統設定中已關閉"
+          }
+        }
+      }
+    },
+    "Not requested yet": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Aún no solicitado"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nog niet aangevraagd"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未请求"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "尚未要求"
+          }
+        }
+      }
+    },
+    "Turned off for this Mac": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Desactivado para este Mac"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Uitgeschakeld voor deze Mac"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已在这台 Mac 上关闭"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已在這台 Mac 上關閉"
+          }
+        }
+      }
+    },
+    "Allowed — not registered yet": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Permitido — aún no registrado"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toegestaan — nog niet geregistreerd"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已允许 — 尚未注册"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "已允許 — 尚未註冊"
+          }
+        }
+      }
+    },
+    "Sandbox (debug build)": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sandbox (compilación de depuración)"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Sandbox (debugbuild)"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沙盒（调试构建）"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "沙盒（除錯建置）"
+          }
+        }
+      }
+    },
+    "Last %lld days": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Últimos %lld días"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Afgelopen %lld dagen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近 %lld 天"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "最近 %lld 天"
+          }
+        }
+      }
+    },
+    "New per day": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nuevos por día"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Nieuw per dag"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每日新增"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每日新增"
+          }
+        }
+      }
+    },
+    "Status changes per day": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cambios de estado por día"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Statuswijzigingen per dag"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每日状态变化"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "每日狀態變更"
+          }
+        }
+      }
+    },
+    "Where they are now": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dónde están ahora"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Waar ze nu zijn"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "它们现在的状态"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "它們現在的狀態"
+          }
+        }
+      }
+    },
+    "Rent": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Alquiler"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Huur"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "租金"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "租金"
+          }
+        }
+      }
+    },
+    "Size": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tamaño"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Oppervlakte"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "面积"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "面積"
+          }
+        }
+      }
+    },
+    "Energy label": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Etiqueta energética"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Energielabel"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "能耗等级"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "能源標籤"
+          }
+        }
+      }
+    },
+    "Tenant type": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tipo de inquilino"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Type huurder"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "租客类型"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "租客類型"
+          }
+        }
+      }
+    },
+    "When they appear": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuándo aparecen"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Wanneer ze verschijnen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "它们何时出现"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "它們何時出現"
+          }
+        }
+      }
+    },
+    "How much of this batch is already gone": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Cuánto de este lote ya no está disponible"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hoeveel van deze batch al weg is"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "这批房源已有多少不可用"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "這批房源已有多少不可用"
+          }
+        }
+      }
+    },
+    "Top 8 — full list on the right": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Los 8 principales — lista completa a la derecha"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Top 8 — volledige lijst rechts"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "前 8 项 — 完整列表在右侧"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "前 8 項 — 完整列表在右側"
+          }
+        }
+      }
+    },
+    "Local time, when the platform published them": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Hora local en la que la plataforma los publicó"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Lokale tijd waarop het platform ze publiceerde"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平台发布时的本地时间"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "平台發佈時的本地時間"
+          }
+        }
+      }
+    },
+    "A listing can change more than once a day": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Un anuncio puede cambiar más de una vez al día"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Een woning kan meer dan één keer per dag veranderen"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一套房源一天内可能变化多次"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "一套房源一天內可能變更多次"
+          }
+        }
+      }
+    },
+    "Check your connection and that you're signed in to the App Store. Nothing is wrong with your FlatRadar account.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Comprueba tu conexión y que has iniciado sesión en el App Store. Tu cuenta de FlatRadar no tiene ningún problema."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Controleer je verbinding en of je bent ingelogd bij de App Store. Er is niets mis met je FlatRadar-account."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "请检查网络连接，并确认已登录 App Store。你的 FlatRadar 账户没有问题。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "請檢查網路連線，並確認已登入 App Store。你的 FlatRadar 賬戶沒有問題。"
+          }
+        }
+      }
+    },
+    "Type your FlatRadar password once. It goes into this Mac's Keychain, unlocked with %@.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Escribe una vez tu contraseña de FlatRadar. Se guarda en el Llavero de este Mac y se desbloquea con %@."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Voer je FlatRadar-wachtwoord eenmaal in. Het wordt opgeslagen in de Keychain van deze Mac en ontgrendeld met %@."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "输入一次 FlatRadar 密码。密码会保存到这台 Mac 的钥匙串中，并通过 %@ 解锁。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "輸入一次 FlatRadar 密碼。密碼會儲存至這台 Mac 的鑰匙圈，並透過 %@ 解鎖。"
+          }
+        }
+      }
+    },
+    "Your password is stored in this Mac's Keychain and unlocked with %@. It never leaves this Mac, and it is not synced to iCloud.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu contraseña se guarda en el Llavero de este Mac y se desbloquea con %@. Nunca sale de este Mac ni se sincroniza con iCloud."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Je wachtwoord wordt opgeslagen in de Keychain van deze Mac en ontgrendeld met %@. Het verlaat deze Mac nooit en wordt niet met iCloud gesynchroniseerd."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密码保存在这台 Mac 的钥匙串中，并通过 %@ 解锁。密码不会离开这台 Mac，也不会同步到 iCloud。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "密碼儲存在這台 Mac 的鑰匙圈中，並透過 %@ 解鎖。密碼不會離開這台 Mac，也不會同步至 iCloud。"
+          }
+        }
+      }
+    },
+    "You're browsing as a guest. An account keeps your notification filter and alert history, and lets FlatRadar send new listings to this Mac.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Estás navegando como invitado. Una cuenta conserva tu filtro de notificaciones y el historial de alertas, y permite que FlatRadar envíe nuevos anuncios a este Mac."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Je bekijkt de app als gast. Met een account blijven je meldingsfilter en meldingsgeschiedenis bewaard en kan FlatRadar nieuwe woningen naar deze Mac sturen."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你正在以访客身份浏览。账户会保留通知筛选和提醒历史，并允许 FlatRadar 将新房源发送到这台 Mac。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你正在以訪客身分瀏覽。賬戶會保留通知篩選和提醒歷史，並允許 FlatRadar 將新房源傳送到這台 Mac。"
+          }
+        }
+      }
+    },
+    "and": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "y"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "en"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "和"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "和"
+          }
+        }
+      }
+    },
+    "or": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "o"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "of"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "或"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "或"
+          }
+        }
+      }
+    },
+    "Shows the number of matching listings and the last scan time. FlatRadar keeps receiving live updates while it is on, even with every window closed.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Muestra el número de anuncios coincidentes y la hora del último escaneo. FlatRadar sigue recibiendo actualizaciones en directo mientras está activo, incluso con todas las ventanas cerradas."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Toont het aantal overeenkomende woningen en het tijdstip van de laatste scan. FlatRadar blijft live updates ontvangen zolang het actief is, zelfs als alle vensters gesloten zijn."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "显示匹配房源数量和上次扫描时间。FlatRadar 运行时会持续接收实时更新，即使所有窗口都已关闭。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "顯示符合條件的房源數量和上次掃描時間。FlatRadar 執行時會持續接收即時更新，即使所有視窗都已關閉。"
+          }
+        }
+      }
+    },
+    "The public stats endpoints didn’t answer. They don’t need a sign-in, so this is usually the server or the network.": {
+      "localizations": {
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Las interfaces públicas de estadísticas no respondieron. No requieren iniciar sesión, así que normalmente se trata del servidor o de la red."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "De openbare statistiek-endpoints reageerden niet. Inloggen is niet nodig, dus meestal ligt het aan de server of het netwerk."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "公开统计接口没有响应。它们不需要登录，所以通常是服务器或网络问题。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "公開統計端點沒有回應。它們不需要登入，所以通常是伺服器或網路問題。"
+          }
+        }
+      }
+    },
+    "FlatRadar can't alert you about new listings or status changes. Turn on notifications for FlatRadar in System Settings → Notifications.": {
+      "localizations": {
+        "es": {"stringUnit": {"state": "translated", "value": "FlatRadar no puede avisarte de nuevos anuncios o cambios de estado. Activa las notificaciones de FlatRadar en Configuración del Sistema → Notificaciones."}},
+        "nl": {"stringUnit": {"state": "translated", "value": "FlatRadar kan je niet waarschuwen voor nieuwe woningen of statuswijzigingen. Schakel meldingen voor FlatRadar in via Systeeminstellingen → Meldingen."}},
+        "zh-Hans": {"stringUnit": {"state": "translated", "value": "FlatRadar 无法提醒你有新房源或状态变化。请在“系统设置”→“通知”中打开 FlatRadar 的通知。"}},
+        "zh-Hant": {"stringUnit": {"state": "translated", "value": "FlatRadar 無法提醒你有新房源或狀態變更。請在「系統設定」→「通知」中開啟 FlatRadar 的通知。"}}
+      }
+    },
+    "Shows a reminder at launch if macOS isn't allowing FlatRadar to notify you.": {
+      "localizations": {
+        "es": {"stringUnit": {"state": "translated", "value": "Muestra un recordatorio al iniciar si macOS no permite que FlatRadar te envíe notificaciones."}},
+        "nl": {"stringUnit": {"state": "translated", "value": "Toont bij het opstarten een herinnering als macOS FlatRadar niet toestaat je meldingen te sturen."}},
+        "zh-Hans": {"stringUnit": {"state": "translated", "value": "如果 macOS 不允许 FlatRadar 发送通知，启动时显示提醒。"}},
+        "zh-Hant": {"stringUnit": {"state": "translated", "value": "如果 macOS 不允許 FlatRadar 傳送通知，啟動時顯示提醒。"}}
+      }
+    },
+    "listings tracked right now": {
+      "localizations": {
+        "es": {"stringUnit": {"state": "translated", "value": "anuncios seguidos ahora mismo"}},
+        "nl": {"stringUnit": {"state": "translated", "value": "woningen die nu worden gevolgd"}},
+        "zh-Hans": {"stringUnit": {"state": "translated", "value": "当前跟踪的房源"}},
+        "zh-Hant": {"stringUnit": {"state": "translated", "value": "目前追蹤的房源"}}
+      }
+    },
+    "Pin for Comparison": {
+      "localizations": {
+        "es": {"stringUnit": {"state": "translated", "value": "Fijar para comparar"}},
+        "nl": {"stringUnit": {"state": "translated", "value": "Vastmaken voor vergelijking"}},
+        "zh-Hans": {"stringUnit": {"state": "translated", "value": "固定以比较"}},
+        "zh-Hant": {"stringUnit": {"state": "translated", "value": "釘選以比較"}}
+      }
+    },
+    "Loaded %lld of %lld — paging failed, sorting covers only what loaded": {
+      "localizations": {
+        "es": {"stringUnit": {"state": "translated", "value": "Se cargaron %1$lld de %2$lld; falló la paginación y el orden solo cubre lo cargado"}},
+        "nl": {"stringUnit": {"state": "translated", "value": "%1$lld van %2$lld geladen; paginering mislukt en sortering geldt alleen voor wat is geladen"}},
+        "zh-Hans": {"stringUnit": {"state": "translated", "value": "已加载 %1$lld / %2$lld；分页失败，排序仅覆盖已加载内容"}},
+        "zh-Hant": {"stringUnit": {"state": "translated", "value": "已載入 %1$lld / %2$lld；分頁失敗，排序僅涵蓋已載入內容"}}
+      }
+    },
+    "%lld listings, sorted by %@": {
+      "localizations": {
+        "es": {"stringUnit": {"state": "translated", "value": "%1$lld anuncios, ordenados por %2$@"}},
+        "nl": {"stringUnit": {"state": "translated", "value": "%1$lld woningen, gesorteerd op %2$@"}},
+        "zh-Hans": {"stringUnit": {"state": "translated", "value": "%1$lld 套房源，按 %2$@ 排序"}},
+        "zh-Hant": {"stringUnit": {"state": "translated", "value": "%1$lld 套房源，按 %2$@ 排序"}}
+      }
+    },
+    "%lld of %lld match, sorted by %@": {
+      "localizations": {
+        "es": {"stringUnit": {"state": "translated", "value": "%1$lld de %2$lld coinciden, ordenados por %3$@"}},
+        "nl": {"stringUnit": {"state": "translated", "value": "%1$lld van %2$lld overeenkomsten, gesorteerd op %3$@"}},
+        "zh-Hans": {"stringUnit": {"state": "translated", "value": "%1$lld / %2$lld 个匹配项，按 %3$@ 排序"}},
+        "zh-Hant": {"stringUnit": {"state": "translated", "value": "%1$lld / %2$lld 個符合項目，按 %3$@ 排序"}}
+      }
+    },
+    "default order": {
+      "localizations": {
+        "es": {"stringUnit": {"state": "translated", "value": "orden predeterminado"}},
+        "nl": {"stringUnit": {"state": "translated", "value": "standaardvolgorde"}},
+        "zh-Hans": {"stringUnit": {"state": "translated", "value": "默认顺序"}},
+        "zh-Hant": {"stringUnit": {"state": "translated", "value": "預設順序"}}
+      }
+    },
+    "First seen": {
+      "localizations": {
+        "es": {"stringUnit": {"state": "translated", "value": "Visto primero"}},
+        "nl": {"stringUnit": {"state": "translated", "value": "Eerst gezien"}},
+        "zh-Hans": {"stringUnit": {"state": "translated", "value": "首次发现"}},
+        "zh-Hant": {"stringUnit": {"state": "translated", "value": "首次發現"}}
+      }
+    },
+    "Last seen": {
+      "localizations": {
+        "es": {"stringUnit": {"state": "translated", "value": "Visto por última vez"}},
+        "nl": {"stringUnit": {"state": "translated", "value": "Laatst gezien"}},
+        "zh-Hans": {"stringUnit": {"state": "translated", "value": "最近发现"}},
+        "zh-Hant": {"stringUnit": {"state": "translated", "value": "最近發現"}}
+      }
+    },
+    "%@ %@": {
+      "localizations": {
+        "es": {"stringUnit": {"state": "translated", "value": "%1$@ %2$@"}},
+        "nl": {"stringUnit": {"state": "translated", "value": "%1$@ %2$@"}},
+        "zh-Hans": {"stringUnit": {"state": "translated", "value": "%1$@ %2$@"}},
+        "zh-Hant": {"stringUnit": {"state": "translated", "value": "%1$@ %2$@"}}
+      }
+    },
+    "%lld listing in the last %lld days": {
+      "localizations": {
+        "es": {"stringUnit": {"state": "translated", "value": "%1$lld anuncio en los últimos %2$lld días"}},
+        "nl": {"stringUnit": {"state": "translated", "value": "%1$lld woning in de afgelopen %2$lld dagen"}},
+        "zh-Hans": {"stringUnit": {"state": "translated", "value": "最近 %2$lld 天有 %1$lld 套房源"}},
+        "zh-Hant": {"stringUnit": {"state": "translated", "value": "最近 %2$lld 天有 %1$lld 套房源"}}
+      }
+    },
+    "%lld listings in the last %lld days": {
+      "localizations": {
+        "es": {"stringUnit": {"state": "translated", "value": "%1$lld anuncios en los últimos %2$lld días"}},
+        "nl": {"stringUnit": {"state": "translated", "value": "%1$lld woningen in de afgelopen %2$lld dagen"}},
+        "zh-Hans": {"stringUnit": {"state": "translated", "value": "最近 %2$lld 天有 %1$lld 套房源"}},
+        "zh-Hant": {"stringUnit": {"state": "translated", "value": "最近 %2$lld 天有 %1$lld 套房源"}}
+      }
+    },
+    "all platforms": {
+      "localizations": {
+        "es": {"stringUnit": {"state": "translated", "value": "todas las plataformas"}},
+        "nl": {"stringUnit": {"state": "translated", "value": "alle platforms"}},
+        "zh-Hans": {"stringUnit": {"state": "translated", "value": "所有平台"}},
+        "zh-Hant": {"stringUnit": {"state": "translated", "value": "所有平台"}}
+      }
+    },
+    "last 24h": {
+      "localizations": {
+        "es": {"stringUnit": {"state": "translated", "value": "últimas 24 h"}},
+        "nl": {"stringUnit": {"state": "translated", "value": "afgelopen 24 uur"}},
+        "zh-Hans": {"stringUnit": {"state": "translated", "value": "最近 24 小时"}},
+        "zh-Hant": {"stringUnit": {"state": "translated", "value": "最近 24 小時"}}
+      }
+    },
+    "only %lld loaded": {
+      "localizations": {
+        "es": {"stringUnit": {"state": "translated", "value": "solo se cargaron %lld"}},
+        "nl": {"stringUnit": {"state": "translated", "value": "slechts %lld geladen"}},
+        "zh-Hans": {"stringUnit": {"state": "translated", "value": "仅加载了 %lld 条"}},
+        "zh-Hant": {"stringUnit": {"state": "translated", "value": "僅載入了 %lld 條"}}
+      }
+    },
+    "%lld loaded…": {
+      "localizations": {
+        "es": {"stringUnit": {"state": "translated", "value": "%lld cargados…"}},
+        "nl": {"stringUnit": {"state": "translated", "value": "%lld geladen…"}},
+        "zh-Hans": {"stringUnit": {"state": "translated", "value": "已加载 %lld 条…"}},
+        "zh-Hant": {"stringUnit": {"state": "translated", "value": "已載入 %lld 條…"}}
+      }
+    },
+    "from %lld platform": {
+      "localizations": {
+        "es": {"stringUnit": {"state": "translated", "value": "de %lld plataforma"}},
+        "nl": {"stringUnit": {"state": "translated", "value": "van %lld platform"}},
+        "zh-Hans": {"stringUnit": {"state": "translated", "value": "来自 %lld 个平台"}},
+        "zh-Hant": {"stringUnit": {"state": "translated", "value": "來自 %lld 個平台"}}
+      }
+    },
+    "from %lld platforms": {
+      "localizations": {
+        "es": {"stringUnit": {"state": "translated", "value": "de %lld plataformas"}},
+        "nl": {"stringUnit": {"state": "translated", "value": "van %lld platforms"}},
+        "zh-Hans": {"stringUnit": {"state": "translated", "value": "来自 %lld 个平台"}},
+        "zh-Hant": {"stringUnit": {"state": "translated", "value": "來自 %lld 個平台"}}
+      }
+    },
+    "1 platform": {
+      "localizations": {
+        "es": {"stringUnit": {"state": "translated", "value": "1 plataforma"}},
+        "nl": {"stringUnit": {"state": "translated", "value": "1 platform"}},
+        "zh-Hans": {"stringUnit": {"state": "translated", "value": "1 个平台"}},
+        "zh-Hant": {"stringUnit": {"state": "translated", "value": "1 個平台"}}
+      }
+    },
+    "New password must be at least %lld characters.": {
+      "localizations": {
+        "es": {"stringUnit": {"state": "translated", "value": "La nueva contraseña debe tener al menos %lld caracteres."}},
+        "nl": {"stringUnit": {"state": "translated", "value": "Het nieuwe wachtwoord moet uit minimaal %lld tekens bestaan."}},
+        "zh-Hans": {"stringUnit": {"state": "translated", "value": "新密码至少需要 %lld 个字符。"}},
+        "zh-Hant": {"stringUnit": {"state": "translated", "value": "新密碼至少需要 %lld 個字元。"}}
+      }
+    },
+    "Password must be at least %lld characters.": {
+      "localizations": {
+        "es": {"stringUnit": {"state": "translated", "value": "La contraseña debe tener al menos %lld caracteres."}},
+        "nl": {"stringUnit": {"state": "translated", "value": "Het wachtwoord moet uit minimaal %lld tekens bestaan."}},
+        "zh-Hans": {"stringUnit": {"state": "translated", "value": "密码至少需要 %lld 个字符。"}},
+        "zh-Hant": {"stringUnit": {"state": "translated", "value": "密碼至少需要 %lld 個字元。"}}
+      }
+    },
+    "Passwords don't match.": {
+      "localizations": {
+        "es": {"stringUnit": {"state": "translated", "value": "Las contraseñas no coinciden."}},
+        "nl": {"stringUnit": {"state": "translated", "value": "De wachtwoorden komen niet overeen."}},
+        "zh-Hans": {"stringUnit": {"state": "translated", "value": "两次密码不匹配。"}},
+        "zh-Hant": {"stringUnit": {"state": "translated", "value": "兩次密碼不匹配。"}}
+      }
     }
   },
   "version": "1.0"

@@ -15,7 +15,7 @@ import UIKit
 ///
 /// 设计
 /// ----
-/// - 单一 NavigationStack(path: $coord.listingsPath)，所有模式共享同一个导航栈
+/// - NavigationStack 绑定当前模式的路径，与宽布局对应 tab 共用
 /// - `navigationDestination(for: ListingRoute.self)` 上提到这里，三个子视图
 ///   里直接 `NavigationLink(value: ListingRoute.xxx)` 即可 push 详情
 /// - iPhone 上 segmented picker 放在 nav bar 左侧，避免不同子页 toolbar
@@ -29,7 +29,7 @@ struct BrowseView: View {
     var body: some View {
         @Bindable var coord = coord
 
-        NavigationStack(path: $coord.listingsPath) {
+        NavigationStack(path: $coord.browsePath) {
             content
             // 不显示 nav title：iPad inline picker / iPhone compactModeMenu
             // 都已标明当前模式，nav bar 里再写一遍 "Calendar" 冗余。
@@ -115,7 +115,7 @@ struct BrowseView: View {
     @ViewBuilder
     private var nonMapContent: some View {
         switch coord.selectedBrowseMode {
-        case .list:     ListingsView()
+        case .list:     ListingsView(state: coord.listingsState)
         case .calendar: CalendarView()
         case .map:      EmptyView()   // outer condition guarantees unreachable
         }

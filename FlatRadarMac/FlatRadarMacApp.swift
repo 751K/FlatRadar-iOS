@@ -812,8 +812,10 @@ private struct ListingCommands: View {
     }
 
     private var pinTitle: String {
-        guard let model, let id = model.focused else { return "Pin for Comparison" }
-        return model.pinned.contains(id) ? "Unpin" : "Pin for Comparison"
+        guard let model, let id = model.focused else { return String(localized: "Pin for Comparison") }
+        return model.pinned.contains(id)
+            ? String(localized: "Unpin")
+            : String(localized: "Pin for Comparison")
     }
 
     private func openFocused() {

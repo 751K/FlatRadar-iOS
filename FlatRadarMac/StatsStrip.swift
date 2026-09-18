@@ -78,10 +78,10 @@ struct StatsStrip: View {
         HStack(alignment: .top, spacing: 30) {
             metric(StatusWording.totalListings,
                    value: summary.summary?.total,
-                   caption: "all platforms")
+                   caption: String(localized: "all platforms"))
             metric(StatusWording.statusChanges,
                    value: summary.summary?.changes24h,
-                   caption: "last 24h")
+                   caption: String(localized: "last 24h"))
             // 原先没套筛选时这里写的是 `Showing`，而菜单栏同一个数写的是
             // `Listings`——同一台机器上两个名字。统一到 ``StatusWording``。
             metric(StatusWording.countLabel(isFiltered: listings.isFiltered),
@@ -111,10 +111,17 @@ struct StatsStrip: View {
 
     /// 分页没拉完时**必须说出来**——否则用户会以为排序和筛选覆盖的是全部房源。
     private var loadCaption: String? {
-        if listings.loadMoreFailed { return "only \(listings.listings.count) loaded" }
-        if listings.hasMore { return "\(listings.listings.count) loaded…" }
+        if listings.loadMoreFailed {
+            return String(localized: "only \(listings.listings.count) loaded")
+        }
+        if listings.hasMore {
+            return String(localized: "\(listings.listings.count) loaded…")
+        }
         let n = Set(listings.listings.compactMap(\.source)).count
-        return n > 0 ? "from \(n) platform\(n == 1 ? "" : "s")" : nil
+        guard n > 0 else { return nil }
+        return n == 1
+            ? String(localized: "from \(n) platform")
+            : String(localized: "from \(n) platforms")
     }
 }
 

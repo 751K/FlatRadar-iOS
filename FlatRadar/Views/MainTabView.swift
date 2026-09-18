@@ -226,7 +226,7 @@ struct MainTabView: View {
             get: { coord.listingsPath },
             set: { coord.listingsPath = $0 }
         )) {
-            ListingsView()
+            ListingsView(state: coord.listingsState)
                 .navigationDestination(for: ListingRoute.self) { route in
                     ListingDetailView(route: route)
                 }
@@ -319,30 +319,6 @@ struct MainTabView: View {
     /// `UIDevice.current.userInterfaceIdiom == .pad` 猜，而那个判据在窄窗口的
     /// iPad 上是错的——见 ``NavigationCoordinator/usesCompactTabs``。
     private func normalizeSelection(_ tab: AppTab, compact: Bool) {
-        coord.usesCompactTabs = compact
-        if compact {
-            switch tab {
-            case .listings:
-                coord.selectedTab = .browse
-                coord.selectedBrowseMode = .list
-            case .map:
-                coord.selectedTab = .browse
-                coord.selectedBrowseMode = .map
-            case .calendar:
-                coord.selectedTab = .browse
-                coord.selectedBrowseMode = .calendar
-            default:
-                break
-            }
-        } else if tab == .browse {
-            switch coord.selectedBrowseMode {
-            case .list:
-                coord.selectedTab = .listings
-            case .map:
-                coord.selectedTab = .map
-            case .calendar:
-                coord.selectedTab = .calendar
-            }
-        }
+        coord.normalizeSelection(tab, compact: compact)
     }
 }

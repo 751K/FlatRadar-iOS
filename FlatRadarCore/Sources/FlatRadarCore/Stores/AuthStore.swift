@@ -25,9 +25,21 @@ public final class AuthStore {
     ///
     /// 这里**不是**空实现：`isRestoringSession` 必须在第一帧之前就定好，
     /// 理由见那个属性。
-    public init() {
+    public init(
+        changePasswordRequest: @escaping @MainActor (String, String) async throws -> Void = {
+            _ = try await APIClient.shared.changePassword(current: $0, new: $1)
+        },
+        invalidateBiometricCredentials: @escaping @MainActor () -> Void = {
+            BiometricAuthService.deleteCredentials()
+        }
+    ) {
+        self.changePasswordRequest = changePasswordRequest
+        self.invalidateBiometricCredentials = invalidateBiometricCredentials
         isRestoringSession = Self.hasPersistedSession(server: server)
     }
+
+    private let changePasswordRequest: @MainActor (String, String) async throws -> Void
+    private let invalidateBiometricCredentials: @MainActor () -> Void
 
     public var isAuthenticated = false
 
@@ -525,7 +537,10 @@ public final class AuthStore {
         errorMessage = nil
         defer { isLoading = false }
         do {
-            _ = try await client.changePassword(current: current, new: new)
+            try await changePasswordRequest(current, new)
+            // 旧密码已失效。清除已保存及待保存凭据，下次由用户重新启用生物识别。
+            invalidateBiometricCredentials()
+            pendingBiometricCredential = nil
             return true
         } catch {
             #if DEBUG

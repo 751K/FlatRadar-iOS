@@ -1,29 +1,36 @@
 import SwiftUI
 import FlatRadarCore
 
+/// 与导航协调器同寿命，切换模式或窗口宽度时保留搜索、筛选和排序。
+@MainActor
+@Observable
+final class ListingsBrowseState {
+    var searchText = ""
+    var searchDraft = ""
+    var showSearch = false
+    var selectedStatus = ""
+    var sort = ListingSortOption.newest
+    var selectedSources: [String] = []
+    var selectedCities: [String] = []
+    var selectedTypes: [String] = []
+    var selectedContract = ""
+    var selectedEnergy = ""
+}
+
 /// Listings 视图 —— BrowseView 内嵌的"列表"模式。
 ///
 /// 不再持有 NavigationStack；外层 BrowseView 提供 NavigationStack(path:) +
 /// navigationDestination，本视图只贡献内容 + 自己的 toolbar item。
 struct ListingsView: View {
+    @Bindable var state: ListingsBrowseState
     @Environment(ListingsStore.self) private var store
     @Environment(NavigationCoordinator.self) private var coord
     /// 分区标题的绿色要按明暗两套压暗/提亮，见 ``Color/onTint(in:)``。
     @Environment(\.colorScheme) private var scheme
-    @State private var searchText = ""
-    @State private var searchDraft = ""
-    @State private var showSearch = false
     @State private var showFilters = false
     @State private var showRefreshError = false
     /// Filter Apply 触觉反馈 trigger —— 每按一次 Apply 自增，驱动 `.sensoryFeedback`
     @State private var filterApplyTick = 0
-    @State private var selectedStatus = ""
-    @State private var sort = ListingSortOption.newest
-    @State private var selectedSources: [String] = []
-    @State private var selectedCities: [String] = []
-    @State private var selectedTypes: [String] = []
-    @State private var selectedContract = ""
-    @State private var selectedEnergy = ""
 
     // 缓存排序 + 分桶结果，避免每次 body 重算 O(n log n) + O(n) date parse
     @State private var cachedSorted: [Listing] = []
@@ -35,55 +42,55 @@ struct ListingsView: View {
     /// Core 拆成独立模块后跨模块推断变贵，整条链的类型检查会超时。
     /// 把内容和 modifier 链切成两段，各自独立求解；渲染结果不变。
     @ViewBuilder
-    private var content: some View {
-            Group {
-                if store.isLoading && store.listings.isEmpty {
-                    ProgressView().padding(.top, 60)
-                } else if let err = store.errorMessage, store.listings.isEmpty {
-                    let apiErr = store.lastError
-                    let title: String = apiErr?.errorDescription ?? "Unable to Load"
-                    let icon: String = apiErr?.systemImage ?? "wifi.slash"
-                    ContentUnavailableView {
-                        Label(title, systemImage: icon)
-                    } description: {
-                        Text(err)
-                    } actions: {
-                        Button("Try Again") {
-                            Task { await store.refresh() }
-                        }
-                    }
-                } else if store.listings.isEmpty {
-                    ContentUnavailableView(
-                        "No Listings",
-                        systemImage: "house",
-                        description: Text(store.isFiltered
-                            ? "No listings match your filter."
-                            : "No listings found."))
-                    .refreshable { await store.refresh() }
-                } else {
-                    listContent
+    private var emptyContent: some View {
+        if store.isLoading {
+            ProgressView().padding(.top, 60)
+        } else if let err = store.errorMessage {
+            let apiErr = store.lastError
+            let title: String = apiErr?.errorDescription ?? "Unable to Load"
+            let icon: String = apiErr?.systemImage ?? "wifi.slash"
+            ContentUnavailableView {
+                Label(title, systemImage: icon)
+            } description: {
+                Text(err)
+            } actions: {
+                Button("Try Again") {
+                    Task { await store.refresh() }
                 }
             }
+        } else {
+            ContentUnavailableView {
+                Label("No Listings", systemImage: "house")
+            } description: {
+                Text(activeFilterCount > 0 || store.isFiltered
+                    ? "No listings match your filter."
+                    : "No listings found.")
+            } actions: {
+                if activeFilterCount > 0 {
+                    Button("Clear All") { clearAllFilters() }
+                }
+            }
+        }
     }
 
     var body: some View {
-        content
+        listContent
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button {
-                    searchDraft = searchText
+                    state.searchDraft = state.searchText
                     withAnimation(.spring(duration: 0.28, bounce: 0.12)) {
-                        showSearch.toggle()
+                        state.showSearch.toggle()
                     }
                 } label: {
-                    Label(searchButtonTitle, systemImage: searchText.isEmpty
+                    Label(searchButtonTitle, systemImage: state.searchText.isEmpty
                         ? "magnifyingglass"
                         : "magnifyingglass.circle.fill")
                 }
-                .tint(searchText.isEmpty ? nil : .blue)
+                .tint(state.searchText.isEmpty ? nil : .blue)
 
                 Menu {
-                    Picker("Sort", selection: $sort) {
+                    Picker("Sort", selection: $state.sort) {
                         ForEach(ListingSortOption.allCases) { option in
                             Label(option.title, systemImage: option.systemImage)
                                 .tag(option)
@@ -105,12 +112,12 @@ struct ListingsView: View {
         }
         .sheet(isPresented: $showFilters) {
             ListingFilterSheet(
-                selectedStatus: $selectedStatus,
-                selectedSources: $selectedSources,
-                selectedCities: $selectedCities,
-                selectedTypes: $selectedTypes,
-                selectedContract: $selectedContract,
-                selectedEnergy: $selectedEnergy,
+                selectedStatus: $state.selectedStatus,
+                selectedSources: $state.selectedSources,
+                selectedCities: $state.selectedCities,
+                selectedTypes: $state.selectedTypes,
+                selectedContract: $state.selectedContract,
+                selectedEnergy: $state.selectedEnergy,
                 activeFilterCount: activeFilterCount,
                 apply: {
                     filterApplyTick &+= 1   // 触发 .sensoryFeedback(.selection, …)
@@ -118,19 +125,13 @@ struct ListingsView: View {
                     Task { await fetchWithCurrentFilters() }
                 },
                 reset: {
-                    selectedStatus = ""
-                    selectedSources = []
-                    selectedCities = []
-                    selectedTypes = []
-                    selectedContract = ""
-                    selectedEnergy = ""
                     showFilters = false
-                    Task { await fetchWithCurrentFilters() }
+                    clearAllFilters()
                 })
         }
         .task {
             if store.listings.isEmpty {
-                await store.fetch()
+                await store.refresh()
             }
             recomputeCachedListings()
         }
@@ -140,7 +141,7 @@ struct ListingsView: View {
         .onChange(of: store.listings) { _, _ in recomputeCachedListings() }
         // 换排序要**重新向服务端要**，不能只把已加载的重排——后者排出来的是
         // 「已加载结果里最便宜的」，不是「全部里最便宜的」。见 ListingSort。
-        .onChange(of: sort) { _, newValue in
+        .onChange(of: state.sort) { _, newValue in
             guard let server = newValue.serverSort else {
                 // `.name` 暂时没有服务端对应，退回本地排（只排已加载的）。
                 recomputeCachedListings()
@@ -179,57 +180,64 @@ struct ListingsView: View {
         return List {
             // —— Live 心跳条 + 活跃 filter chips
             Section {
-                if showSearch { inlineSearchRow }
+                if state.showSearch { inlineSearchRow }
                 heartbeatRow
                 if !activeFilterChips.isEmpty { filterChipsRow }
             }
             .listRowSeparator(.hidden)
 
-            let lastID = sorted.last?.id
-
-            // —— NEW TODAY · N
-            if !new.isEmpty {
+            if store.listings.isEmpty {
                 Section {
-                    ForEach(new) { listing in
-                        row(for: listing, lastID: lastID)
-                    }
-                } header: {
-                    // 原来这里写死 `Color(red: 52/255, green: 199/255, blue: 89/255)`
-                    // ——那正好是 systemGreen 的**浅色值** `#34C759`，深色模式下
-                    // 系统本该给 `#30D158`，写死之后它停在浅色那一档不动。
-                    // 同一个 `sectionHeader` 另外两个调用点传的都是语义样式。
-                    //
-                    // 不是简单换成 `.green`：这行是 11pt 的分区标题，绿字在白底上
-                    // 只有 2.2:1。跟徽标同一条路——压暗一档再用（``Color/onTint(in:)``）。
-                    sectionHeader("NEW TODAY · \(new.count)",
-                                  color: Color.statusBook.onTint(in: scheme))
-                }
-            }
-
-            // —— EARLIER
-            if !earlier.isEmpty {
-                Section {
-                    ForEach(earlier) { listing in
-                        row(for: listing, lastID: lastID)
-                    }
-                } header: {
-                    // 分支写，不用三元：三元里的两个字面量会被合并成 String，
-                    // Text 就走非本地化重载，这两句会从 xcstrings 里消失。
-                    if new.isEmpty {
-                        sectionHeader("ALL LISTINGS", color: .secondary)
-                    } else {
-                        sectionHeader("EARLIER", color: .secondary)
-                    }
-                }
-            }
-
-            if store.isLoadingMore {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                    Spacer()
+                    emptyContent
                 }
                 .listRowSeparator(.hidden)
+            } else {
+                let lastID = sorted.last?.id
+
+                // —— NEW TODAY · N
+                if !new.isEmpty {
+                    Section {
+                        ForEach(new) { listing in
+                            row(for: listing, lastID: lastID)
+                        }
+                    } header: {
+                        // 原来这里写死 `Color(red: 52/255, green: 199/255, blue: 89/255)`
+                        // ——那正好是 systemGreen 的**浅色值** `#34C759`，深色模式下
+                        // 系统本该给 `#30D158`，写死之后它停在浅色那一档不动。
+                        // 同一个 `sectionHeader` 另外两个调用点传的都是语义样式。
+                        //
+                        // 不是简单换成 `.green`：这行是 11pt 的分区标题，绿字在白底上
+                        // 只有 2.2:1。跟徽标同一条路——压暗一档再用（``Color/onTint(in:)``）。
+                        sectionHeader("NEW TODAY · \(new.count)",
+                                      color: Color.statusBook.onTint(in: scheme))
+                    }
+                }
+
+                // —— EARLIER
+                if !earlier.isEmpty {
+                    Section {
+                        ForEach(earlier) { listing in
+                            row(for: listing, lastID: lastID)
+                        }
+                    } header: {
+                        // 分支写，不用三元：三元里的两个字面量会被合并成 String，
+                        // Text 就走非本地化重载，这两句会从 xcstrings 里消失。
+                        if new.isEmpty {
+                            sectionHeader("ALL LISTINGS", color: .secondary)
+                        } else {
+                            sectionHeader("EARLIER", color: .secondary)
+                        }
+                    }
+                }
+
+                if store.isLoadingMore {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                        Spacer()
+                    }
+                    .listRowSeparator(.hidden)
+                }
             }
         }
         // .insetGrouped（默认）：灰底 + 白色 inset section 卡片，跟
@@ -305,18 +313,18 @@ struct ListingsView: View {
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
-            TextField("Search by name or address", text: $searchDraft)
+            TextField("Search by name or address", text: $state.searchDraft)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
                 .submitLabel(.search)
                 .onSubmit {
                     applySearch()
                 }
-            if !searchDraft.isEmpty {
+            if !state.searchDraft.isEmpty {
                 Button {
-                    searchDraft = ""
-                    if !searchText.isEmpty {
-                        searchText = ""
+                    state.searchDraft = ""
+                    if !state.searchText.isEmpty {
+                        state.searchText = ""
                         Task { await fetchWithCurrentFilters() }
                     }
                 } label: {
@@ -330,7 +338,7 @@ struct ListingsView: View {
                 applySearch()
             }
             .font(.subheadline.weight(.semibold))
-            .disabled(searchDraft.trimmingCharacters(in: .whitespacesAndNewlines) == searchText)
+            .disabled(state.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines) == state.searchText)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
@@ -396,8 +404,8 @@ struct ListingsView: View {
     private func recomputeCachedListings() {
         // 有服务端排序时 `store.listings` 已经是排好的，原样用；
         // 只有 `.name`（后端 enum 里还没有）才在本地排。
-        let sorted = sort.serverSort == nil
-            ? store.listings.sorted(using: sort)
+        let sorted = state.sort.serverSort == nil
+            ? store.listings.sorted(using: state.sort)
             : store.listings
         let now = Date()
         var new: [Listing] = []; new.reserveCapacity(sorted.count)
@@ -430,46 +438,46 @@ struct ListingsView: View {
 
     private var activeFilterChips: [FilterChipModel] {
         var chips: [FilterChipModel] = []
-        if !searchText.isEmpty {
-            chips.append(.init(label: "Search: \(searchText)", active: true, mono: false) {
-                searchText = ""
-                searchDraft = ""
+        if !state.searchText.isEmpty {
+            chips.append(.init(label: "Search: \(state.searchText)", active: true, mono: false) {
+                state.searchText = ""
+                state.searchDraft = ""
                 Task { await fetchWithCurrentFilters() }
             })
         }
-        if !selectedStatus.isEmpty {
-            chips.append(.init(label: shortStatusLabel(selectedStatus), active: true, mono: false) {
-                selectedStatus = ""
+        if !state.selectedStatus.isEmpty {
+            chips.append(.init(label: shortStatusLabel(state.selectedStatus), active: true, mono: false) {
+                state.selectedStatus = ""
                 Task { await fetchWithCurrentFilters() }
             })
         }
-        for city in selectedCities {
+        for city in state.selectedCities {
             chips.append(.init(label: city, active: false, mono: false) {
-                selectedCities.removeAll { $0 == city }
+                state.selectedCities.removeAll { $0 == city }
                 Task { await fetchWithCurrentFilters() }
             })
         }
-        for source in selectedSources {
+        for source in state.selectedSources {
             chips.append(.init(label: sourceShortLabel(source), active: false, mono: true) {
-                selectedSources.removeAll { $0 == source }
+                state.selectedSources.removeAll { $0 == source }
                 Task { await fetchWithCurrentFilters() }
             })
         }
-        for t in selectedTypes {
+        for t in state.selectedTypes {
             chips.append(.init(label: t, active: false, mono: false) {
-                selectedTypes.removeAll { $0 == t }
+                state.selectedTypes.removeAll { $0 == t }
                 Task { await fetchWithCurrentFilters() }
             })
         }
-        if !selectedContract.isEmpty {
-            chips.append(.init(label: selectedContract, active: false, mono: false) {
-                selectedContract = ""
+        if !state.selectedContract.isEmpty {
+            chips.append(.init(label: state.selectedContract, active: false, mono: false) {
+                state.selectedContract = ""
                 Task { await fetchWithCurrentFilters() }
             })
         }
-        if !selectedEnergy.isEmpty {
-            chips.append(.init(label: "Energy ≥ \(selectedEnergy)", active: false, mono: true) {
-                selectedEnergy = ""
+        if !state.selectedEnergy.isEmpty {
+            chips.append(.init(label: "Energy ≥ \(state.selectedEnergy)", active: false, mono: true) {
+                state.selectedEnergy = ""
                 Task { await fetchWithCurrentFilters() }
             })
         }
@@ -487,36 +495,36 @@ struct ListingsView: View {
     }
 
     private func clearAllFilters() {
-        selectedStatus = ""
-        selectedSources = []
-        selectedCities = []
-        selectedTypes = []
-        selectedContract = ""
-        selectedEnergy = ""
-        searchText = ""
-        searchDraft = ""
+        state.selectedStatus = ""
+        state.selectedSources = []
+        state.selectedCities = []
+        state.selectedTypes = []
+        state.selectedContract = ""
+        state.selectedEnergy = ""
+        state.searchText = ""
+        state.searchDraft = ""
         Task { await fetchWithCurrentFilters() }
     }
 
     private func applySearch() {
-        let trimmed = searchDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed != searchText else { return }
-        searchText = trimmed
+        let trimmed = state.searchDraft.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed != state.searchText else { return }
+        state.searchText = trimmed
         Task { await fetchWithCurrentFilters() }
     }
 
     private var activeFilterCount: Int {
-        ([selectedStatus].filter { !$0.isEmpty }.count
-         + (searchText.isEmpty ? 0 : 1)
-         + (selectedSources.isEmpty ? 0 : 1)
-         + (selectedCities.isEmpty ? 0 : 1)
-         + (selectedTypes.isEmpty ? 0 : 1)
-         + (selectedContract.isEmpty ? 0 : 1)
-         + (selectedEnergy.isEmpty ? 0 : 1))
+        ([state.selectedStatus].filter { !$0.isEmpty }.count
+         + (state.searchText.isEmpty ? 0 : 1)
+         + (state.selectedSources.isEmpty ? 0 : 1)
+         + (state.selectedCities.isEmpty ? 0 : 1)
+         + (state.selectedTypes.isEmpty ? 0 : 1)
+         + (state.selectedContract.isEmpty ? 0 : 1)
+         + (state.selectedEnergy.isEmpty ? 0 : 1))
     }
 
     private var searchButtonTitle: String {
-        searchText.isEmpty ? "Search" : "Search: \(searchText)"
+        state.searchText.isEmpty ? "Search" : "Search: \(state.searchText)"
     }
 
     private var filterButtonTitle: String {
@@ -525,17 +533,17 @@ struct ListingsView: View {
 
     private func fetchWithCurrentFilters() async {
         // Backend treats single-city cities= as SQL level; multi-city as Python filter
-        let sourcesParam = selectedSources.isEmpty ? nil : selectedSources
-        let citiesParam = selectedCities.isEmpty ? nil : selectedCities
+        let sourcesParam = state.selectedSources.isEmpty ? nil : state.selectedSources
+        let citiesParam = state.selectedCities.isEmpty ? nil : state.selectedCities
         await store.fetch(
-            city: (selectedCities.count == 1 ? selectedCities[0] : nil),
-            status: selectedStatus.nilIfEmpty,
-            query: searchText.nilIfEmpty,
+            city: (state.selectedCities.count == 1 ? state.selectedCities[0] : nil),
+            status: state.selectedStatus.nilIfEmpty,
+            query: state.searchText.nilIfEmpty,
             sources: sourcesParam,
             cities: citiesParam,
-            types: selectedTypes.isEmpty ? nil : selectedTypes,
-            contract: selectedContract.nilIfEmpty,
-            energy: selectedEnergy.nilIfEmpty)
+            types: state.selectedTypes.isEmpty ? nil : state.selectedTypes,
+            contract: state.selectedContract.nilIfEmpty,
+            energy: state.selectedEnergy.nilIfEmpty)
     }
 
     private func sourceShortLabel(_ source: String) -> String {
@@ -545,7 +553,7 @@ struct ListingsView: View {
 
 /// 列表页排序选项的**展示**形态。真正的排序在服务端做，这里只负责标题、图标，
 /// 以及映射到 `FlatRadarCore.ListingSort`（后端 openapi 的 enum 镜像）。
-private enum ListingSortOption: String, CaseIterable, Identifiable {
+enum ListingSortOption: String, CaseIterable, Identifiable {
     case newest
     case priceLow
     case priceHigh

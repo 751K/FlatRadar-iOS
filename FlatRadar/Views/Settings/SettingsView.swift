@@ -5,6 +5,7 @@ import FlatRadarCore
 
 struct SettingsView: View {
     @Environment(AuthStore.self) private var auth
+    @Environment(NavigationCoordinator.self) private var coord
     @Environment(PushStore.self) private var push
     @Environment(CoffeeStore.self) private var coffee
     @Environment(ReviewPromptStore.self) private var review
@@ -473,11 +474,19 @@ struct SettingsView: View {
             }
             .navigationTitle("Settings")
             .onAppear { editedURL = serverURL }
+            .task {
+                await push.refreshPermissionAndRegistration {
+                    auth.isAuthenticated && !auth.isGuest
+                }
+            }
             .sheet(isPresented: $showEnableBiometric) {
                 EnableBiometricSheet()
             }
-            .sheet(isPresented: $showGuestRegister) {
+            .sheet(isPresented: $showGuestRegister, onDismiss: {
+                coord.isRegistrationPresented = false
+            }) {
                 RegisterAccountSheet()
+                    .onAppear { coord.isRegistrationPresented = true }
             }
             .confirmationDialog("Remove Face ID Sign-In?", isPresented: $showRemoveBiometric, titleVisibility: .visible) {
                 Button("Remove", role: .destructive) {

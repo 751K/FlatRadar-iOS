@@ -107,7 +107,7 @@ struct MapView: View {
     /// 当前 cluster 列表（由 listings + currentRegion 决定）。
     /// **@State 缓存**：之前是 computed property，任何 MapStore 字段变化（包括
     /// selectedID 切换等无关项）都会触发 body 重算 → 重 cluster 2000 pin。
-    /// 现在只在 `.onChange(of: store.listings.count)` 和跨 bucket 时刷新。
+    /// 现在只在可见房源内容变化或跨 bucket 时刷新。
     @State private var clusters: [ListingCluster] = []
 
     /// 聚类后台任务句柄；新一轮 recompute 前取消上一轮，避免快速跨桶时
@@ -387,15 +387,8 @@ struct MapView: View {
             }
         }
         .onAppear { recomputeClusters() }
-        .onChange(of: store.listings.count) { _, _ in
-            recomputeClusters()
-        }
-        // 筛选是本地的，改一下就要立刻重画。visibleCount 变化能覆盖
-        // 状态 chip / 城市 / 平台 / 租金 / 面积任意一项的改动。
-        .onChange(of: store.visibleCount) { _, _ in
-            recomputeClusters()
-        }
-        .onChange(of: store.focusExtra?.id) { _, _ in
+        // 等量筛选结果、同 ID 的坐标/价格更新也必须重新聚合。
+        .onChange(of: store.visibleListings) { _, _ in
             recomputeClusters()
         }
         .onChange(of: clusters.count) { _, _ in

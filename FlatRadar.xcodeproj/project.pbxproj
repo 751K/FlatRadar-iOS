@@ -15,6 +15,7 @@
 		FCC02E5A2FD10C0DE000006A /* FlatRadarCore in Frameworks */ = {isa = PBXBuildFile; productRef = FCC02E5A2FD10C0DE0000069 /* FlatRadarCore */; };
 		FCC02E5A2FD10C0DE000007B /* FlatRadarCore in Frameworks */ = {isa = PBXBuildFile; productRef = FCC02E5A2FD10C0DE000007A /* FlatRadarCore */; };
 		FCC02E5A2FD10C0DE000007D /* FlatRadarWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FCC02E5A2FD10C0DE0000073 /* FlatRadarWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		FCC02E5A2FD10C0DE0000081 /* Localizable.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = FCC02E5A2FD10C0DE0000080 /* Localizable.xcstrings */; };
 		FCC02E5A2FD10C0DE000006C /* FlatRadarMacWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = FCC02E5A2FD10C0DE0000061 /* FlatRadarMacWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
@@ -73,6 +74,7 @@
 		FCC02E5A2FD10C0DE0000040 /* AppIcon.icon */ = {isa = PBXFileReference; lastKnownFileType = folder.iconcomposer.icon; name = AppIcon.icon; path = FlatRadar/AppIcon.icon; sourceTree = "<group>"; };
 		FCC02E5A2FD10C0DE0000051 /* FlatRadarMacUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = FlatRadarMacUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		FCC02E5A2FD10C0DE0000073 /* FlatRadarWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = FlatRadarWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		FCC02E5A2FD10C0DE0000080 /* Localizable.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.xcstrings; path = FlatRadar/Localizable.xcstrings; sourceTree = "<group>"; };
 		FCC02E5A2FD10C0DE0000061 /* FlatRadarMacWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = FlatRadarMacWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -195,6 +197,7 @@
 			children = (
 				FCA5BF452FBA1D5F0081A5E4 /* FlatRadar.storekit */,
 				FC1F38652FB72DA000FC7A33 /* FlatRadar */,
+				FCC02E5A2FD10C0DE0000080 /* Localizable.xcstrings */,
 				FCC02E5A2FD10C0DE0000040 /* AppIcon.icon */,
 				FCC02E5A2FD10C0DE0000012 /* FlatRadarMac */,
 				FCC02E5A2FD10C0DE0000032 /* FlatRadarMacTests */,
@@ -506,6 +509,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				FCC02E5A2FD10C0DE0000041 /* AppIcon.icon in Resources */,
+				FCC02E5A2FD10C0DE0000081 /* Localizable.xcstrings in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

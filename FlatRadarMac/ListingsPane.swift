@@ -267,8 +267,7 @@ struct ListingsPane: View {
     private var rangeText: String {
         let store = model.listings
         if store.loadMoreFailed {
-            return "Loaded \(store.listings.count) of \(store.total) — "
-                 + "paging failed, sorting covers only what loaded"
+            return String(localized: "Loaded \(store.listings.count) of \(store.total) — paging failed, sorting covers only what loaded")
         }
         // 判据是 `hasActiveFilters` 而不是"搜索框空不空"。
         //
@@ -278,14 +277,26 @@ struct ListingsPane: View {
         // 是这一行最不该犯的错。
         let shown = model.rows.count
         if !model.hasActiveFilters {
-            return "\(store.total) listings, sorted by \(sortLabel)"
+            return String(localized: "\(store.total) listings, sorted by \(sortLabel)")
         }
-        return "\(shown) of \(store.total) match, sorted by \(sortLabel)"
+        return String(localized: "\(shown) of \(store.total) match, sorted by \(sortLabel)")
     }
 
     private var sortLabel: String {
-        guard let c = model.sortOrder.first else { return "default order" }
-        return "\(c.key.rawValue) \(c.order == .forward ? "↑" : "↓")"
+        guard let c = model.sortOrder.first else { return String(localized: "default order") }
+        let key: String = switch c.key {
+        case .price: String(localized: "Price")
+        case .area: String(localized: "Area")
+        case .energy: String(localized: "Energy")
+        case .firstSeen: String(localized: "First seen")
+        case .lastSeen: String(localized: "Last seen")
+        case .availableFrom: String(localized: "Available")
+        case .city: String(localized: "City")
+        case .status: String(localized: "Status")
+        case .source: String(localized: "Platform")
+        }
+        let direction = c.order == .forward ? "↑" : "↓"
+        return String(localized: "\(key) \(direction)")
     }
 
     private func openOriginal(_ l: Listing) {

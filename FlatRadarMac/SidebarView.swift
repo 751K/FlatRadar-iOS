@@ -230,7 +230,9 @@ struct SidebarView: View {
         var parts: [String] = []
         let sources = Set(model.listings.listings.compactMap(\.source)).count
         if sources > 0 {
-            parts.append(sources == 1 ? "1 platform" : "\(sources) platforms")
+            parts.append(sources == 1
+                         ? String(localized: "1 platform")
+                         : String(localized: "\(sources) platforms"))
         }
         if let ago = summary.scannedAgoText {
             // 走共用的那一份（原先这里是第四处裸字面量）。这里**不**套

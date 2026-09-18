@@ -59,16 +59,14 @@ struct ContentView: View {
                 showOnboarding = true
             }
         }
-        .onChange(of: auth.isAuthenticated) { _, new in
-            if new, termsAccepted, !onboardingCompleted {
+        .onChange(of: auth.sessionIdentity) { _, new in
+            if new != nil, termsAccepted, !onboardingCompleted {
                 showOnboarding = true
             }
-            // Face ID 保存提示——LoginView 登录成功后会立即被
-            // MainTabView 替换，alert 不能放 LoginView 层级。
-            // 只有 user 展示 Face ID 保存提示；guest 和 admin 跳过。
-            if new, auth.isUser, auth.pendingBiometricCredential != nil {
-                showSaveBiometric = true
-            }
+        }
+        .onChange(of: canOfferBiometricSave) { _, ready in
+            // 游客注册要等注册 sheet 完成关闭，避免提示被模态页面吞掉。
+            if ready { showSaveBiometric = true }
         }
         .alert("Save for \(BiometricAuthService.biometryName)?", isPresented: $showSaveBiometric) {
             Button("Save") {
@@ -125,6 +123,11 @@ struct ContentView: View {
     }
 
     /// 是否满足"现在该弹崩溃报告 alert"的全部前置条件。
+    private var canOfferBiometricSave: Bool {
+        auth.isAuthenticated && auth.isUser && auth.pendingBiometricCredential != nil
+            && !coord.isRegistrationPresented && !showTerms && !showOnboarding
+    }
+
     private func refreshCrashPrompt() {
         // 条款没接受 → 还在条款 sheet 里，不打扰
         // 没认证（包括 guest 的"已 authenticated 但 isGuest"）→ 也可以弹，

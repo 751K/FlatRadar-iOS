@@ -89,7 +89,7 @@ struct FlatRadarApp: App {
                     //    不阻塞下面 coffee store 初始化。
                     if authStore.isAuthenticated, !authStore.isGuest {
                         Task { await mapStore.fetch() }
-                        Task { await listingsStore.fetch() }
+                        Task { await listingsStore.refresh() }
                     }
                     // 6. StoreKit 2 交易监听 + 加载咖啡产品
                     coffeeStore.listenForTransactions()
@@ -145,14 +145,19 @@ struct FlatRadarApp: App {
                     // 通知状态顺带一起传：ReviewPromptStore 拿不到 PushStore，
                     // 而这里两个都在手上。
                     if newPhase == .active {
+                        Task {
+                            await pushStore.refreshPermissionAndRegistration {
+                                authStore.isAuthenticated && !authStore.isGuest
+                            }
+                        }
                         reviewStore.noteActiveDay(
                             hasNotifications: pushStore.permissionStatus == .authorized
                                 || pushStore.permissionStatus == .provisional)
                     }
                 }
-                .onChange(of: authStore.isAuthenticated) { _, newValue in
+                .onChange(of: authStore.sessionIdentity) { _, newValue in
                     syncStreamState(scenePhase: scenePhase)
-                    if newValue {
+                    if newValue != nil {
                         // 登入路径：从 guest/未登录切到登录态 → 预热 map + listings，
                         // 跟 App 首次启动 .task 里的预热同一处理。
                         if !authStore.isGuest {
@@ -160,7 +165,7 @@ struct FlatRadarApp: App {
                                 Task { await mapStore.fetch() }
                             }
                             if listingsStore.listings.isEmpty {
-                                Task { await listingsStore.fetch() }
+                                Task { await listingsStore.refresh() }
                             }
                         }
                     } else {

@@ -25,6 +25,17 @@ public final class NotificationsStore {
     var streamError: String?
 
     private let client = APIClient.shared
+    // Injectable boundaries keep request-order tests independent of the network and OS badge.
+    @ObservationIgnored var loadPage: (Int, Int) async throws -> NotificationsResponse = { limit, offset in
+        try await APIClient.shared.getNotifications(limit: limit, offset: offset)
+    }
+    @ObservationIgnored var markReadRequest: ([Int]?) async throws -> Void = { ids in
+        _ = try await APIClient.shared.markNotificationsRead(ids: ids)
+    }
+    @ObservationIgnored var updateBadge: (Int) async throws -> Void = { count in
+        try await UNUserNotificationCenter.current().setBadgeCount(count)
+    }
+    private var requestGeneration: UInt64 = 0
     private let pageSize = 50
     private let decoder: JSONDecoder = {
         let d = JSONDecoder()
@@ -48,69 +59,69 @@ public final class NotificationsStore {
     }
 
     public func fetch() async {
+        requestGeneration &+= 1
+        let generation = requestGeneration
+        backfillTask?.cancel()
+        backfillTask = nil
+        isLoadingMore = false
         isLoading = true
         errorMessage = nil
+        defer {
+            if generation == requestGeneration { isLoading = false }
+        }
         do {
-            let resp = try await client.getNotifications(limit: pageSize, offset: 0)
+            let resp = try await loadPage(pageSize, 0)
+            guard generation == requestGeneration, !Task.isCancelled else { return }
             notifications = resp.items
             total = resp.total
             unreadCount = resp.unread
+            lastError = nil
             revision &+= 1
+            // Only a successful, current first page may start background pagination.
+            backfillTask = Task { [weak self] in
+                await self?.loadMoreUntilUnreadIsVisible(generation: generation)
+            }
         } catch {
+            guard generation == requestGeneration else { return }
             // 被取消不是失败——见 Error.isCancellation。
             if !error.isCancellation {
                 lastError = error as? APIError
                 errorMessage = error.localizedDescription
             }
         }
-        // 关键：首屏一拿到第 1 页就结束 loading，立刻渲染。
-        // "把所有未读页都补齐"放到后台非阻塞执行——之前 await 在这里，
-        // 未读跨 N 页时首屏要干等 N 次串行往返才显示，体感卡顿。
-        isLoading = false
-
-        // 后台补齐未读页（不阻塞 UI；带上限防失控）。仅在第 1 页拉成功后启动。
-        if errorMessage == nil {
-            backfillTask?.cancel()
-            backfillTask = Task { [weak self] in
-                await self?.loadMoreUntilUnreadIsVisible()
-            }
-        }
     }
 
     public func loadMore() async {
-        guard hasMore, !isLoadingMore else { return }
+        guard hasMore, !isLoadingMore, !isLoading, !Task.isCancelled else { return }
+        let generation = requestGeneration
         isLoadingMore = true
+        defer {
+            if generation == requestGeneration { isLoadingMore = false }
+        }
         do {
-            let resp = try await client.getNotifications(
-                limit: pageSize, offset: notifications.count)
+            let resp = try await loadPage(pageSize, notifications.count)
+            guard generation == requestGeneration, !Task.isCancelled else { return }
             notifications.append(contentsOf: resp.items)
             total = resp.total
             revision &+= 1
         } catch {
+            guard generation == requestGeneration else { return }
             #if DEBUG
             print("[NotificationsStore] loadMore failed: \(error)")
             #endif
         }
-        isLoadingMore = false
     }
 
-    private func loadMoreUntilUnreadIsVisible() async {
+    private func loadMoreUntilUnreadIsVisible(generation: UInt64) async {
         var pagesLoaded = 0
         while unreadCount > loadedUnreadCount, notifications.count < total {
             // 取消（登出 / 新一轮 fetch / 视图消失）或触顶 → 立即停。
-            if Task.isCancelled || pagesLoaded >= maxBackfillPages { break }
-            do {
-                let resp = try await client.getNotifications(
-                    limit: pageSize,
-                    offset: notifications.count)
-                if resp.items.isEmpty { break }
-                notifications.append(contentsOf: resp.items)
-                total = resp.total
-                revision &+= 1
-                pagesLoaded += 1
-            } catch {
-                break
-            }
+            guard generation == requestGeneration, !Task.isCancelled,
+                  !isLoadingMore, pagesLoaded < maxBackfillPages else { break }
+            let before = notifications.count
+            await loadMore()
+            guard generation == requestGeneration, notifications.count > before else { break }
+            pagesLoaded += 1
         }
     }
 
@@ -120,8 +131,10 @@ public final class NotificationsStore {
 
     public func markRead(ids: [Int]) async {
         guard !ids.isEmpty else { return }
+        let generation = requestGeneration
         do {
-            _ = try await client.markNotificationsRead(ids: ids)
+            try await markReadRequest(ids)
+            guard generation == requestGeneration, !Task.isCancelled else { return }
             let idSet = Set(ids)
             // 翻状态时**当场算这次新增了多少 "from unread to read"**，
             // 直接拿来减 unreadCount。避免之前每次 O(n) 重扫整张列表，也对
@@ -143,8 +156,10 @@ public final class NotificationsStore {
     }
 
     public func markAllRead() async {
+        let generation = requestGeneration
         do {
-            _ = try await client.markNotificationsRead(ids: nil)
+            try await markReadRequest(nil)
+            guard generation == requestGeneration, !Task.isCancelled else { return }
             // Optimistic local update
             for i in notifications.indices {
                 notifications[i] = notifications[i].markedRead()
@@ -176,6 +191,8 @@ public final class NotificationsStore {
     /// 登出时清空：先断 SSE 再清数据，避免断开期间还有 handleSSEData 写入旧值。
     /// 注意 unreadCount = 0 会触发 didSet → syncAppBadge → 同步 App 角标到 0。
     public func clear() {
+        // In-flight HTTP requests may complete even after their caller is cancelled.
+        requestGeneration &+= 1
         disconnectStream()
         notifications = []
         total = 0
@@ -205,6 +222,7 @@ public final class NotificationsStore {
         while !Task.isCancelled {
             do {
                 try await runStreamOnce()
+                try Task.checkCancellation()
                 // 正常返回（服务端 maxage 到了）→ 短暂等待再连
                 backoff = 2_000_000_000
                 isStreamConnected = false
@@ -213,6 +231,7 @@ public final class NotificationsStore {
             } catch is CancellationError {
                 break
             } catch {
+                guard !Task.isCancelled else { break }
                 isStreamConnected = false
                 streamError = error.localizedDescription
                 #if DEBUG
@@ -225,6 +244,7 @@ public final class NotificationsStore {
     }
 
     private func runStreamOnce() async throws {
+        try Task.checkCancellation()
         // 进函数立刻 snapshot lastId；之前 maxId 是 computed property，
         // 在 runStreamOnce 内部多处读会随 notifications 变化（handleSSEData
         // 边塞数据 边可能撞）。snapshot 一次保证本次连接生命周期内 lastId
@@ -261,12 +281,14 @@ public final class NotificationsStore {
     /// 失败安静吞（权限被撤是常见情况，UI 上 tab badge 仍正常显示）。
     private func syncAppBadge() {
         let n = unreadCount
+        let generation = requestGeneration
         // 显式 @MainActor —— setBadgeCount 是 MainActor-isolated API。
         // 不写 @MainActor 在 Swift 6 strict concurrency 下报错；
         // 写了在 Swift 5 模式下也不会有负面影响。
         Task { @MainActor in
+            guard generation == requestGeneration, n == unreadCount else { return }
             do {
-                try await UNUserNotificationCenter.current().setBadgeCount(n)
+                try await updateBadge(n)
             } catch {
                 // 用户拒了 badge 权限 / iOS < 16 → 静默
             }

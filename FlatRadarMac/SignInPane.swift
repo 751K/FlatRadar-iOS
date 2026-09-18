@@ -95,7 +95,7 @@ struct SignInPane: View {
                 .tracking(-1.6)
                 .monospacedDigit()
                 .padding(.top, 26)
-            Text("listings tracked right now")
+            Text(String(localized: "listings tracked right now"))
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
 
@@ -479,7 +479,7 @@ struct SignInPane: View {
 enum LegalSheet: String, Identifiable {
     case privacy, terms
     var id: String { rawValue }
-    var title: String { self == .privacy ? "Privacy Policy" : "Terms of Use" }
+    var title: String { self == .privacy ? String(localized: "Privacy Policy") : String(localized: "Terms of Use") }
 }
 
 /// 条款正文。走 `GET /api/v1/legal`（``APIClient/getLegal(lang:)``）。

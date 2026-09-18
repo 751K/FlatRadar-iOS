@@ -124,11 +124,11 @@ enum AlertFeed {
             // 「X → X」清楚。设计稿里就有 `still ● Lottery` 这一行。
             return from == to ? "Still \(to)" : "\(from) → \(to)"
         }
-        if let to { return "New listing · \(to)" }
+        if let to { return String(localized: "New listing · \(to)") }
         switch n.type {
-        case "heartbeat":    return "Scraper heartbeat"
-        case "error":        return "Scraper error"
-        case "announcement": return "Announcement"
+        case "heartbeat":    return String(localized: "Scraper heartbeat")
+        case "error":        return String(localized: "Scraper error")
+        case "announcement": return String(localized: "Announcement")
         default:             return n.body
         }
     }
@@ -162,9 +162,9 @@ enum AlertFeed {
 
     static func label(for day: Date, now: Date) -> String {
         let today = calendar.startOfDay(for: now)
-        if day == today { return "Today" }
+        if day == today { return String(localized: "Today") }
         if let yesterday = calendar.date(byAdding: .day, value: -1, to: today), day == yesterday {
-            return "Yesterday"
+            return String(localized: "Yesterday")
         }
         return dayFormatter.string(from: day)
     }

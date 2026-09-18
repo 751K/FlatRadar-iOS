@@ -85,9 +85,9 @@ enum AppearancePreference: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .system: "System"
-        case .light:  "Light"
-        case .dark:   "Dark"
+        case .system: String(localized: "System")
+        case .light:  String(localized: "Light")
+        case .dark:   String(localized: "Dark")
         }
     }
 
@@ -134,9 +134,7 @@ private struct GeneralSettings: View {
             } header: {
                 Text("Menu Bar")
             } footer: {
-                Text("Shows the number of matching listings and the last scan time. "
-                   + "FlatRadar keeps receiving live updates while it is on, "
-                   + "even with every window closed.")
+                Text("Shows the number of matching listings and the last scan time. FlatRadar keeps receiving live updates while it is on, even with every window closed.")
             }
 
             // 反馈接口要带 bearer（`POST /feedback` 是 authenticated），访客发不出去。

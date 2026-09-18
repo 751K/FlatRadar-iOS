@@ -236,13 +236,13 @@ private struct ChangePasswordSheet: View {
     private var validationError: String? {
         guard !newPassword.isEmpty else { return nil }
         if newPassword.count < Self.minLength {
-            return "New password must be at least \(Self.minLength) characters."
+            return String(localized: "New password must be at least \(Self.minLength) characters.")
         }
         if !confirmPassword.isEmpty, newPassword != confirmPassword {
-            return "New passwords don't match."
+            return String(localized: "New passwords don't match.")
         }
         if newPassword == currentPassword {
-            return "New password must differ from the current one."
+            return String(localized: "New password must differ from current.")
         }
         return nil
     }
@@ -327,14 +327,18 @@ private struct CreateAccountSheet: View {
     /// 与后端 `_register` 对齐：≥2 字符、不可用 `__` 开头（后端保留给自己）。
     private var validationError: String? {
         if !trimmedName.isEmpty {
-            if trimmedName.count < 2 { return "Username must be at least 2 characters." }
-            if trimmedName.lowercased().hasPrefix("__") { return "That username isn't available." }
+            if trimmedName.count < 2 {
+                return String(localized: "Username must be at least 2 characters.")
+            }
+            if trimmedName.lowercased().hasPrefix("__") {
+                return String(localized: "That username isn't available.")
+            }
         }
         if !password.isEmpty, password.count < SignInPane.minNewPasswordLength {
-            return "Password must be at least \(SignInPane.minNewPasswordLength) characters."
+            return String(localized: "Password must be at least \(SignInPane.minNewPasswordLength) characters.")
         }
         if !confirmPassword.isEmpty, password != confirmPassword {
-            return "Passwords don't match."
+            return String(localized: "Passwords don't match.")
         }
         return nil
     }

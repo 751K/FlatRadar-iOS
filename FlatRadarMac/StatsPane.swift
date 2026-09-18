@@ -156,8 +156,11 @@ struct StatsPane: View {
     private var headline: String {
         let n = stats.sampleSize
         let window = (stats.chartsWindow ?? stats.days).rawValue
-        guard n > 0 else { return "Last \(window) days" }
-        return "\(n) listing\(n == 1 ? "" : "s") in the last \(window) days"
+        guard n > 0 else { return String(localized: "Last \(window) days") }
+        if n == 1 {
+            return String(localized: "\(n) listing in the last \(window) days")
+        }
+        return String(localized: "\(n) listings in the last \(window) days")
     }
 
     // MARK: - 一张图
@@ -184,8 +187,7 @@ struct StatsPane: View {
         ContentUnavailableView {
             Label("Unable to Load Stats", systemImage: "chart.bar.xaxis")
         } description: {
-            Text("The public stats endpoints didn’t answer. They don’t need a sign-in, "
-               + "so this is usually the server or the network.")
+            Text("The public stats endpoints didn’t answer. They don’t need a sign-in, so this is usually the server or the network.")
         } actions: {
             Button("Try Again") { Task { await stats.load(force: true) } }
         }
@@ -207,18 +209,18 @@ nonisolated enum StatsCopy {
 
     static func title(_ key: String) -> String {
         switch key {
-        case "daily_new":     return "New per day"
-        case "daily_changes": return "Status changes per day"
-        case "status_dist":   return "Where they are now"
-        case "price_dist":    return "Rent"
-        case "area_dist":     return "Size"
-        case "type_dist":     return "Type"
-        case "energy_dist":   return "Energy label"
-        case "floor_dist":    return "Floor"
-        case "city_dist":     return "City"
-        case "source_dist":   return "Platform"
-        case "tenant_dist":   return "Tenant type"
-        case "hourly_dist":   return "When they appear"
+        case "daily_new":     return String(localized: "New per day")
+        case "daily_changes": return String(localized: "Status changes per day")
+        case "status_dist":   return String(localized: "Where they are now")
+        case "price_dist":    return String(localized: "Rent")
+        case "area_dist":     return String(localized: "Size")
+        case "type_dist":     return String(localized: "Type")
+        case "energy_dist":   return String(localized: "Energy label")
+        case "floor_dist":    return String(localized: "Floor")
+        case "city_dist":     return String(localized: "City")
+        case "source_dist":   return String(localized: "Platform")
+        case "tenant_dist":   return String(localized: "Tenant type")
+        case "hourly_dist":   return String(localized: "When they appear")
         default:              return key
         }
     }
@@ -228,13 +230,13 @@ nonisolated enum StatsCopy {
         case "status_dist":
             // 这张图最容易被误读成"库存状态"。它其实在回答一个更有意思的问题：
             // 这批新房源多快没的。
-            return "How much of this batch is already gone"
+            return String(localized: "How much of this batch is already gone")
         case "city_dist":
-            return "Top 8 — full list on the right"
+            return String(localized: "Top 8 — full list on the right")
         case "hourly_dist":
-            return "Local time, when the platform published them"
+            return String(localized: "Local time, when the platform published them")
         case "daily_changes":
-            return "A listing can change more than once a day"
+            return String(localized: "A listing can change more than once a day")
         default:
             return nil
         }

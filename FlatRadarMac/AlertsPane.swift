@@ -332,12 +332,12 @@ struct AlertsPane: View {
     /// 比不说更糟。
     private var deliveryStatusText: String {
         if push.permissionStatus == .denied {
-            return "In-app only — notifications are blocked in System Settings"
+            return String(localized: "In-app only — notifications are blocked in System Settings")
         }
         if push.deliveryDisabledByUser {
-            return "In-app only — delivery to this Mac is turned off"
+            return String(localized: "In-app only — delivery to this Mac is turned off")
         }
-        return "Also delivered to Notification Center"
+        return String(localized: "Also delivered to Notification Center")
     }
 
 }

@@ -138,11 +138,11 @@ struct NotificationSettings: View {
 
     private var statusText: String {
         switch push.permissionStatus {
-        case .denied:        return "Off in System Settings"
-        case .notDetermined: return "Not requested yet"
+        case .denied:        return String(localized: "Off in System Settings")
+        case .notDetermined: return String(localized: "Not requested yet")
         default:
-            if push.deliveryDisabledByUser { return "Turned off for this Mac" }
-            return push.registeredDeviceId != nil ? "On" : "Allowed — not registered yet"
+            if push.deliveryDisabledByUser { return String(localized: "Turned off for this Mac") }
+            return push.registeredDeviceId != nil ? String(localized: "On") : String(localized: "Allowed — not registered yet")
         }
     }
 

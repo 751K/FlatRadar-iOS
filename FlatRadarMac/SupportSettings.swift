@@ -84,8 +84,7 @@ struct SupportSettings: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Couldn't load the tips")
                         .foregroundStyle(.secondary)
-                    Text("Check your connection and that you're signed in to the "
-                       + "App Store. Nothing is wrong with your FlatRadar account.")
+                    Text("Check your connection and that you're signed in to the App Store. Nothing is wrong with your FlatRadar account.")
                         .font(.callout)
                         .foregroundStyle(.tertiary)
                         .fixedSize(horizontal: false, vertical: true)

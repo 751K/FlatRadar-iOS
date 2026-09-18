@@ -253,15 +253,15 @@ enum ListingColumn: String, CaseIterable, Identifiable {
 
     var title: String {
         switch self {
-        case .address:   return "Address"
-        case .city:      return "City"
-        case .price:     return "Price"
-        case .area:      return "Area"
-        case .type:      return "Type"
-        case .energy:    return "Energy"
-        case .platform:  return "Plat."
-        case .status:    return "Status"
-        case .available: return "Available"
+        case .address:   return String(localized: "Address")
+        case .city:      return String(localized: "City")
+        case .price:     return String(localized: "Price")
+        case .area:      return String(localized: "Area")
+        case .type:      return String(localized: "Type")
+        case .energy:    return String(localized: "Energy")
+        case .platform:  return String(localized: "Plat.")
+        case .status:    return String(localized: "Status")
+        case .available: return String(localized: "Available")
         }
     }
 

@@ -121,7 +121,7 @@ final class DesignSystemTests: XCTestCase {
 
     // MARK: - 窄窗口 iPad 的返回落点
 
-    /// 窄窗口：三个视图共用 Browse 那一个栈，所以往栈上推一层，
+    /// 窄窗口：Browse 绑定日历自己的路径，详情压在日历上，
     /// **不能动 `selectedBrowseMode`**——动了就等于把人脚下那一屏换掉。
     func test_窄窗口从日历点进详情不会换掉当前模式() {
         let coord = NavigationCoordinator()
@@ -134,7 +134,8 @@ final class DesignSystemTests: XCTestCase {
         XCTAssertEqual(coord.selectedBrowseMode, .calendar,
                        "返回时应该回到日历。这正是原先 `idiom == .pad` 分支在 iPad "
                        + "竖屏上做错的事：它把模式改成了 .list。")
-        XCTAssertEqual(coord.listingsPath.count, 1)
+        XCTAssertEqual(coord.calendarPath.count, 1)
+        XCTAssertTrue(coord.listingsPath.isEmpty)
     }
 
     /// 宽窗口：Map / Calendar 各是独立 tab，详情压在**它自己那一栈**上，

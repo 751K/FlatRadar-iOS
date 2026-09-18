@@ -221,6 +221,17 @@ public final class PushStore {
         permissionStatus = Self.map(await notifications.authorizationStatus())
     }
 
+    /// 返回前台或进入设置时重新读取系统授权；不再次弹出权限申请。
+    /// 在 await 后检查会话，避免查询期间退出登录仍启动设备注册。
+    public func refreshPermissionAndRegistration(canRegister: () -> Bool) async {
+        await refreshPermissionStatus()
+        guard !Task.isCancelled, canRegister(), !deliveryDisabledByUser,
+              !UITestFlags.isScreenshotMode,
+              permissionStatus == .authorized || permissionStatus == .provisional
+                || permissionStatus == .ephemeral else { return }
+        bridge?.registerForRemoteNotifications()
+    }
+
     /// 这个错误是不是「系统不允许这个 app 发通知」——也就是用户拒过、系统不会再弹框。
     static func isNotAllowed(_ error: any Error) -> Bool {
         (error as? UNError)?.code == .notificationsNotAllowed

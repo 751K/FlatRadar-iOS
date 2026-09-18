@@ -43,8 +43,7 @@ struct UnlockSettings: View {
             } header: {
                 Text("Unlocking")
             } footer: {
-                Text("Your password is stored in this Mac's Keychain and unlocked with "
-                   + "\(method). It never leaves this Mac, and it is not synced to iCloud.")
+                Text("Your password is stored in this Mac's Keychain and unlocked with \(method). It never leaves this Mac, and it is not synced to iCloud.")
             }
             .sheet(isPresented: $showEnable) {
                 EnableUnlockSheet { storedFlag = BiometricAuthService.hasStoredCredentials }
@@ -92,8 +91,7 @@ private struct EnableUnlockSheet: View {
             Text("Turn on \(method) sign-in")
                 .font(.headline)
 
-            Text("Type your FlatRadar password once. It goes into this Mac's Keychain, "
-               + "unlocked with \(method).")
+            Text("Type your FlatRadar password once. It goes into this Mac's Keychain, unlocked with \(method).")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)

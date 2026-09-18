@@ -178,10 +178,10 @@ enum Theme {
     /// `status_capsule` 的兜底一致（它 `return StatusCapsule(status or "", "secondary")`）。
     static func shortStatusLabel(_ status: ListingStatus) -> String? {
         switch status {
-        case .book:     return "Book"
-        case .lottery:  return "Lottery"
-        case .reserved: return "Reserved"
-        case .occupied: return "Occupied"
+        case .book:     return String(localized: "Book")
+        case .lottery:  return String(localized: "Lottery")
+        case .reserved: return String(localized: "Reserved")
+        case .occupied: return String(localized: "Occupied")
         case .other:    return nil
         }
     }

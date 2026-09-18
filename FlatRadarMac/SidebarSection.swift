@@ -20,11 +20,11 @@ enum SidebarSection: String, Hashable, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .listings: return "Listings"
-        case .map:      return "Map"
-        case .calendar: return "Calendar"
-        case .alerts:   return "Alerts"
-        case .stats:    return "Stats"
+        case .listings: return String(localized: "Listings")
+        case .map:      return String(localized: "Map")
+        case .calendar: return String(localized: "Calendar")
+        case .alerts:   return String(localized: "Alerts")
+        case .stats:    return String(localized: "Stats")
         }
     }
 

@@ -55,7 +55,7 @@ struct SectionReloadAction {
     let isLoading: Bool
     let run: @MainActor () async -> Void
 
-    var title: String { "Reload \(section.label)" }
+    var title: String { String(localized: "Reload \(section.label)") }
 }
 
 extension FocusedValues {
