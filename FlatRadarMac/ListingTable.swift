@@ -27,13 +27,17 @@ struct ListingTable: View {
     @Environment(\.openWindow) private var openWindow
 
     var body: some View {
-        VStack(spacing: 0) {
-            ListingTableHeader(model: model)
-            rows
+        // 从父布局获得实际宽度，避免固定列的最小宽度反过来撑开分栏、挤出 inspector。
+        GeometryReader { geometry in
+            let columns = ListingColumn.visibleColumns(in: geometry.size.width)
+            VStack(spacing: 0) {
+                ListingTableHeader(model: model, columns: columns)
+                rows(columns: columns)
+            }
         }
     }
 
-    private var rows: some View {
+    private func rows(columns: [ListingColumn]) -> some View {
         ScrollViewReader { proxy in
             List {
                 ForEach(model.rows) { listing in
@@ -44,6 +48,7 @@ struct ListingTable: View {
                     // 让两行换个底色（代码审查 P2）。放进行里之后，跨行只重画进出的那两行。
                     HoverableListingRow(
                         listing: listing,
+                        columns: columns,
                         isSelected: model.selection.contains(listing.id),
                         isPinned: model.pinned.contains(listing.id),
                         onClick: { click(listing, modifiers: $0) },
@@ -225,6 +230,20 @@ enum ListingColumn: String, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// 给地址保留 180pt，另预留两侧内边距和滚动条；越窄越先隐藏次要信息。
+    /// 只改变显示列，不改变排序、筛选或选中房源，完整信息仍可在 inspector 查看。
+    static func visibleColumns(in width: CGFloat) -> [ListingColumn] {
+        var columns = allCases
+        var requiredWidth: CGFloat = 180 + 28 + 16
+        requiredWidth += columns.compactMap(\.width).reduce(0, +)
+        for column in [energy, type, available, platform, area, city, status] {
+            guard requiredWidth > width else { break }
+            columns.removeAll { $0 == column }
+            requiredWidth -= column.width ?? 0
+        }
+        return columns
+    }
+
     var title: String {
         switch self {
         case .address:   return String(localized: "Address")
@@ -292,10 +311,11 @@ enum ListingColumn: String, CaseIterable, Identifiable {
 private struct ListingTableHeader: View {
 
     @Bindable var model: BrowseModel
+    let columns: [ListingColumn]
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(ListingColumn.allCases) { column in
+            ForEach(columns) { column in
                 headerCell(column)
             }
         }
@@ -352,13 +372,14 @@ private struct ListingTableHeader: View {
 private struct ListingTableRow: View {
 
     let listing: Listing
+    let columns: [ListingColumn]
     let isSelected: Bool
     let isHovered: Bool
     let isPinned: Bool
 
     var body: some View {
         HStack(spacing: 0) {
-            ForEach(ListingColumn.allCases) { column in
+            ForEach(columns) { column in
                 cell(column)
                     .padding(.trailing, column.alignment == .trailing ? 12 : 0)
                     .frame(width: column.width, alignment: column.alignment)
@@ -462,6 +483,7 @@ private struct ListingTableRow: View {
 private struct HoverableListingRow: View {
 
     let listing: Listing
+    let columns: [ListingColumn]
     let isSelected: Bool
     let isPinned: Bool
     let onClick: (NSEvent.ModifierFlags) -> Void
@@ -473,6 +495,7 @@ private struct HoverableListingRow: View {
 
     var body: some View {
         ListingTableRow(listing: listing,
+                        columns: columns,
                         isSelected: isSelected,
                         isHovered: isHovered,
                         isPinned: isPinned)
