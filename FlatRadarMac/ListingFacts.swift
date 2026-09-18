@@ -55,15 +55,15 @@ nonisolated enum ListingText {
         let lower = raw.lowercased()
         let hasPeriod = lower.contains("mo") || lower.contains("month")
                      || lower.contains("/") || lower.contains("p.m")
-        return hasPeriod ? raw : "\(raw) / mo"
+        return hasPeriod ? raw : String(localized: "\(raw) / mo")
     }
 
     /// `First seen 38m ago · last checked 2m ago`。
     /// 两个都是后端已有的字段（`first_seen` / `last_seen`），不是新东西。
     static func provenance(_ l: Listing) -> String? {
         let parts = [
-            l.firstSeen.map { "First seen \(ServerTime.relativeTime($0))" },
-            l.lastSeen.map { "last checked \(ServerTime.relativeTime($0))" },
+            l.firstSeen.map { String(localized: "First seen \(ServerTime.relativeTime($0))") },
+            l.lastSeen.map { String(localized: "last checked \(ServerTime.relativeTime($0))") },
         ].compactMap { $0 }
         return parts.isEmpty ? nil : parts.joined(separator: " · ")
     }
@@ -228,7 +228,9 @@ struct WrappingRow: Layout {
 /// 两处各画一个"差不多的矮按钮"，迟早差出 1pt 和半个圆角。
 struct ListingActionButton: View {
 
-    let title: String
+    // 类型是 LocalizedStringKey 而不是 String：调用处全是字面量，这样它们会查字符串表、
+    // 也会被编译器提取。原先是 String，`Text(String)` 不查表，任何语言下都是英文。
+    let title: LocalizedStringKey
     var prominent = false
     /// 撑满可用宽度。
     ///

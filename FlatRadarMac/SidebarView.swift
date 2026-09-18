@@ -142,7 +142,7 @@ struct SidebarView: View {
         }
     }
 
-    private func sectionHeader(_ title: String) -> some View {
+    private func sectionHeader(_ title: LocalizedStringKey) -> some View {
         Text(title)
             .font(.subheadline.weight(.semibold))
             .foregroundStyle(.tertiary)
@@ -168,7 +168,7 @@ struct SidebarView: View {
                 VStack(alignment: .leading, spacing: 1) {
                     // 房源下架后**不自动换成另一套**——那会让人以为自己还在比较
                     // 原来那两套。
-                    Text(listing?.name ?? "No longer available")
+                    Text(listing?.name ?? String(localized: "No longer available"))
                         .font(.body)
                         .foregroundStyle(listing == nil ? AnyShapeStyle(Color.orange)
                                                         : AnyShapeStyle(Color.primary))

@@ -52,10 +52,13 @@ struct CalendarMonthGrid {
 
     private static let titleFormatter: DateFormatter = {
         let f = DateFormatter()
+        // 跟系统语言走，格式用模板而不是写死：原先锁在 en_US_POSIX，中文界面里
+        // 也是「Monday 21 September」。locale 先设，再设 calendar——反过来的话
+        // 设 locale 会把 calendar 换成那个 locale 的默认历法。
+        f.locale = .autoupdatingCurrent
         f.calendar = ServerTime.calendar
         f.timeZone = ServerTime.timeZone
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "LLLL yyyy"
+        f.setLocalizedDateFormatFromTemplate("LLLLyyyy")
         return f
     }()
 }
@@ -160,8 +163,9 @@ enum CalendarGrid {
     /// 表头 Mon…Sun。跟着 ``gridCalendar`` 的 `firstWeekday` 走，不写死。
     static var weekdaySymbols: [String] {
         let f = DateFormatter()
+        // 周几的缩写跟系统语言走（原先锁英文）。locale 先设，理由同 titleFormatter。
+        f.locale = .autoupdatingCurrent
         f.calendar = gridCalendar
-        f.locale = Locale(identifier: "en_US_POSIX")
         let symbols = f.shortWeekdaySymbols ?? ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
         let shift = gridCalendar.firstWeekday - 1
         return Array(symbols[shift...] + symbols[..<shift])

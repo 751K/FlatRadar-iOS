@@ -314,7 +314,7 @@ struct SignInPane: View {
 
     // MARK: - 零件
 
-    private func field(_ label: String, text: Binding<String>, secure: Bool) -> some View {
+    private func field(_ label: LocalizedStringKey, text: Binding<String>, secure: Bool) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Text(label)
                 .font(.subheadline)
@@ -364,7 +364,7 @@ struct SignInPane: View {
                                ttlDays: staySignedIn ? 90 : 1)
     }
 
-    private func primaryButton(_ title: String, enabled: Bool,
+    private func primaryButton(_ title: LocalizedStringKey, enabled: Bool,
                                _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 8) {
@@ -435,7 +435,7 @@ struct SignInPane: View {
             VStack(alignment: .leading, spacing: 6) {
                 // 完成判据：「拒绝网络或凭据错误时，窗口显示可理解的错误」。
                 // 用后端给的具体原因，不是「登录失败」四个字。
-                Text(auth.lastError?.errorDescription ?? "Sign-in failed")
+                Text(auth.lastError?.errorDescription ?? String(localized: "Sign-in failed"))
                     .font(.callout.weight(.medium))
                 Text(msg).font(.caption).fixedSize(horizontal: false, vertical: true)
 
@@ -523,7 +523,7 @@ struct LegalView: View {
                 let resp = try await APIClient.shared.getLegal()
                 text = kind == .privacy ? resp.privacy : resp.terms
             } catch {
-                failed = "Could not load: \(error.localizedDescription)"
+                failed = String(localized: "Could not load: \(error.localizedDescription)")
             }
         }
     }

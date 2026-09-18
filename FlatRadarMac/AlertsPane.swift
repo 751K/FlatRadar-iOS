@@ -118,7 +118,7 @@ struct AlertsPane: View {
         .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 12))
     }
 
-    private func metric(_ title: String, _ value: Int, _ caption: String) -> some View {
+    private func metric(_ title: LocalizedStringKey, _ value: Int, _ caption: LocalizedStringKey) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(title).font(.subheadline).foregroundStyle(.secondary)
             Text("\(value)")
@@ -150,7 +150,7 @@ struct AlertsPane: View {
         .padding(.vertical, 10)
     }
 
-    private func chip(_ label: String, kind: NotificationItem.Kind?) -> some View {
+    private func chip(_ label: LocalizedStringKey, kind: NotificationItem.Kind?) -> some View {
         let selected = kindFilter == kind
         let n = count(kind)
         return Button { kindFilter = kind } label: {

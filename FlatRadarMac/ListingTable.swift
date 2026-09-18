@@ -197,7 +197,7 @@ private struct RowQuickActions: View {
     private static let fadeEnd: CGFloat = 0.22
 
     private func button(_ symbol: String,
-                        help: String,
+                        help: LocalizedStringKey,
                         action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol)

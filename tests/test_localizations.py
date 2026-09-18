@@ -143,6 +143,34 @@ def test_catalog_has_no_duplicate_keys(path):
     assert not dups, f"{path.name} 里这些 key 出现了不止一次：{sorted(set(dups))}"
 
 
+#: iPad 宽布局下顶部 tab 栏的六个标签（MainTabView）。Browse 只在窄布局出现。
+IPAD_TABS = ["Dashboard", "Listings", "Map", "Calendar", "Alerts", "Settings"]
+
+#: 六个标签加起来最多多少个字符还放得下。
+#:
+#: 来自 build 386 的 13 英寸 iPad 横屏实测：nl 合计 55 个字符，一行放下；es 是
+#: 58 个（`Panel de control` + `Configuración`），tab 栏被分成两页，Alerts 和
+#: Settings 落到第二页——截图测试找不到这两个 tab，真实的西语用户也得先点
+#: 「Página siguiente」才看得见它们。按字符数估是粗的，但方向对：只会在
+#: 「可能放不下」时红。
+IPAD_TAB_BUDGET = 55
+
+
+def test_ipad_tab_labels_fit_on_one_page():
+    cat = _catalog(ROOT / "FlatRadar" / "Localizable.xcstrings")
+    over = {}
+    for lang in _target_languages(cat) | {"en"}:
+        labels = []
+        for key in IPAD_TABS:
+            loc = cat["strings"][key].get("localizations", {}).get(lang, {})
+            labels.append(loc.get("stringUnit", {}).get("value") or key)
+        if sum(len(x) for x in labels) > IPAD_TAB_BUDGET:
+            over[lang] = labels
+    assert not over, (
+        f"这些语言的 iPad tab 标签合计超过 {IPAD_TAB_BUDGET} 个字符，tab 栏会分页："
+        f"{over}")
+
+
 def test_allowlist_has_no_stale_entries():
     """白名单里的 key 必须真的还在目录里。
 

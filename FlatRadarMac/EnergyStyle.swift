@@ -67,6 +67,6 @@ enum RoomType {
         let s = raw.trimmingCharacters(in: .whitespaces)
         guard !s.isEmpty else { return nil }
         guard s.allSatisfy(\.isNumber), let n = Int(s) else { return s }
-        return n == 1 ? "1-room" : "\(n)-room"
+        return n == 1 ? String(localized: "1-room") : String(localized: "\(n)-room")
     }
 }

@@ -157,7 +157,7 @@ struct CalendarPane: View {
         .fixedSize()
     }
 
-    private func metric(_ title: String, _ value: Int, _ caption: String) -> some View {
+    private func metric(_ title: LocalizedStringKey, _ value: Int, _ caption: LocalizedStringKey) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text(title)
                 .font(.subheadline)
@@ -384,10 +384,13 @@ struct CalendarPane: View {
 
     private static let longDate: DateFormatter = {
         let f = DateFormatter()
+        // 跟系统语言走，格式用模板而不是写死：原先锁在 en_US_POSIX，中文界面里
+        // 也是「Monday 21 September」。locale 先设，再设 calendar——反过来的话
+        // 设 locale 会把 calendar 换成那个 locale 的默认历法。
+        f.locale = .autoupdatingCurrent
         f.calendar = ServerTime.calendar
         f.timeZone = ServerTime.timeZone
-        f.locale = Locale(identifier: "en_US_POSIX")
-        f.dateFormat = "EEEE d MMMM"
+        f.setLocalizedDateFormatFromTemplate("EEEEdMMMM")
         return f
     }()
 }

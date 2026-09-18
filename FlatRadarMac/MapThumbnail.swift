@@ -266,7 +266,7 @@ struct MapThumbnail: View {
     @ViewBuilder
     private func approximateNotice(_ mapListing: MapListing) -> some View {
         if mapListing.stackCount > 1 {
-            chip("Approximate · \(mapListing.stackCount) units share this address",
+            chip(String(localized: "Approximate · \(mapListing.stackCount) units share this address"),
                  tint: Color.statusLottery)
         }
     }
@@ -334,7 +334,7 @@ struct MapThumbnail: View {
     // MARK: - 各种「没有地图」
 
     /// `notFound` / `noCoordinates` 是后端的事实，说清楚是哪一种，不给重试。
-    private func placeholder(_ title: String, detail: String) -> some View {
+    private func placeholder(_ title: LocalizedStringKey, detail: LocalizedStringKey) -> some View {
         VStack(spacing: 2) {
             Image(systemName: "mappin.slash")
                 .font(.system(size: 14))

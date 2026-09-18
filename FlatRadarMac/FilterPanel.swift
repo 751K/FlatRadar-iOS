@@ -37,7 +37,7 @@ struct FilterPanel: View {
 
     // MARK: - 四列
 
-    private func column<C: View>(_ title: String, @ViewBuilder content: () -> C) -> some View {
+    private func column<C: View>(_ title: LocalizedStringKey, @ViewBuilder content: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.subheadline.weight(.semibold))
@@ -210,7 +210,7 @@ struct FilterPanel: View {
             .foregroundStyle(.tertiary)
     }
 
-    private func numberField(_ label: String, unit: String, text: Binding<String>) -> some View {
+    private func numberField(_ label: LocalizedStringKey, unit: String, text: Binding<String>) -> some View {
         HStack(spacing: 6) {
             Text(label).font(.body).frame(width: 62, alignment: .leading)
             TextField("Any", text: text)

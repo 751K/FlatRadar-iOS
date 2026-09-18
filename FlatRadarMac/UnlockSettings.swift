@@ -133,11 +133,11 @@ private struct EnableUnlockSheet: View {
             // 返回 false 可能是密码错，也可能是断网。把 `AuthStore` 记下的原因
             // 原样带出来，不要一律说成"密码错误"。
             inlineError = auth.errorMessage
-                ?? "Couldn't verify your password. Please try again."
+                ?? String(localized: "Couldn't verify your password. Please try again.")
             return
         }
         guard let name = auth.userInfo?.name else {
-            inlineError = "Couldn't read your account name."
+            inlineError = String(localized: "Couldn't read your account name.")
             return
         }
         do {

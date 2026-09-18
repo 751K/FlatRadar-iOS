@@ -144,12 +144,14 @@ struct EnergyLabel: View {
 /// 值缺失时显示 `—`，**不留空**：留空看不出是「没有」还是「没加载」。
 struct LabeledRow: View {
 
-    let label: String
+    // 类型是 LocalizedStringKey 而不是 String：调用处全是字面量，这样它们会查字符串表、
+    // 也会被编译器提取。原先是 String，`Text(String)` 不查表，任何语言下都是英文。
+    let label: LocalizedStringKey
     let value: String?
     var valueColor: Color?
     var mono = false
 
-    init(_ label: String, _ value: String?, color: Color? = nil, mono: Bool = false) {
+    init(_ label: LocalizedStringKey, _ value: String?, color: Color? = nil, mono: Bool = false) {
         self.label = label
         self.value = (value?.isEmpty == true) ? nil : value
         self.valueColor = color

@@ -593,8 +593,7 @@ struct MapPane: View {
     /// 并说明，不做一次"切过去发现什么都没选中"的空跳。
     private func showInList(_ id: Listing.ID) {
         guard model.listing(id) != nil else {
-            mapNote = "This listing isn’t in the list — /map and /listings cover "
-                    + "different sets, and your saved filter applies to the list."
+            mapNote = String(localized: "This listing isn’t in the list — /map and /listings cover different sets, and your saved filter applies to the list.")
             return
         }
         model.focused = id
@@ -888,8 +887,7 @@ struct MapPane: View {
         guard let building = buildings.first(where: { b in
             b.units.contains { $0.id == request.id }
         }) else {
-            mapNote = "This listing has no map position yet — its address hasn’t been "
-                    + "geocoded, or it falls outside the map’s freshness window."
+            mapNote = String(localized: "This listing has no map position yet — its address hasn’t been geocoded, or it falls outside the map’s freshness window.")
             return
         }
         mapNote = nil
@@ -1021,7 +1019,7 @@ struct MapPane: View {
         let all = ListingStatus.allCases.count
         if store.activeStatuses.count < all {
             out.append(FilterToken(id: "status",
-                                   label: "Status: \(store.activeStatuses.count)") {
+                                   label: String(localized: "Status: \(store.activeStatuses.count)")) {
                 store.showEverything()
             })
         }
@@ -1032,7 +1030,7 @@ struct MapPane: View {
 
     private func loadFailure(_ message: String) -> some View {
         ContentUnavailableView {
-            Label(store.lastError?.errorDescription ?? "Unable to Load the Map",
+            Label(store.lastError?.errorDescription ?? String(localized: "Unable to Load the Map"),
                   systemImage: store.lastError?.systemImage ?? "wifi.slash")
         } description: {
             Text(message)
