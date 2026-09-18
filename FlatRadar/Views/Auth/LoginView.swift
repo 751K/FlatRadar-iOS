@@ -430,6 +430,10 @@ struct LoginView: View {
 
     private func sheetContent(_ m: LoginMetrics) -> some View {
         VStack(alignment: .leading, spacing: 0) {
+            if auth.sessionRestorePending {
+                restorePendingNotice.padding(.bottom, m.cardGap + 10)
+            }
+
             Text("CONTINUE AS")
                 .scaledFont(m.sectionLabel, relativeTo: .caption2, weight: .bold)
                 .tracking(m.sectionLabelTracking)
@@ -447,6 +451,37 @@ struct LoginView: View {
             footer(m)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 钥匙串里有会话，但这次启动没连上服务器验证它。
+    ///
+    /// 原先这种情况 token 会被直接删掉——地铁里打开 app 就等于被登出，出了站也
+    /// 回不去，只能重新输密码。现在 token 留着，这里说清楚：**你没被登出**，
+    /// 网络一回来会自己进去。不说这一句，用户看到的就是一张普通登录页。
+    ///
+    /// 放在「CONTINUE AS」上面：这是打开这一屏最先该知道的事。不用红色：
+    /// 不是用户做错了什么。
+    private var restorePendingNotice: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("Can't reach FlatRadar right now", systemImage: "wifi.exclamationmark")
+                .font(.subheadline.weight(.semibold))
+            Text("You're still signed in on this device. We'll reconnect automatically when the connection is back.")
+                .font(.footnote)
+                .foregroundStyle(sheetMuted)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                Button("Try Again") { Task { await auth.retryPendingRestore() } }
+                    .font(.footnote.weight(.semibold))
+                    .disabled(auth.isRetryingRestore)
+                if auth.isRetryingRestore {
+                    ProgressView().controlSize(.small)
+                }
+            }
+            .padding(.top, 2)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.05), in: RoundedRectangle(cornerRadius: 12))
     }
 
     @ViewBuilder

@@ -132,6 +132,23 @@ final class MenuBarPanelRenderTests: XCTestCase {
                        "筛选串再长也不能把面板撑宽——那一行是 lineLimit(1) + 尾部截断")
     }
 
+    // MARK: - 登录页：连不上服务器时的提示
+
+    /// 登录表单最宽 380pt。提示那段话在这个宽度下要能**完整折行**，不能被截断成
+    /// 一行省略号——那句「你仍是登录状态」恰恰是整条提示唯一有用的信息。
+    func test_连不上服务器的提示在登录表单宽度里完整显示() throws {
+        for (name, dark, retrying) in [("08-restore-light", false, false),
+                                       ("08-restore-dark", true, false),
+                                       ("08-restore-retrying", false, true)] {
+            let size = try render(RestorePendingNotice(isRetrying: retrying) {}
+                                    .frame(width: 380),
+                                  dark: dark, name: name)
+            XCTAssertEqual(size.width, 760)
+            XCTAssertGreaterThan(size.height / 2, 90,
+                                 "标题 + 两行说明 + 按钮，矮于 90pt 说明说明文字被截成了一行")
+        }
+    }
+
     // MARK: - 菜单栏上那一格
 
     /// 房子、数字、未读菱形三样东西在竖直方向上**居中对齐**。
@@ -238,7 +255,11 @@ final class MenuBarPanelRenderTests: XCTestCase {
     /// SwiftUI 的 `\.colorScheme`。只设后者的话，深色那张会是"深色的系统色 +
     /// 浅色的自定义色"，混出来的图比全错还难发现。
     private func render(_ panel: MenuBarPanel, dark: Bool, name: String) throws -> RenderedSize {
-        let view = MenuBarPanelView(panel: panel)
+        try render(MenuBarPanelView(panel: panel), dark: dark, name: name)
+    }
+
+    private func render(_ content: some View, dark: Bool, name: String) throws -> RenderedSize {
+        let view = content
             .environment(\.colorScheme, dark ? .dark : .light)
             .background(dark ? Color(white: 0.11) : Color(white: 0.97))
 

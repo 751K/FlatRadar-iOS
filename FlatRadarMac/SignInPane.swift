@@ -160,6 +160,7 @@ struct SignInPane: View {
                     // 只写 `alignment: .center` 不管用——VStack 里一旦有 Spacer
                     // 就会撑满高度，外层的 alignment 随之失效（这个坑踩过两次了）。
                     Spacer(minLength: 24)
+                    restorePendingBox
                     switch mode {
                     case .signIn: signInForm
                     case .create: createForm
@@ -410,6 +411,24 @@ struct SignInPane: View {
         .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 9))
     }
 
+    /// 钥匙串里有会话，但这次启动没连上服务器验证它。
+    ///
+    /// 原先这种情况 token 会被直接删掉——没网时打开 app 就等于被登出。现在 token
+    /// 留着，这里说清楚发生了什么：**你没被登出**，网络一回来会自己进去。
+    /// 不说这一句的话，用户看到的就是一张普通登录表单，会以为自己被踢出来了。
+    ///
+    /// 不是红色：这不是用户做错了什么，也不是这个 app 坏了。放在表单**上面**：
+    /// 这是打开这一屏时最先该知道的事，看完它再决定要不要自己登录。
+    @ViewBuilder
+    private var restorePendingBox: some View {
+        if auth.sessionRestorePending {
+            RestorePendingNotice(isRetrying: auth.isRetryingRestore) {
+                Task { await auth.retryPendingRestore() }
+            }
+            .padding(.bottom, 22)
+        }
+    }
+
     @ViewBuilder
     private var errorBox: some View {
         if let msg = auth.errorMessage {
@@ -507,5 +526,40 @@ struct LegalView: View {
                 failed = "Could not load: \(error.localizedDescription)"
             }
         }
+    }
+}
+
+// MARK: - 连不上服务器时的那条提示
+
+/// 登录页顶上那条「暂时连不上，你仍是登录状态」。
+///
+/// 单独拎出来、只收两个普通值，是为了能在单测里离线画出来看
+/// （`MenuBarPanelRenderTests` 旁边那一组）——`sessionRestorePending` 在
+/// `AuthStore` 里是 `private(set)`，只有真断网才进得了这个状态。
+struct RestorePendingNotice: View {
+
+    let isRetrying: Bool
+    let onRetry: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Label("Can't reach FlatRadar right now", systemImage: "wifi.exclamationmark")
+                .font(.callout.weight(.semibold))
+            Text("You're still signed in on this device. We'll reconnect automatically when the connection is back.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+            HStack(spacing: 8) {
+                Button("Try Again", action: onRetry)
+                    .disabled(isRetrying)
+                if isRetrying {
+                    ProgressView().controlSize(.small)
+                }
+            }
+            .padding(.top, 4)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 9))
     }
 }

@@ -2300,6 +2300,40 @@
         }
       }
     },
+    "Can't reach FlatRadar right now": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Can't reach FlatRadar right now"
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Ahora mismo no se puede conectar con FlatRadar"
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "FlatRadar is nu niet bereikbaar"
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暂时连不上 FlatRadar"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "暫時連不上 FlatRadar"
+          }
+        }
+      }
+    },
     "Cancel": {
       "localizations": {
         "en": {
@@ -11139,6 +11173,40 @@
           "stringUnit": {
             "state": "translated",
             "value": "當你下次使用密碼登錄時候，可再次啓用"
+          }
+        }
+      }
+    },
+    "You're still signed in on this device. We'll reconnect automatically when the connection is back.": {
+      "localizations": {
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "You're still signed in on this device. We'll reconnect automatically when the connection is back."
+          }
+        },
+        "es": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Tu sesión sigue abierta en este dispositivo. Volveremos a conectar automáticamente cuando vuelva la conexión."
+          }
+        },
+        "nl": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Je bent op dit apparaat nog steeds ingelogd. We maken automatisch opnieuw verbinding zodra die er weer is."
+          }
+        },
+        "zh-Hans": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你在这台设备上仍是登录状态。网络恢复后会自动重新连接。"
+          }
+        },
+        "zh-Hant": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "你在這台裝置上仍是登入狀態。網路恢復後會自動重新連線。"
           }
         }
       }

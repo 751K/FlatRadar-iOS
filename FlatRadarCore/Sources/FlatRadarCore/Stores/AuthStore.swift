@@ -1,4 +1,5 @@
 import Foundation
+import Network
 import SwiftUI
 
 public enum Role: String, Sendable {
@@ -139,20 +140,172 @@ public final class AuthStore {
 
         let savedToken = KeychainManager.load(server: server)
             ?? UserDefaults.standard.string(forKey: "auth_token")
-        guard let token = savedToken else { return }
+        guard let token = savedToken else {
+            stopRestoreRetries()
+            return
+        }
 
+        // 这一轮恢复的"代号"。等 `getMe()` 的这段时间里用户可能已经手动登录、
+        // 进了游客、或者登出——那之后回来的结果属于一个已经不存在的会话，
+        // 不能再碰 client 的 token 或登录态（见 ``abandonPendingRestore()``）。
+        let generation = restoreGeneration
         client.setToken(token)
 
-        // Verify token is still valid
         do {
             let me = try await client.getMe()
+            guard generation == restoreGeneration else { return }
+            stopRestoreRetries()
             applyMe(me)
         } catch {
-            // Token expired or revoked — clear and stay on login screen
-            KeychainManager.delete(server: server)
-            UserDefaults.standard.removeObject(forKey: "auth_token")
+            guard generation == restoreGeneration else { return }
             client.setToken(nil)
+            if Self.shouldDiscardSession(after: error) {
+                // 服务器明确说这个 token 不认了（过期 / 被撤销 / 账号没了）。
+                KeychainManager.delete(server: server)
+                UserDefaults.standard.removeObject(forKey: "auth_token")
+                stopRestoreRetries()
+            } else {
+                // 没问到，不等于被拒。token 留在钥匙串里，停在登录页并告诉用户，
+                // 网络回来 / 退避时间到了再问一次。理由见 ``shouldDiscardSession(after:)``。
+                sessionRestorePending = true
+                scheduleRestoreRetry()
+            }
         }
+    }
+
+    // MARK: - 恢复没能验证时
+
+    /// 钥匙串里有一份会话，但这次**没能向服务器验证**它——连不上、超时、服务器出错。
+    ///
+    /// 界面据此停在登录页上说一句「暂时连不上，你仍是登录状态」，而不是一张
+    /// 什么都没说的登录表单。为什么不停在「恢复中」那一屏：离线可能持续很久，
+    /// 那一屏什么都做不了，而登录页上至少还能换个账号或以游客进去。
+    ///
+    /// 为什么不干脆当作已登录进主界面：本地**只存了 token**，角色、用户名、
+    /// 筛选条件全靠 `getMe()` 才知道。不知道是普通用户还是管理员，主界面就画不对。
+    public private(set) var sessionRestorePending = false
+
+    /// 手动重试正在进行。登录页那个 Try Again 据此转圈、防连点。
+    public private(set) var isRetryingRestore = false
+
+    /// 这次恢复失败，**该不该把存着的会话扔掉**。
+    ///
+    /// 原先的问题
+    /// ----------
+    /// `catch` 里不分青红皂白删 token，注释写着「Token expired or revoked」。可 catch
+    /// 抓到的远不止这一种：断网、DNS 失败、超时、后端部署那几十秒的 5xx、限流 429，
+    /// 全都走这一支。token 明明有效，只是这一次没问到，就被永久删掉——没网时打开
+    /// app 等于被登出，网络回来也回不去，只能重新输密码，而且不知道为什么。
+    ///
+    /// 判据：只认**服务器自己在响应信封里说**的 `unauthorized` / `forbidden`
+    /// ——和 `APIClient` 触发全局 `authFailedNotification`（401 自动登出）用的是
+    /// **同一个谓词** ``APIError/isAuthError``。「这个会话死了」这件事只有后端说了算，
+    /// 两处各判一遍迟早会判得不一样。
+    ///
+    /// 由此推出的几种情况：
+    /// - `.network`：没连上，token 可能完全有效 → 保留
+    /// - `.serverError` / `.rateLimited` / `.badResponse`：服务器那边的事 → 保留
+    /// - `.decoding`：响应不是我们的 JSON 信封——典型是后端重启时反向代理吐的
+    ///   HTML 502 页 → 保留
+    /// - `CancellationError` 等非 `APIError`：请求被取消（比如恢复途中窗口关了）→ 保留
+    ///
+    /// 代价：如果哪天某个代理层直接回一个**不带信封**的 401，这里会把一个真失效的
+    /// token 留下来、隔一段时间问一次。那是可恢复的（手动登录就覆盖掉了）；
+    /// 反过来错删一个有效 token 是不可恢复的——两个错误方向里选了能回头的那个。
+    static func shouldDiscardSession(after error: Error) -> Bool {
+        (error as? APIError)?.isAuthError ?? false
+    }
+
+    /// 第 `attempt` 次自动重试之前等多久：3s、10s、30s，之后每 60s 一次。
+    ///
+    /// 退避是为了后端出故障的时候别一起去敲它；封顶 60s 是因为 app 开着、停在
+    /// 登录页上的人，等一分钟以上还没进去就会自己去输密码了，再往后拉长没有意义。
+    nonisolated static func restoreRetryDelay(attempt: Int) -> Duration {
+        let schedule: [Duration] = [.seconds(3), .seconds(10), .seconds(30)]
+        return attempt < schedule.count ? schedule[attempt] : .seconds(60)
+    }
+
+    /// 网络状态变了，**要不要马上重试**：只认「从断到通」这一下。
+    ///
+    /// `NWPathMonitor` 开始监听时会先回调一次当前状态。如果这次失败不是断网而是
+    /// 后端 5xx，那一刻网络本来就是通的——把"通"当成信号立刻重试，就会在后端还
+    /// 没恢复时白打一轮，然后再开监听、再立刻回调"通"、再打……变成一个死循环。
+    /// 所以 `previous == nil`（第一次回调）不算数，那种情况交给退避计时器。
+    nonisolated static func shouldRetryOnPathChange(from previous: Bool?, to current: Bool) -> Bool {
+        previous == false && current
+    }
+
+    /// 手动再试一次（登录页上那个 Try Again），也是自动重试走的同一条路。
+    public func retryPendingRestore() async {
+        guard sessionRestorePending, !isAuthenticated, !isRetryingRestore else { return }
+        isRetryingRestore = true
+        defer { isRetryingRestore = false }
+        await restoreSession()
+    }
+
+    @ObservationIgnored private var restoreGeneration = 0
+    @ObservationIgnored private var restoreRetryAttempt = 0
+    @ObservationIgnored private var restoreRetryTask: Task<Void, Never>?
+    @ObservationIgnored private var pathMonitor: NWPathMonitor?
+    @ObservationIgnored private var lastPathSatisfied: Bool?
+
+    private func scheduleRestoreRetry() {
+        restoreRetryTask?.cancel()
+        let delay = Self.restoreRetryDelay(attempt: restoreRetryAttempt)
+        restoreRetryAttempt += 1
+        restoreRetryTask = Task { [weak self] in
+            try? await Task.sleep(for: delay)
+            guard !Task.isCancelled else { return }
+            await self?.retryPendingRestore()
+        }
+        watchNetwork()
+    }
+
+    /// 网络一通就重试，不必干等退避计时器——离线启动那种情况下，这才是用户
+    /// 真正会遇到的恢复路径（下地铁、Wi-Fi 连上）。
+    private func watchNetwork() {
+        guard pathMonitor == nil else { return }
+        let monitor = NWPathMonitor()
+        // ⚠️ `@Sendable` 不能省。这个包开着默认 MainActor 隔离，不标的话这个闭包
+        // 会被推断成 MainActor 隔离，而 `NWPathMonitor` 在它自己的队列上调它——
+        // 隔离检查当场 trap。2.1.0 线上那次无限崩溃就是同一类问题
+        // （后台回调的闭包没写 nonisolated）。
+        monitor.pathUpdateHandler = { @Sendable [weak self] path in
+            let satisfied = path.status == .satisfied
+            Task { @MainActor in self?.networkPathChanged(satisfied: satisfied) }
+        }
+        monitor.start(queue: DispatchQueue(label: "AuthStore.path"))
+        pathMonitor = monitor
+    }
+
+    private func networkPathChanged(satisfied: Bool) {
+        let previous = lastPathSatisfied
+        lastPathSatisfied = satisfied
+        guard sessionRestorePending,
+              Self.shouldRetryOnPathChange(from: previous, to: satisfied) else { return }
+        restoreRetryAttempt = 0
+        Task { await retryPendingRestore() }
+    }
+
+    /// 不再等了：恢复成功、被服务器拒绝、或者钥匙串里已经没有 token。
+    private func stopRestoreRetries() {
+        sessionRestorePending = false
+        restoreRetryTask?.cancel()
+        restoreRetryTask = nil
+        restoreRetryAttempt = 0
+        pathMonitor?.cancel()
+        pathMonitor = nil
+        lastPathSatisfied = nil
+    }
+
+    /// 用户自己做了决定（手动登录 / 注册 / 进游客 / 登出）：挂着的那次恢复作废。
+    ///
+    /// 光停计时器不够——一次重试可能**正在等 `getMe()`**。它回来时要是还照常
+    /// `client.setToken(nil)`，就把用户刚手动登录拿到的新 token 抹掉了；要是成功，
+    /// 又会用旧账号的 `me` 盖掉新账号。代号一变，那次回来的结果就直接丢弃。
+    private func abandonPendingRestore() {
+        restoreGeneration &+= 1
+        stopRestoreRetries()
     }
 
     // MARK: - Login
@@ -166,6 +319,7 @@ public final class AuthStore {
     }
 
     private func login(username: String, password: String, ttlDays: Int) async {
+        abandonPendingRestore()
         isLoading = true
         errorMessage = nil
         do {
@@ -190,6 +344,7 @@ public final class AuthStore {
     // MARK: - Register
 
     public func register(name: String, password: String, ttlDays: Int = 90) async {
+        abandonPendingRestore()
         isLoading = true
         errorMessage = nil
         do {
@@ -230,6 +385,7 @@ public final class AuthStore {
     // MARK: - Guest
 
     public func enterAsGuest() {
+        abandonPendingRestore()
         role = .guest
         isAuthenticated = true
         userInfo = nil
@@ -275,6 +431,7 @@ public final class AuthStore {
     // MARK: - Logout
 
     public func logout() async {
+        abandonPendingRestore()
         _ = try? await client.logout()
         pendingBiometricCredential = nil
         KeychainManager.delete(server: server)

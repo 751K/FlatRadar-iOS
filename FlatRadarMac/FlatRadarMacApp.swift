@@ -122,6 +122,7 @@ struct FlatRadarMacApp: App {
         Task { @MainActor in
             await auth.restoreSession()
             state.authenticated = auth.isAuthenticated
+            state.pending = auth.sessionRestorePending
             state.name = auth.userInfo?.name
             state.done = true
         }
@@ -139,12 +140,20 @@ struct FlatRadarMacApp: App {
             exit(2)
         }
         // 只报用户名，不报 token。
-        print(state.authenticated
-              ? "RESULT: RESTORED — 会话已从钥匙串恢复，用户 \(state.name ?? "?")"
-              : "RESULT: NO SESSION — 钥匙串里没有可用会话")
+        //
+        // 第三种结果是这一版才有的：连不上服务器时 token **留在钥匙串里**，
+        // 不再当成过期删掉（见 `AuthStore.shouldDiscardSession`）。不单列的话它
+        // 会被报成 NO SESSION，而那恰恰是修之前的错误结论。
+        if state.authenticated {
+            print("RESULT: RESTORED — 会话已从钥匙串恢复，用户 \(state.name ?? "?")")
+        } else if state.pending {
+            print("RESULT: PENDING — 钥匙串里有会话，但这次连不上服务器验证；会话已保留")
+        } else {
+            print("RESULT: NO SESSION — 钥匙串里没有可用会话")
+        }
         print("UserDefaults 回退 token: "
               + (KeychainDiagnostics.hasUserDefaultsFallbackToken ? "有（不该有）" : "无"))
-        exit(state.authenticated ? 0 : 1)
+        exit(state.authenticated ? 0 : state.pending ? 3 : 1)
     }
 
     var body: some Scene {
@@ -278,6 +287,7 @@ struct FlatRadarMacApp: App {
 private final class SessionReportState {
     var done = false
     var authenticated = false
+    var pending = false
     var name: String?
 }
 
