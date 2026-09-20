@@ -580,60 +580,9 @@ private struct RootView: View {
         //
         // 记住进来之前的尺寸再缩，出去时原样还回去：这样用户自己调过的窗口
         // 不会被登出一次就抹掉。冷启动时如果已经登录，这段一次都不跑。
-        .background(WindowSizer(compact: !auth.isAuthenticated))
+        .background(WindowSizer(phase: auth.isRestoringSession ? .restoring
+                                : auth.isAuthenticated ? .browser : .signIn))
     }
-}
-
-/// 按登录态切窗口尺寸。见 ``RootView`` 里的调用点。
-private struct WindowSizer: NSViewRepresentable {
-
-    let compact: Bool
-
-    /// 登录屏的尺寸，取自设计稿那张图的比例。
-    static let signInSize = NSSize(width: 900, height: 620)
-
-    func makeNSView(context: Context) -> NSView { NSView(frame: .zero) }
-
-    func updateNSView(_ view: NSView, context: Context) {
-        // 下一个 runloop 再动：`updateNSView` 跑的时候视图不一定已经进了窗口。
-        // 截图模式下尺寸由 ``ScreenshotMode`` 说了算，这里整段让路。
-        //
-        // **要重试，不能只 async 一次。** 只试一次时 `view.window` 常常还是 nil
-        // （尤其是窗口走系统恢复那条路创建的时候），`pin` 于是一次都没跑，恢复
-        // 回来的尺寸就这么留下了。实测连续启动五次：第一次 1440×900（重编译后
-        // 没有恢复状态），之后 868 → 836 → 804 → 772，每次矮一条标题栏。
-        //
-        // 反复复位还有第二个作用：`pin` 之后仍有东西会改尺寸，多按几次能把它按住。
-        if ScreenshotMode.isOn {
-            for delay in [0.0, 0.1, 0.3, 0.6, 1.0, 1.5, 2.5, 4.0] {
-                DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                    guard let window = view.window else { return }
-                    ScreenshotMode.pin(window)
-                }
-            }
-            return
-        }
-        DispatchQueue.main.async {
-            guard let window = view.window else { return }
-            let current = window.contentLayoutRect.size
-            if compact {
-                guard current != Self.signInSize else { return }
-                context.coordinator.restoreTo = current      // 记住原来的
-                window.setContentSize(Self.signInSize)
-                window.center()
-            } else if let target = context.coordinator.restoreTo {
-                context.coordinator.restoreTo = nil
-                window.setContentSize(target)
-                window.center()
-            }
-        }
-    }
-
-    func makeCoordinator() -> Coordinator { Coordinator() }
-
-    /// 记住登录前的窗口尺寸。放在 coordinator 里而不是 `@State`：
-    /// 这个 representable 会随登录态重建，`@State` 活不过那一次重建。
-    final class Coordinator { var restoreTo: NSSize? }
 }
 
 /// 应用菜单里的 Sign Out。

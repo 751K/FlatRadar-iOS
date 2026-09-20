@@ -57,8 +57,10 @@ struct MainWindow: View {
         } detail: {
             content
                 .inspector(isPresented: $showInspector) {
-                    InspectorPane(model: model)
-                        .inspectorColumnWidth(min: 270, ideal: 300, max: 420)
+                    GeometryReader { _ in
+                        InspectorPane(model: model)
+                    }
+                    .inspectorColumnWidth(min: 270, ideal: 300, max: 420)
                 }
                 .toolbar { toolbar }
                 // 右栏开关的菜单入口要能改它，所以把 binding 本身送上去。
@@ -169,7 +171,14 @@ struct MainWindow: View {
 
     @ViewBuilder
     private var content: some View {
-        paneBody
+        // 登录窗口尚未扩展、或异步内容刚到达时，子视图的理想尺寸会变。
+        // 分栏先分配空间，再让页面在其中布局，避免理想尺寸反馈到 AppKit
+        // 触发 SplitViewChildController 的约束更新循环（分发版 build 394）。
+        GeometryReader { _ in
+            paneBody
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .frame(minWidth: 320)
             // 截图自动化靠它确认「现在显示的是哪一屏」。
             //
             // 不验侧栏那一行的选中态：macOS 上那些行的 AX label 是**空的**
