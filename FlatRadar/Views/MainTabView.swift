@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import FlatRadarCore
 
 /// 给 NotificationsView 的 tab item 单独挂红点，**故意**抽成 ViewModifier：
@@ -19,6 +20,7 @@ private struct AlertsTabBadge: ViewModifier {
 }
 
 struct MainTabView: View {
+    @Environment(\.flatRadarUsesVerticalBar) private var usesVerticalBar
     @Environment(AuthStore.self) private var auth
     @Environment(NavigationCoordinator.self) private var coord
 
@@ -47,7 +49,7 @@ struct MainTabView: View {
                                    browseMode: coord.selectedBrowseMode) },
             set: { newValue in
                 coord.selectedTab = newValue
-                // 宽窗口下点 Listings / Map / Calendar 时同步 browseMode，
+                // 独立标签下点 Listings / Map / Calendar 时同步 browseMode，
                 // 这样转回竖屏时 Browse 里落在同一个模式上，不用等 onChange。
                 switch newValue {
                 case .listings: coord.selectedBrowseMode = .list
@@ -80,13 +82,24 @@ struct MainTabView: View {
 
     var body: some View {
         GeometryReader { proxy in
-            let useCompactTabs = shouldUseCompactTabs(width: proxy.size.width)
+            let useCompactTabs = shouldUseCompactTabs(size: proxy.size)
+            let showsListingsSplit = UIDevice.current.userInterfaceIdiom == .pad
+                && !useCompactTabs
+                && Self.visibleTab(coord.selectedTab, compact: useCompactTabs,
+                                   browseMode: coord.selectedBrowseMode) == .listings
 
             ZStack {
                 tabView(compact: useCompactTabs)
                 keyboardShortcuts(compact: useCompactTabs)
             }
-            .toolbarBackground(.ultraThinMaterial, for: .tabBar)
+            .background {
+                if showsListingsSplit {
+                    Color(.systemGroupedBackground).ignoresSafeArea()
+                }
+            }
+            .toolbarBackground(showsListingsSplit
+                ? AnyShapeStyle(Color(.systemGroupedBackground))
+                : AnyShapeStyle(.ultraThinMaterial), for: .tabBar)
             .toolbarBackground(.visible, for: .tabBar)
             .onChange(of: coord.selectedTab) { _, new in
                 normalizeSelection(new, compact: useCompactTabs)
@@ -109,9 +122,8 @@ struct MainTabView: View {
     /// TabView 能同时装下两套 tab 集合，按需隐藏其中几个——Dashboard / Alerts /
     /// Settings 这三个原本要写两遍的，现在只写一遍。
     ///
-    /// 判据仍然是**宽度**而不是 horizontal size class。Apple 文档里的等价例子用的
-    /// 是 size class，但那对这个 App 是错的：iPad 的 Stage Manager / Split View
-    /// 会在窗口已经窄到放不下六个 tab 时仍然报 regular。见 `shouldUseCompactTabs`。
+    /// 侧边栏、展开的 iPhone 大窗口直接显示房源标签；其余横向栏按宽度合并。
+    /// 不依赖 size class：iPad 窄窗口仍可能报 regular。
     ///
     /// `accessibilityIdentifier` 现在挂在 **tab 自己**身上（`TabContent` 的修饰符），
     /// 不再是 `.tabItem { Label(…).accessibilityIdentifier(…) }`。旧写法在 iPhone 上
@@ -127,7 +139,7 @@ struct MainTabView: View {
         }
         .accessibilityIdentifier("tab-dashboard")
 
-        // 窄：List / Map / Calendar 收进 Browse 里的 segmented picker
+        // 窄的横向栏：List / Map / Calendar 收进 Browse 菜单
         Tab(value: AppTab.browse) {
             BrowseView()
         } label: {
@@ -136,7 +148,7 @@ struct MainTabView: View {
         .accessibilityIdentifier("tab-browse")
         .hidden(!compact)
 
-        // 宽：三个平铺成独立 tab。
+        // 侧边栏、展开的 iPhone 或宽窗口：三个平铺成独立 tab。
         //
         // 曾经把它们包进 `TabSection("Browse")`，想让侧边栏里多一层分组标题。
         // 那是错的：sidebarAdaptable 的**顶部 tab bar** 会把整个 section 折叠成
@@ -219,17 +231,23 @@ struct MainTabView: View {
         .defaultAdaptableTabBarPlacement(.tabBar)
     }
 
-    // MARK: - iPad tab content
+    // MARK: - Independent tab content
 
+    @ViewBuilder
     private var listingsTab: some View {
-        NavigationStack(path: Binding(
-            get: { coord.listingsPath },
-            set: { coord.listingsPath = $0 }
-        )) {
-            ListingsView(state: coord.listingsState)
-                .navigationDestination(for: ListingRoute.self) { route in
-                    ListingDetailView(route: route)
-                }
+        if UIDevice.current.userInterfaceIdiom == .pad {
+            // 独立 Listings 标签只在宽窗口展示；窄窗口由 BrowseView 接管。
+            ListingsSplitView()
+        } else {
+            NavigationStack(path: Binding(
+                get: { coord.listingsPath },
+                set: { coord.listingsPath = $0 }
+            )) {
+                ListingsView(state: coord.listingsState)
+                    .navigationDestination(for: ListingRoute.self) { route in
+                        ListingDetailView(route: route)
+                    }
+            }
         }
     }
 
@@ -266,11 +284,12 @@ struct MainTabView: View {
 
     // MARK: - Keyboard shortcuts
 
-    private func shouldUseCompactTabs(width: CGFloat) -> Bool {
-        // iPad Stage Manager / Split View can keep a regular size class even
-        // when the window is too narrow for six top tabs. Switch to Browse
-        // once the actual content width gets tight.
-        width < 920
+    private func shouldUseCompactTabs(size: CGSize) -> Bool {
+        // Duo 侧栏，以及展开后短边至少 600pt 的 iPhone 窗口，直接展示一级标签。
+        // 同时看两条边，避免普通 iPhone 横屏仅因宽度增加就展开标签。
+        let hasExpandedPhoneSpace = UIDevice.current.userInterfaceIdiom == .phone
+            && min(size.width, size.height) >= 600
+        return !usesVerticalBar && !hasExpandedPhoneSpace && size.width < 920
     }
 
     private func keyboardShortcuts(compact: Bool) -> some View {
@@ -320,5 +339,17 @@ struct MainTabView: View {
     /// iPad 上是错的——见 ``NavigationCoordinator/usesCompactTabs``。
     private func normalizeSelection(_ tab: AppTab, compact: Bool) {
         coord.normalizeSelection(tab, compact: compact)
+    }
+}
+
+private extension EnvironmentValues {
+    /// 将新 SDK 的原生栏方向封装在可兼容旧系统的环境读取中。
+    var flatRadarUsesVerticalBar: Bool {
+        #if canImport(SwiftUI, _version: 8.0.85)
+        if #available(iOS 27.1, *) {
+            return toolbarVerticalEdge != nil
+        }
+        #endif
+        return false
     }
 }

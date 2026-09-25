@@ -285,4 +285,11 @@ final class NavigationCoordinator {
 enum ListingRoute: Hashable, Sendable {
     case known(Listing)
     case byId(String, titleHint: String?)
+
+    var listingID: String {
+        switch self {
+        case .known(let listing): listing.id
+        case .byId(let id, _): id
+        }
+    }
 }

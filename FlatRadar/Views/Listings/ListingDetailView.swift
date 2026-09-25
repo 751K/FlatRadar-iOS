@@ -13,6 +13,7 @@ import FlatRadarCore
 /// 加载失败（404 / 网络异常）时用 ContentUnavailableView 兜底。
 struct ListingDetailView: View {
     let route: ListingRoute
+    var isSplitDetail = false
 
     @Environment(NavigationCoordinator.self) private var coord
     @Environment(ReviewPromptStore.self) private var review
@@ -38,7 +39,8 @@ struct ListingDetailView: View {
                 Color.clear
             }
         }
-        .navigationTitle(navigationTitle)
+        .navigationTitle(isSplitDetail ? "" : navigationTitle)
+        .background(isSplitDetail ? Color(.systemGroupedBackground) : Color.clear)
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             // 房源加载好后才显示分享按钮——加载中 / 失败时分享一个空链接没意义。
@@ -198,7 +200,7 @@ struct ListingDetailView: View {
             VStack(alignment: .leading, spacing: 16) {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(listing.name)
-                        .font(.title2)
+                        .font(isSplitDetail ? .largeTitle : .title2)
                         .fontWeight(.bold)
                         .lineLimit(2)
                         .fixedSize(horizontal: false, vertical: true)
@@ -223,25 +225,36 @@ struct ListingDetailView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
 
+                if isSplitDetail {
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 12) { listingActions(for: listing) }
+                        VStack(spacing: 10) { listingActions(for: listing) }
+                    }
+                    .padding(.bottom, 8)
+                }
+
                 LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                     DetailMetricCard(
                         title: "Price",
                         value: listing.priceText ?? "Unknown",
-                        systemImage: "eurosign.circle")
+                        systemImage: "eurosign.circle", compact: isSplitDetail)
                         DetailMetricCard(
                             title: "Available",
                             value: listing.availableFrom.map(ServerTime.displayDate) ?? "Unknown",
-                            systemImage: "calendar")
+                            systemImage: "calendar", compact: isSplitDetail)
                     if let area = listing.areaText {
-                        DetailMetricCard(title: "Area", value: area, systemImage: "square.resize")
+                        DetailMetricCard(title: "Area", value: area, systemImage: "square.resize", compact: isSplitDetail)
                     }
                     if let floor = listing.floorText {
-                        DetailMetricCard(title: "Floor", value: floor, systemImage: "stairs")
+                        DetailMetricCard(title: "Floor", value: floor, systemImage: "stairs", compact: isSplitDetail)
                     }
                 }
 
+                ListingMapCard(listing: listing, isSplitDetail: isSplitDetail)
+                    .id(listing.id)
+
                 if !primaryDetails(for: listing).isEmpty {
-                    DetailSection(title: "Key Details") {
+                    DetailSection(title: "Key Details", compactLayout: isSplitDetail) {
                         ForEach(primaryDetails(for: listing), id: \.title) { item in
                             DetailRow(label: item.title, value: item.value)
                         }
@@ -249,7 +262,7 @@ struct ListingDetailView: View {
                 }
 
                 if !secondaryDetails(for: listing).isEmpty {
-                    DetailSection(title: "All Details") {
+                    DetailSection(title: "All Details", compactLayout: isSplitDetail) {
                         ForEach(secondaryDetails(for: listing), id: \.key) { key, value in
                             DetailRow(label: displayKey(key), value: displayValue(value, forKey: key))
                                 // 地址是这一屏唯一会被拷去别处用的东西（发给中介、
@@ -267,7 +280,7 @@ struct ListingDetailView: View {
                         }
                     }
                 } else if !listing.features.isEmpty {
-                    DetailSection(title: "Features") {
+                    DetailSection(title: "Features", compactLayout: isSplitDetail) {
                         ForEach(listing.features, id: \.self) { feature in
                             Label(feature, systemImage: "checkmark.circle")
                                 .font(.subheadline)
@@ -276,7 +289,7 @@ struct ListingDetailView: View {
                 }
 
                 if listing.firstSeen != nil || listing.lastSeen != nil {
-                    DetailSection(title: "Monitoring") {
+                    DetailSection(title: "Monitoring", compactLayout: isSplitDetail) {
                         if let first = listing.firstSeen {
                             DetailRow(label: "First seen", value: ServerTime.display(first))
                         }
@@ -294,19 +307,36 @@ struct ListingDetailView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.top, 8)
 
-                    Link(destination: url) {
-                        Label("Open on \(listing.sourceDisplayText)", systemImage: "safari")
-                            .font(.headline)
-                            .frame(maxWidth: .infinity)
+                    if !isSplitDetail {
+                        platformLink(for: listing, url: url)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
                 }
 
-                viewOnMapButton(for: listing)
+                if !isSplitDetail { viewOnMapButton(for: listing) }
             }
-            .padding()
+            .padding(isSplitDetail ? 24 : 16)
+            .frame(maxWidth: isSplitDetail ? 800 : .infinity, alignment: .leading)
+            .frame(maxWidth: .infinity, alignment: .top)
         }
+    }
+
+    @ViewBuilder
+    private func listingActions(for listing: Listing) -> some View {
+        if let url = URL(string: listing.url), !listing.url.isEmpty {
+            platformLink(for: listing, url: url)
+        }
+        viewOnMapButton(for: listing)
+    }
+
+    private func platformLink(for listing: Listing, url: URL) -> some View {
+        Link(destination: url) {
+            Label("Open on \(listing.sourceDisplayText)", systemImage: "safari")
+                .font(.headline)
+                .fixedSize(horizontal: isSplitDetail, vertical: true)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
+        .controlSize(.large)
     }
 
     /// 「在地图上查看」。
@@ -328,6 +358,7 @@ struct ListingDetailView: View {
             // 层级差别交给按钮样式表达：主操作 borderedProminent，这颗 bordered。
             Label("View on map", systemImage: "map")
                 .font(.headline)
+                .fixedSize(horizontal: isSplitDetail, vertical: true)
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(.bordered)
@@ -425,6 +456,7 @@ private struct DetailMetricCard: View {
     let title: String
     let value: String
     let systemImage: String
+    var compact = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -436,9 +468,16 @@ private struct DetailMetricCard: View {
                 .lineLimit(2)
                 .minimumScaleFactor(0.85)
         }
-        .frame(maxWidth: .infinity, minHeight: 74, alignment: .leading)
+        .frame(maxWidth: .infinity, minHeight: compact ? 48 : 74, alignment: .leading)
         .padding(12)
-        .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background {
+            if compact {
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(.secondarySystemGroupedBackground))
+            } else {
+                RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.thinMaterial)
+            }
+        }
     }
 }
 
@@ -478,16 +517,19 @@ private struct DetailSection<Content: View>: View {
     /// 卡片实测宽度，由 onGeometryChange 填。0 时按单列排（首帧）。
     @State private var width: CGFloat = 0
 
+    @ScaledMetric(relativeTo: .subheadline) private var fieldWidth: CGFloat = 180
     let title: String
+    let compactLayout: Bool
     let content: Content
 
-    init(title: String, @ViewBuilder content: () -> Content) {
+    init(title: String, compactLayout: Bool = false, @ViewBuilder content: () -> Content) {
         self.title = title
+        self.compactLayout = compactLayout
         self.content = content()
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: compactLayout ? 16 : 10) {
             Text(title)
                 .font(.headline)
             // LazyVGrid 而不是 VStack：单列时两者等价（列数为 1、间距同样是 8），
@@ -497,11 +539,15 @@ private struct DetailSection<Content: View>: View {
                 content
             }
             .font(.subheadline)
-            .padding(12)
+            .padding(compactLayout ? 0 : 12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { width = $0 }
-            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .background(compactLayout ? Color.clear : Color(.secondarySystemGroupedBackground),
+                        in: RoundedRectangle(cornerRadius: 16, style: .continuous))
         }
+        .padding(compactLayout ? 18 : 0)
+        .background(compactLayout ? Color(.secondarySystemGroupedBackground) : Color.clear,
+                    in: RoundedRectangle(cornerRadius: 18, style: .continuous))
     }
 
     /// 列数按**实测宽度**分档，不看 size class。
@@ -512,6 +558,9 @@ private struct DetailSection<Content: View>: View {
     /// 配合 `DetailRow` 的竖排：每格只要装得下标签和值本身，不再需要为「两端顶开」
     /// 留一段空白，所以同样的宽度排得下更多列。
     private var columns: [GridItem] {
+        if compactLayout {
+            return [GridItem(.adaptive(minimum: fieldWidth), spacing: 24, alignment: .leading)]
+        }
         let count = if width >= 1_200 { 3 } else if width >= 620 { 2 } else { 1 }
         return Array(repeating: GridItem(.flexible(), spacing: 20, alignment: .leading),
                      count: count)

@@ -8,8 +8,9 @@
 | 目标 | 状态 |
 |---|---|
 | AI 筛选：自然语言 → `ListingFilter`。入口只在 `SystemLanguageModel` 可用时出现 | 未开始 |
-| iPad `NavigationSplitView`：横屏点房源不再把列表整个顶掉 | 未开始 |
-| iPhone Duo 适配 | 未开始 |
+| iPad `NavigationSplitView`：横屏点房源不再把列表整个顶掉 | 已实现 Listings 两栏、选中高亮及与窄窗口共用详情路径；iPad 分栏与统一底色已确认，顶部模糊效果已关闭，待完整回归 |
+| 日历改用 SwiftUI：自适应宽度、横向滑动翻月 | 已实现，待完整回归 |
+| iPhone Duo 适配 | 进行中：登录页宽度与横屏布局已调整；外屏侧栏及内屏竖屏已将 Browse 展开为 Listings / Map / Calendar 一级标签；其余页面及真机待验 |
 
 ## 2.2.0（已发布；Mac 1.0.1 已上架）
 

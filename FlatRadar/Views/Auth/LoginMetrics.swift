@@ -124,7 +124,9 @@ nonisolated struct LoginMetrics {
         // 570（13 吋）——都还是 iPhone 那套更合适；真正宽到能摆 700 的列最少是
         // 744（iPad mini 竖屏）。iPhone 横屏短边最多 430（16 Pro Max），也在线下。
         guard min(size.width, size.height) >= 600 else { return .phone }
-        return size.width > size.height ? .padLandscape : .padPortrait
+        guard size.width > size.height else { return .padPortrait }
+        guard size.width >= 720 else { return .phone }
+        return padLandscape(for: size)
     }
 
     /// iPhone，以及 iPad 上窄到只剩一栏的分屏。
@@ -214,4 +216,22 @@ nonisolated struct LoginMetrics {
         m.faceHeight = 78
         return m
     }()
+
+    /// 横屏双栏按实际宽度缩放。1194pt 的 iPad 保留设计稿尺寸；更窄的横屏设备
+    /// 收窄左栏并减小内边距，给右侧登录卡留出至少约 320pt 的阅读宽度。
+    private static func padLandscape(for size: CGSize) -> LoginMetrics {
+        var m = padLandscape
+        m.leftColumn = min(m.leftColumn, size.width * 0.47)
+
+        let rightWidth = max(0, size.width - m.leftColumn)
+        let targetContentWidth = min(460, max(320, rightWidth * 0.72))
+        m.sheetSidePadding = min(87, max(24, (rightWidth - targetContentWidth) / 2))
+
+        let leftScale = m.leftColumn / padLandscape.leftColumn
+        m.heroSidePadding = max(24, 44 * leftScale)
+        m.headline = max(30, 40 * leftScale)
+        m.heroTopPadding = max(40, min(74, size.height * 74 / 834))
+        m.skylineHeight = max(150, min(230, size.height * 230 / 834))
+        return m
+    }
 }

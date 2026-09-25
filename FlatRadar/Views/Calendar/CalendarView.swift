@@ -5,16 +5,11 @@ import FlatRadarCore
 ///
 /// 布局
 /// ----
-/// 1. 月历：``NativeMonthCalendar``（原生 ``UICalendarView``）。月份标题、前后
-///    箭头、滑动翻页、周首日本地化都由它自己管；每天下面的可入住数是我们挂上去
-///    的装饰。
+/// 1. 月历：``SwiftUIMonthCalendar``。七列日期网格会填满卡片宽度，月份标题、前后
+///    箭头、滑动翻页、周首日本地化和房源数都由 SwiftUI 绘制。
 /// 2. 选中日的房源列表（点单条进 ListingDetailView via deep link）。
 ///
-/// 横屏 ≥700pt 时两者左右分栏，否则上下排。
-///
-/// 这里原来是一整套手写月历——月份切换条、7 列表头、42 格的网格、跟手翻页的
-/// 三联带子，外加为它调优的预计算和降级渲染。换成原生之后那些全部删掉了，
-/// 沿革见 `NativeMonthCalendar` 的文件头和那条 commit。
+/// 宽度足够时两者左右分栏，否则上下排。
 ///
 /// 与 Map 共享一个交互模式：点元素弹底层 sheet，从 sheet 进详情走
 /// ``NavigationCoordinator.openListing`` 复用 Listings tab 的 NavigationStack。
@@ -37,6 +32,10 @@ struct CalendarView: View {
     /// 属于布局结构，不是行高。
     private var isRegular: Bool { hSizeClass == .regular }
 
+    /// 分栏前要求月历列至少能舒适地排下七列日期。它只是布局下限；SwiftUI 网格
+    /// 会继续随卡片宽度伸展，不再受 UIKit 月网格的 391pt 上限限制。
+    @ScaledMetric(relativeTo: .body) private var minimumCalendarGridWidth: CGFloat = 370
+
     @State private var anchor: Date = Self.startOfMonth(for: Date())
     @State private var selectedDay: Date?
     @State private var showRefreshError = false
@@ -44,8 +43,7 @@ struct CalendarView: View {
     /// 碰上一次刷新，就会被拽回自动选的那天。
     @State private var didAutoSelect = false
 
-    /// 见 ``ServerTime/calendar``——和 ``NativeMonthCalendar`` 共用同一份，
-    /// 两边各建一个是 build 295→307 那个"日历停在 8 月"的根源。
+    /// 见 ``ServerTime/calendar``——和 SwiftUI 月历共用同一份服务端时区日历。
     private static let cal = ServerTime.calendar
 
     /// 完整日期，跟随系统语言（en："Wednesday, May 14, 2026"，
@@ -77,26 +75,21 @@ struct CalendarView: View {
     /// 原来是 `width >= 700 && width > height`，只有横屏分栏。理由是横屏缺纵向
     /// 空间：月历高度固定，吃掉上半屏之后当日房源挤在下面一条缝里。
     ///
-    /// 但竖屏 iPad 是另一种浪费：月网格**宽度也是固定的**（默认字号 391pt，多给
-    /// 的只变成留白），所以 834 甚至 1024 的竖屏上，月历只占中间一小条，两侧
-    /// 大片空白，下面才是房源。分栏之后两边都用得上。
+    /// 但竖屏 iPad 是另一种浪费：月网格过去不会随卡片变宽，导致屏幕两侧留白。
+    /// SwiftUI 网格现在会铺满左栏，分栏后两边都用得上。
     ///
     /// 所以判据只剩「两列都放得下」：
     ///
-    /// - 左栏 ≥ 网格宽 + 卡片左右留白（``calendarColumnFloor``）
+    /// - 左栏 ≥ 可读的网格宽度 + 卡片左右留白（``calendarColumnFloor``）
     /// - 右栏 ≥ 350pt，够放下一行「名字 + 地点 + 状态 + 价格」
     ///
-    /// 默认字号下合计约 773pt。落点：iPhone 竖屏 393 不分栏、iPhone 横屏 852
-    /// 分栏（和以前一样）、iPad mini 竖屏 744 **不**分栏（分了右栏只剩 321pt）、
-    /// iPad 11 寸竖屏 834 和 13 寸竖屏 1024 分栏、Split View 半屏 570 不分栏。
+    /// 默认字号下合计约 752pt。落点：iPhone 竖屏不分栏、iPhone 横屏分栏，iPad mini
+    /// 竖屏保持上下布局，较宽的 iPad 竖屏和 iPad 横屏分栏，Split View 半屏不分栏。
     private var isSideBySide: Bool { size.width >= calendarColumnFloor + 350 }
 
-    /// 左栏的下限：一整个月网格 + 卡片左右留白。
-    ///
-    /// 比这还窄的话月历不是缩小而是**被切掉**——见
-    /// ``NativeMonthCalendar/nominalGridWidth``。
+    /// 左栏的舒适宽度下限，加卡片左右留白。它不限制网格最大宽度。
     private var calendarColumnFloor: CGFloat {
-        NativeMonthCalendar.nominalGridWidth + 2 * Self.cardHorizontalPadding
+        minimumCalendarGridWidth + 2 * Self.cardHorizontalPadding
     }
 
     /// 分栏时左栏的宽度。
@@ -104,10 +97,7 @@ struct CalendarView: View {
     /// 比例分两档：横屏 2:3（偏向房源），竖屏 1:1。竖屏给月历多一点是因为那边
     /// 纵向不缺，两列等宽读起来最稳；横屏纵向紧张，房源列多拿一点能多显示一行。
     ///
-    /// 外面再套一个 ``calendarColumnFloor`` 的下限。这不是保守，是必需的：
-    /// 按比例算出来的值可能比网格还窄——iPhone 横屏 852×0.4 = 341，iPad mini
-    /// 竖屏 744×0.5 = 372，都不到 391。以前没这条，那两档其实是把月历切了一角，
-    /// 只是没人报过。
+    /// 外面再套一个 ``calendarColumnFloor`` 的下限，避免分栏后日期列过窄。
     private var calendarColumnWidth: CGFloat {
         let ratio: CGFloat = size.width > size.height ? 2.0 / 5.0 : 1.0 / 2.0
         return max(size.width * ratio, calendarColumnFloor)
@@ -161,7 +151,8 @@ struct CalendarView: View {
                     Text("Today").font(.subheadline.weight(.medium))
                 }
                 .disabled(Self.cal.isDate(anchor, equalTo: Self.startOfMonth(for: Date()),
-                                          toGranularity: .month))
+                                          toGranularity: .month)
+                          && selectedDay.map { Self.cal.isDateInToday($0) } == true)
             }
         }
         .task {
@@ -190,24 +181,14 @@ struct CalendarView: View {
 
     /// 拿到数据后自动选中**一个有房源的日子**。
     ///
-    /// 修的是 build 293 截图里同时暴露的两件事：
+    /// 自动选日时同时同步日期与月份：
     ///
-    /// 1. **月份不对。** 截图上日历停在 8 月，而右上角 "Today" 是禁用态——那个
-    ///    按钮的禁用条件正是「anchor 就是当前月」，也就是说 anchor 在 9 月而
-    ///    `UICalendarView` 显示 8 月，视图和状态脱节了。推测是设
-    ///    `availableDateRange` 时 UIKit 把可见月吸附到了范围起点（数据最早在
-    ///    8 月），而 `NativeMonthCalendar` 里那道「只在 lastReportedMonth 变了
-    ///    才 setVisibleDateComponents」的守卫没接住这次吸附。
-    /// 2. **右栏空着。** 没有选中日 → 右栏只有一句 "Tap a day…"，横屏分栏后
+    /// 1. **月份显式同步。** 选中日期和可见月份是两份 SwiftUI 状态，所以这里
+    ///    一起设置，不依赖日历控件内部滚动来同步月份。
+    /// 2. **右栏有内容。** 没有选中日 → 右栏只有一句 "Tap a day…"，横屏分栏后
     ///    大半屏是空的。
     ///
-    /// 一次修两件：选中某天会让 `setSelected` 把日历滚到那天所在的月（头文件：
-    /// "Sets the selected date to be displayed in the calendar"），月份跟着对；
-    /// 右栏也有内容了。
-    ///
-    /// **`anchor` 一起设**，不靠 delegate 回写：程序触发的滚动不一定会走
-    /// `didChangeVisibleDateComponentsFrom`（它的文档写的是 "from user
-    /// interaction"），不显式同步的话就会重演上面那个脱节。
+    /// 选中日期和月份一起设置，右栏会有内容且标题、网格状态保持同步。
     ///
     /// 选哪天：今天或今天之后**第一个**有房源的日子；全都在过去就选最后一个。
     /// 不选「房源最多的那天」——那样每次刷新可能跳到不同的月份，用户会莫名其妙。
@@ -230,24 +211,19 @@ struct CalendarView: View {
     /// 页面上，没有边界，读起来是一堆散元素而不是「一个月历」。大面板用实体表面
     /// 而不是玻璃——玻璃在大面积上会把自己的内容也搅浑（地图那张说明卡踩过）。
     ///
-    /// **`store.dateRange` 那一行同时是数据订阅**：`countForDay` 是个闭包，
-    /// body 求值时并不读 `listings`，所以如果这里不读一次 `dateRange`（它内部
-    /// 遍历 `listings`），@Observable 就不会把这个视图登记为 `listings` 的
-    /// 观察者——刷新拿到新数据后日期下面的数字不会重画。原先靠一条
-    /// `.onChange(of: store.listings.count)` 显式触发重算，那是手写版留下的，
-    /// 已经删了。
+    /// 读取 `store.dateRange` 会让这个视图观察列表刷新；`countForDay` 是闭包，
+    /// 本身不会在这里访问 `listings`。数据变化后重算日期格和房源数；下面那条
+    /// `.onChange(of: store.listings.count)` 只负责首次自动选日。
     private var calendarCard: some View {
-        NativeMonthCalendar(
+        SwiftUIMonthCalendar(
             selectedDay: $selectedDay,
             visibleMonth: $anchor,
             availableRange: store.dateRange,
             countForDay: { store.listings(on: $0).count }
         )
-        // 宽度上限由 NativeMonthCalendar 自己卡（容器在布局时实测月网格的页宽），
-        // 这里不再写死一个数——写死过 420（太窄）、460 / 640（会露出相邻月份）。
+        // 七列按卡片可用宽度等分，卡片会随所在列展开。
         .padding(.vertical, 8)
-        // 卡片底**贴着日历本身**，不是撑满整列。顺序反过来的话（先撑满再画底）
-        // 卡片会横跨整个左栏，而里面的日历只占中间那一段，两边各空一截。
+        // 卡片底随月历一起铺开。
         .background(Color(.secondarySystemGroupedBackground),
                     in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .frame(maxWidth: .infinity)   // 画完底再在列里居中

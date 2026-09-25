@@ -23,6 +23,9 @@ final class ListingsBrowseState {
 /// navigationDestination，本视图只贡献内容 + 自己的 toolbar item。
 struct ListingsView: View {
     @Bindable var state: ListingsBrowseState
+    /// 分栏时由容器接管选择；单列导航继续 push 到原来的路径。
+    var selectedListingID: String? = nil
+    var onSelectListing: ((Listing) -> Void)? = nil
     @Environment(ListingsStore.self) private var store
     @Environment(NavigationCoordinator.self) private var coord
     /// 分区标题的绿色要按明暗两套压暗/提亮，见 ``Color/onTint(in:)``。
@@ -183,6 +186,7 @@ struct ListingsView: View {
                 if !activeFilterChips.isEmpty { filterChipsRow }
             }
             .listRowSeparator(.hidden)
+            .listRowBackground(onSelectListing == nil ? nil : Color(.secondarySystemGroupedBackground))
 
             if store.listings.isEmpty {
                 Section {
@@ -241,23 +245,47 @@ struct ListingsView: View {
         // .insetGrouped（默认）：灰底 + 白色 inset section 卡片，跟
         // Settings / Notifications / Dashboard 风格一致。
         .listStyle(.insetGrouped)
+        .scrollContentBackground(onSelectListing == nil ? .automatic : .hidden)
+        .background(onSelectListing == nil ? Color.clear : Color(.systemGroupedBackground))
+        .contentMargins(.top, onSelectListing == nil ? nil : 8, for: .scrollContent)
         .refreshable { await store.refresh() }
     }
 
     @ViewBuilder
     private func row(for listing: Listing, lastID: String?) -> some View {
         Button {
-            coord.listingsPath.append(ListingRoute.known(listing))
+            if let onSelectListing {
+                onSelectListing(listing)
+            } else {
+                coord.listingsPath.append(ListingRoute.known(listing))
+            }
         } label: {
             HStack(spacing: 0) {
                 ListingRow(listing: listing)
-                Spacer(minLength: 10)
-                Image(systemName: "chevron.right")
-                    .font(.system(.subheadline, weight: .semibold))
-                    .foregroundStyle(.tertiary)
+                if onSelectListing == nil {
+                    Spacer(minLength: 10)
+                    Image(systemName: "chevron.right")
+                        .font(.system(.subheadline, weight: .semibold))
+                        .foregroundStyle(.tertiary)
+                }
+            }
+            .padding(onSelectListing == nil ? 0 : 10)
+            .background {
+                if selectedListingID == listing.id {
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.09))
+                        .overlay(alignment: .leading) {
+                            Capsule().fill(Color.accentColor)
+                                .frame(width: 3, height: 24)
+                        }
+                }
             }
         }
         .buttonStyle(ScaleButtonStyle())
+        .listRowInsets(onSelectListing == nil ? nil
+            : EdgeInsets(top: 4, leading: 6, bottom: 4, trailing: 6))
+        .listRowBackground(onSelectListing == nil ? nil : Color(.secondarySystemGroupedBackground))
+        .accessibilityAddTraits(selectedListingID == listing.id ? .isSelected : [])
         .onAppear {
             if listing.id == lastID {
                 Task { await store.loadMore() }

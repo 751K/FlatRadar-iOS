@@ -91,7 +91,8 @@ struct LoginView: View {
                 if metrics.splitsColumns {
                     splitLayout(proxy.size, metrics)
                 } else {
-                    stackedLayout(proxy.size, metrics)
+                    stackedLayout(proxy.size, metrics,
+                                  trailingBleed: max(0, proxy.safeAreaInsets.trailing))
                 }
             }
             .toolbar(.hidden)
@@ -144,24 +145,28 @@ struct LoginView: View {
     // MARK: - 布局一：竖着排（iPhone + iPad 竖屏）
 
     /// 头部 → 插画 → 白卡，白卡从插画底下抬起来。
-    private func stackedLayout(_ size: CGSize, _ m: LoginMetrics) -> some View {
+    private func stackedLayout(_ size: CGSize, _ m: LoginMetrics,
+                               trailingBleed: CGFloat) -> some View {
         ScrollView {
             VStack(spacing: 0) {
                 column(m) { hero(m) }
                     .padding(.top, m.heroTopPadding)
                     .padding(.bottom, 20)
 
-                Skyline(width: size.width, height: m.skylineHeight, alignment: .center)
+                Skyline(width: size.width + trailingBleed,
+                        height: m.skylineHeight, alignment: .leading)
+                    .frame(width: size.width, alignment: .leading)
 
                 column(m) { sheetContent(m) }
                     .padding(.top, m.sheetTopPadding)
                     .padding(.bottom, 24)
                     .frame(maxWidth: .infinity)
-                    .background(
-                        SignInPalette.sheet,
-                        in: UnevenRoundedRectangle(topLeadingRadius: m.sheetRadius,
-                                                   topTrailingRadius: m.sheetRadius)
-                    )
+                    .background {
+                        UnevenRoundedRectangle(topLeadingRadius: m.sheetRadius,
+                                               topTrailingRadius: m.sheetRadius)
+                            .fill(SignInPalette.sheet)
+                            .ignoresSafeArea(.container, edges: .trailing)
+                    }
                     // 只向上打影（设计稿 `0 -6px 24px`）——它要表达的是这张卡压在
                     // 插画上面。深色下投影看不见，直接省掉。
                     .shadow(color: SignInPalette.accentInk.opacity(isDark ? 0 : 0.10),
@@ -169,6 +174,9 @@ struct LoginView: View {
             }
             .frame(width: size.width)
         }
+        // The illustration paints under Duo's side rail; scrollable foreground
+        // content remains inset to the safe area.
+        .scrollClipDisabled(trailingBleed > 0)
         .scrollBounceBehavior(.basedOnSize)
         // 上半截暖底、下半截白卡，一起顶出安全区——状态栏那一条要是暖的，
         // 底下 home indicator 那一条要是白的。暖底给得比 头部+插画 宽裕，
@@ -197,48 +205,44 @@ struct LoginView: View {
     /// 左栏暖底 + 房子，右栏一整块白。设计稿 B / C。
     private func splitLayout(_ size: CGSize, _ m: LoginMetrics) -> some View {
         let rightWidth = max(size.width - m.leftColumn, 0)
-        return ZStack(alignment: .topLeading) {
-            // 底色两层，都顶出安全区。右栏那块**保留左侧圆角**——所以不能简单地
-            // 把背景按 x 切两半（那样圆角背后露出来的还是白，等于没圆角），
-            // 必须让白卡自己带着圆角铺到屏幕边缘。
-            SignInPalette.pitch
-                .ignoresSafeArea()
-
-            UnevenRoundedRectangle(topLeadingRadius: m.sheetRadius,
-                                   bottomLeadingRadius: m.sheetRadius)
-                .fill(SignInPalette.sheet)
-                .shadow(color: SignInPalette.accentInk.opacity(isDark ? 0 : 0.08),
-                        radius: 12, x: -3)
-                .frame(width: rightWidth)
-                .frame(maxWidth: .infinity, alignment: .trailing)
-                .ignoresSafeArea()
-
-            // 房子贴左栏底边，同样顶到屏幕最下沿。
-            Skyline(width: m.leftColumn, height: m.skylineHeight, alignment: .leading)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-                .ignoresSafeArea(edges: .bottom)
-
-            HStack(spacing: 0) {
-                VStack(alignment: .leading, spacing: 0) {
-                    hero(m)
-                    Spacer(minLength: 0)
-                }
-                .padding(.horizontal, m.heroSidePadding)
-                .padding(.top, m.heroTopPadding)
-                .frame(width: m.leftColumn, alignment: .topLeading)
-
-                // 右栏内容**垂直居中**（设计稿 `justify-content:center`）。
-                // 套一层 ScrollView 是给大字号 / 小机型留的退路：内容比屏幕高时
-                // 能滚，够矮时 `minHeight` 把它顶到满高再居中。
-                ScrollView {
-                    sheetContent(m)
-                        .padding(.horizontal, m.sheetSidePadding)
-                        .frame(width: rightWidth)
-                        .frame(minHeight: size.height, alignment: .center)
-                }
-                .scrollBounceBehavior(.basedOnSize)
-                .frame(width: rightWidth)
+        let sheetContentWidth = min(520, max(0, rightWidth - 2 * m.sheetSidePadding))
+        return HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 0) {
+                hero(m)
+                Spacer(minLength: 0)
             }
+            .padding(.horizontal, m.heroSidePadding)
+            .padding(.top, m.heroTopPadding)
+            .frame(width: m.leftColumn, height: size.height, alignment: .topLeading)
+            .background(alignment: .bottomLeading) {
+                Skyline(width: m.leftColumn, height: m.skylineHeight, alignment: .leading)
+                    .ignoresSafeArea(.container, edges: .bottom)
+            }
+
+            // 内容足够短时居中，展开表单或放大字体后仍可滚动。
+            ScrollView {
+                sheetContent(m)
+                    .frame(width: sheetContentWidth)
+                    .frame(width: rightWidth)
+                    .frame(minHeight: size.height, alignment: .center)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+            .frame(width: rightWidth, height: size.height)
+            .background {
+                // 背景属于右栏，左边界与内容共用分栏坐标；只向外侧安全区延伸。
+                // 固定宽度的背景在整屏 trailing 对齐后再忽略安全区，会被 Duo
+                // 的右侧系统区域推离内容，造成卡片跨到暖色背景上。
+                UnevenRoundedRectangle(topLeadingRadius: m.sheetRadius,
+                                       bottomLeadingRadius: m.sheetRadius)
+                    .fill(SignInPalette.sheet)
+                    .shadow(color: SignInPalette.accentInk.opacity(isDark ? 0 : 0.08),
+                            radius: 12, x: -3)
+                    .ignoresSafeArea(.container, edges: [.top, .bottom, .trailing])
+            }
+        }
+        .frame(width: size.width, height: size.height, alignment: .topLeading)
+        .background {
+            SignInPalette.pitch.ignoresSafeArea()
         }
     }
 
