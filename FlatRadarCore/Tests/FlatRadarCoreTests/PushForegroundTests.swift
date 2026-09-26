@@ -13,23 +13,30 @@ private actor PermissionSource: NotificationAuthorizing {
     func authorizationStatus() async -> UNAuthorizationStatus { status }
 }
 
+/// A MainActor-isolated mock for the platform bridge used by PushStore.
+/// Keep this at file scope: nesting it in the XCTestCase's @MainActor context
+/// makes Swift 6.2 infer conflicting isolation for its synthesized initializer.
+@MainActor
+private final class PushForegroundBridgeMock: PushPlatformBridge {
+    var onDeviceToken: ((Data) -> Void)?
+    var onRegistrationError: ((any Error) -> Void)?
+    var registrations = 0
+
+    init() {}
+
+    func flushPendingToken() {}
+    func registerForRemoteNotifications() { registrations += 1 }
+}
+
 @MainActor
 final class PushForegroundTests: XCTestCase {
-    private final class Bridge: PushPlatformBridge {
-        var onDeviceToken: ((Data) -> Void)?
-        var onRegistrationError: ((any Error) -> Void)?
-        var registrations = 0
-        func flushPendingToken() {}
-        func registerForRemoteNotifications() { registrations += 1 }
-    }
-
     func testSettingsPermissionChangesRefreshAndRegisterWithoutPrompting() async {
         let source = PermissionSource()
         let name = "PushForegroundTests.\(UUID())"
         let defaults = UserDefaults(suiteName: name)!
         defer { defaults.removePersistentDomain(forName: name) }
         let store = PushStore(defaults: defaults, notifications: source)
-        let bridge = Bridge()
+        let bridge = PushForegroundBridgeMock()
         store.setup(bridge: bridge)
         await store.refreshPermissionAndRegistration { true }
         XCTAssertEqual(store.permissionStatus, .denied)
@@ -53,7 +60,7 @@ final class PushForegroundTests: XCTestCase {
         let defaults = UserDefaults(suiteName: name)!
         defer { defaults.removePersistentDomain(forName: name) }
         let store = PushStore(defaults: defaults, notifications: source)
-        let bridge = Bridge()
+        let bridge = PushForegroundBridgeMock()
         store.setup(bridge: bridge)
         await store.refreshPermissionAndRegistration { false }
         XCTAssertEqual(store.permissionStatus, .authorized)
