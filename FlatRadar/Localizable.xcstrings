@@ -7693,7 +7693,32 @@
       }
     },
     "FlatRadar is an **independent** third-party client. Not affiliated with, endorsed by, or sponsored by any of the platforms it monitors. All listing data belongs to its respective owners." : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "FlatRadar es un cliente **independiente** de terceros. No está afiliado, respaldado ni patrocinado por ninguna de las plataformas que monitoriza. Todos los datos de los anuncios pertenecen a sus respectivos propietarios."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "FlatRadar is een **onafhankelijke** client van derden. Het is niet gelieerd aan, onderschreven door of gesponsord door een van de platforms die het volgt. Alle advertentiegegevens zijn eigendom van de respectieve eigenaren."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "FlatRadar 是一款**独立**的第三方客户端，与其监测的任何平台均无关联，也未获其认可或赞助。所有房源数据均归各自所有者所有。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "FlatRadar 是一款**獨立**的第三方用戶端，與其監測的任何平台均無關聯，也未獲其認可或贊助。所有房源資料均歸各自所有者所有。"
+          }
+        }
+      }
     },
     "FlatRadar is an **unofficial** third-party client.\nNot affiliated with, endorsed by, or sponsored by any of the platforms it monitors.\nAll listing data belongs to its respective owners." : {
       "extractionState" : "stale",
@@ -8973,7 +8998,32 @@
       }
     },
     "List, Map, and Calendar show the same listings from different angles.\nEach one has its own tab at the top." : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lista, Mapa y Calendario muestran los mismos anuncios desde distintas perspectivas.\nCada vista tiene su propia pestaña en la parte superior."
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lijst, Kaart en Agenda tonen dezelfde woningen vanuit verschillende invalshoeken.\nElke weergave heeft een eigen tabblad bovenaan."
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "列表、地图和日历从不同角度展示相同的房源。\n每种视图都有自己的顶部标签页。"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "列表、地圖和日曆從不同角度呈現相同的房源。\n每種檢視都有自己的頂部標籤頁。"
+          }
+        }
+      }
     },
     "List, Map, and Calendar show the same listings from different angles.\nSwitch between them from the menu at the top left." : {
       "localizations" : {
@@ -10280,7 +10330,32 @@
       }
     },
     "More breakdowns" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Más desgloses"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Meer uitsplitsingen"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查看更多细分数据"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "查看更多細分數據"
+          }
+        }
+      }
     },
     "More breakdowns ›" : {
       "extractionState" : "stale",
@@ -17371,7 +17446,32 @@
       }
     },
     "Signing you in" : {
-
+      "localizations" : {
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Iniciando sesión"
+          }
+        },
+        "nl" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Je wordt aangemeld"
+          }
+        },
+        "zh-Hans" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在登录"
+          }
+        },
+        "zh-Hant" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "正在登入"
+          }
+        }
+      }
     },
     "Size" : {
       "localizations" : {

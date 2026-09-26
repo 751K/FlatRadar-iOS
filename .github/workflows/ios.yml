@@ -118,7 +118,8 @@ jobs:
             -destination "id=${{ steps.sim.outputs.udid }}" \
             -only-testing:FlatRadarTests \
             -resultBundlePath ios-tests.xcresult \
-            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_ALLOWED=YES \
+            CODE_SIGN_IDENTITY=- \
             | { command -v xcpretty >/dev/null && xcpretty || cat; }
           # xcpretty 不一定在镜像里；没有就原样打印。退出码必须取 xcodebuild
           # 那一段，否则格式化工具成功就把测试失败吞掉了。
