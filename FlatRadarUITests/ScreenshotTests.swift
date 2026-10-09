@@ -74,7 +74,7 @@ final class ScreenshotTests: XCTestCase {
         let (args, tab) = browse("list", padTab: Tab.listings)
         launch(extra: args)
         waitForMainUI()
-        selectTab(tab, "Listings")
+        selectBrowseTab(tab, "Listings")
         sleep(2)
         snap(named: "02-Listings")
     }
@@ -83,7 +83,7 @@ final class ScreenshotTests: XCTestCase {
         let (args, tab) = browse("map", padTab: Tab.map)
         launch(extra: args)
         waitForMainUI()
-        selectTab(tab, "Map")
+        selectBrowseTab(tab, "Map")
         // Leaflet 渲染稍慢
         sleep(3)
         snap(named: "03-Map")
@@ -93,7 +93,7 @@ final class ScreenshotTests: XCTestCase {
         let (args, tab) = browse("calendar", padTab: Tab.calendar)
         launch(extra: args)
         waitForMainUI()
-        selectTab(tab, "Calendar")
+        selectBrowseTab(tab, "Calendar")
         sleep(2)
         snap(named: "04-Calendar")
     }
@@ -175,11 +175,7 @@ final class ScreenshotTests: XCTestCase {
 
     }
 
-    /// ⚠️ 这跟 App 的判据**不是同一个东西**。``MainTabView`` 用的是内容宽度
-    /// （``width < 920``，为了照顾 iPad 分屏 / 台前调度下窗口变窄的情况），
-    /// 而这里用的是设备类型。两台截图设备（iPhone 17 Pro Max / iPad Pro 13"）
-    /// 上两者结论一致，所以现在不出问题；哪天加一台窄窗口的 iPad，就会出现
-    /// 「App 走 compact 布局、测试按 wide 布局找 tab」的错位。
+    /// 设备类型只决定 iPad 横屏及截图转正；浏览标签按实际 UI 查找，兼容 Duo。
     private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
     /// 三个浏览视图在当前设备上怎么到达：(launch args, 目标 tab)。
@@ -201,7 +197,7 @@ final class ScreenshotTests: XCTestCase {
     private func browse(_ mode: String, padTab: Tab) -> ([String], Tab) {
         isPad
             ? (["UI_TEST_TAB=\(padTab.launchName)"], padTab)
-            : (["UI_TEST_TAB=browse", "UI_TEST_BROWSE_MODE=\(mode)"], Tab.browse)
+            : (["UI_TEST_TAB=browse", "UI_TEST_BROWSE_MODE=\(mode)"], padTab)
     }
 
     // MARK: - Helpers
@@ -390,6 +386,25 @@ final class ScreenshotTests: XCTestCase {
             _ = app.buttons.firstMatch.waitForExistence(timeout: 1)
         } while Date() < deadline
         XCTFail("主界面未在 60s 内出现。当前按钮清单：\n" + buttonInventory())
+    }
+
+    /// 普通 iPhone 用 Browse，Duo 展开或使用侧栏时用独立浏览标签。
+    /// 等 identifier 出现后再判断，避免普通 iPhone 的延迟暴露被误判成宽布局。
+    private func selectBrowseTab(_ expandedTab: Tab, _ label: String) {
+        let deadline = Date().addingTimeInterval(10)
+        repeat {
+            if tabButton(.browse) != nil {
+                selectTab(.browse, label)
+                return
+            }
+            if tabButton(expandedTab) != nil {
+                selectTab(expandedTab, label)
+                return
+            }
+            _ = identifierQuery(.browse).firstMatch.waitForExistence(timeout: 1)
+        } while Date() < deadline
+        // 宽布局的目标标签可能在下一页，沿用 findTab 的翻页逻辑。
+        selectTab(expandedTab, label)
     }
 
     /// 落到指定 tab：launch arg 没生效就直接点它。

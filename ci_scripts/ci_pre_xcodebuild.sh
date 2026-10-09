@@ -43,6 +43,7 @@ set -u
 # 时候记得回来改这里，不然状态栏覆盖会静默地打在没人用的设备上。
 DEVICES=(
   "iPhone 17 Pro Max"
+  "iPhone Duo"
   "iPad Pro 13-inch (M5) (16GB)"
 )
 
