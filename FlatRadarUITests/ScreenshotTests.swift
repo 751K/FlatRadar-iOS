@@ -286,12 +286,12 @@ final class ScreenshotTests: XCTestCase {
         return e.exists ? e : nil
     }
 
-    /// iPad 那条路：App 声明的 identifier 优先，SF Symbol 兜底。
-    /// 一个谓词覆盖两种写法，只需要**一次**等待，不必先把一条等超时。
+    /// Tab 的 identifier 可能挂在按钮、侧栏行或容器上，按 identifier 跨类型查询。
+    /// SF Symbol 兜底只接受按钮，避免匹配页面内的装饰图标。
     private func identifierQuery(_ tab: Tab) -> XCUIElementQuery {
-        app.buttons.matching(
-            NSPredicate(format: "identifier == %@ OR identifier == %@",
-                        tab.id, tab.symbol))
+        app.descendants(matching: .any).matching(
+            NSPredicate(format: "identifier == %@ OR (identifier == %@ AND elementType == %d)",
+                        tab.id, tab.symbol, XCUIElement.ElementType.button.rawValue))
     }
 
     /// 等到 tab 出现；超时返回 nil，由调用方决定怎么报。
@@ -380,9 +380,9 @@ final class ScreenshotTests: XCTestCase {
         let deadline = Date().addingTimeInterval(60)
         repeat {
             if app.tabBars.firstMatch.exists { return }          // iPhone
-            if app.buttons.matching(
+            if app.descendants(matching: .any).matching(
                 NSPredicate(format: "identifier BEGINSWITH %@", "tab-")
-               ).firstMatch.exists { return }                    // iPad
+               ).firstMatch.exists { return }                    // iPad / Duo 侧栏
             _ = app.buttons.firstMatch.waitForExistence(timeout: 1)
         } while Date() < deadline
         XCTFail("主界面未在 60s 内出现。当前按钮清单：\n" + buttonInventory())
