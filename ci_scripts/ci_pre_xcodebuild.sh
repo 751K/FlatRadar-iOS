@@ -75,6 +75,42 @@ for runtime, devices in data.get('devices', {}).items():
 " "$name")
 
   if [ -z "${udid:-}" ]; then
+    # 新 Xcode 镜像不一定预建上一代设备；存在 device type 和 runtime 时先创建。
+    udid=$(python3 - "$name" <<'PYCREATE'
+import json, subprocess, sys
+
+def inventory(kind):
+    result = subprocess.run(
+        ["xcrun", "simctl", "list", kind, "-j"],
+        capture_output=True, text=True,
+    )
+    if result.returncode:
+        return {}
+    try:
+        return json.loads(result.stdout)
+    except ValueError:
+        return {}
+
+name = sys.argv[1]
+device = next((d for d in inventory("devicetypes").get("devicetypes", [])
+               if d.get("name") == name), None)
+runtimes = [r for r in inventory("runtimes").get("runtimes", [])
+            if r.get("isAvailable") and ".iOS-" in r.get("identifier", "")]
+if device and runtimes:
+    runtime = max(runtimes, key=lambda r: tuple(int(v) for v in r["version"].split(".")))
+    result = subprocess.run(
+        ["xcrun", "simctl", "create", name, device["identifier"], runtime["identifier"]],
+        capture_output=True, text=True,
+    )
+    if result.returncode == 0:
+        print(result.stdout.strip())
+    else:
+        print("› [status-bar] 创建模拟器失败：" + result.stderr.strip(), file=sys.stderr)
+PYCREATE
+)
+  fi
+
+  if [ -z "${udid:-}" ]; then
     echo "› [status-bar] 找不到「${name}」，跳过"
     continue
   fi
