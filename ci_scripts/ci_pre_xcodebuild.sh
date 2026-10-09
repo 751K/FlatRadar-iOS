@@ -75,7 +75,7 @@ for runtime, devices in data.get('devices', {}).items():
 " "$name")
 
   if [ -z "${udid:-}" ]; then
-    echo "› [status-bar] 找不到「$name」，跳过"
+    echo "› [status-bar] 找不到「${name}」，跳过"
     continue
   fi
 
