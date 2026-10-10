@@ -18,6 +18,14 @@ clones, then selects the inner screen by its native pixel dimensions. A missing
 inner framebuffer or an incorrect output size fails the test instead of silently
 attaching another outer-screen screenshot.
 
+`ScreenshotsDuoProbe` runs only the English login page and includes raw physical
+screens, the app-window screenshot, and the final export for diagnosis. Cloud
+build 432 confirmed that opening the hinge resets orientation, app-window
+captures are black, and the physical inner PNG is rounded down to 2006 × 2852.
+The capture now rotates after opening, uses the physical inner screen, and copies
+the last row/column to restore the missing pixel on each edge. The captured content
+is not rescaled. The exported landscape image must be exactly 2853 × 2007.
+
 `DuoPose.c` is exclusively in `FlatRadarUITests`; its simulator HID calls are not
 linked into the shipping app. The hinge control is adapted from the MIT-licensed
 [hinge](https://github.com/artemnovichkov/hinge) tool; see [hinge-LICENSE](hinge-LICENSE).

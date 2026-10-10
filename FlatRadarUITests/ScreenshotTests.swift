@@ -277,6 +277,7 @@ final class ScreenshotTests: XCTestCase {
                               userInfo: [NSLocalizedDescriptionKey: "Device Hub pose control failed (\(result))"])
             }
             sleep(2)
+            if !duoInnerLandscape { XCUIDevice.shared.orientation = .portrait }
         }
 
         // 语言不在这里设——由 Screenshots.xctestplan 的 configuration 决定。
