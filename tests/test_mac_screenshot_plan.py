@@ -222,7 +222,7 @@ def test_post_clone_injects_credentials_into_every_configuration(tmp_path):
 
     (tmp_path / "TestPlans").mkdir()
     (tmp_path / "ci_scripts").mkdir()
-    for name in ("Screenshots.xctestplan", "MacScreenshots.xctestplan"):
+    for name in ("Screenshots.xctestplan", "ScreenshotsDuoInner.xctestplan", "MacScreenshots.xctestplan"):
         shutil.copy(ROOT / "TestPlans" / name, tmp_path / "TestPlans" / name)
     script = tmp_path / "ci_scripts" / "ci_post_clone.sh"
     shutil.copy(ROOT / "ci_scripts" / "ci_post_clone.sh", script)

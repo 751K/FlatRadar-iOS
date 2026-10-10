@@ -1,0 +1,72 @@
+{
+  "configurations": [
+    {
+      "id": "ED778F2E-5944-4D0E-9962-091BE12725B2",
+      "name": "en-US",
+      "options": {
+        "language": "en",
+        "region": "US"
+      }
+    },
+    {
+      "id": "A2CEB2BD-3008-4E88-82FB-44F268B3B949",
+      "name": "zh-Hans",
+      "options": {
+        "language": "zh-Hans",
+        "region": "CN"
+      }
+    },
+    {
+      "id": "B7A93675-60EE-476A-954B-32C377447B4D",
+      "name": "zh-Hant",
+      "options": {
+        "language": "zh-Hant",
+        "region": "TW"
+      }
+    },
+    {
+      "id": "98FC7985-6E77-4E8C-8DA6-F4107D9C34F1",
+      "name": "nl-NL",
+      "options": {
+        "language": "nl",
+        "region": "NL"
+      }
+    },
+    {
+      "id": "2A03F54F-5125-4FEA-8698-8F3C37035C7F",
+      "name": "es-ES",
+      "options": {
+        "language": "es",
+        "region": "ES"
+      }
+    }
+  ],
+  "defaultOptions": {
+    "codeCoverage": false,
+    "environmentVariableEntries": [
+      {
+        "key": "UI_TEST_DUO_INNER_LANDSCAPE",
+        "value": "1"
+      }
+    ]
+  },
+  "testTargets": [
+    {
+      "target": {
+        "containerPath": "container:FlatRadar.xcodeproj",
+        "identifier": "FC5588722FBDB6A300855C9D",
+        "name": "FlatRadarUITests"
+      },
+      "selectedTests": [
+        "ScreenshotTests/testCapture00_Login()",
+        "ScreenshotTests/testCapture01_Dashboard()",
+        "ScreenshotTests/testCapture02_Listings()",
+        "ScreenshotTests/testCapture03_Map()",
+        "ScreenshotTests/testCapture04_Calendar()",
+        "ScreenshotTests/testCapture05_Notifications()",
+        "ScreenshotTests/testCapture06_Settings()"
+      ]
+    }
+  ],
+  "version": 1
+}

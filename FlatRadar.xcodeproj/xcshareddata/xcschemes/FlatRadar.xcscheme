@@ -36,6 +36,9 @@
          <TestPlanReference
             reference = "container:TestPlans/Screenshots.xctestplan">
          </TestPlanReference>
+         <TestPlanReference
+            reference = "container:TestPlans/ScreenshotsDuoInner.xctestplan">
+         </TestPlanReference>
       </TestPlans>
    </TestAction>
    <LaunchAction

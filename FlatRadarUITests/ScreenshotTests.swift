@@ -18,6 +18,9 @@
 import UIKit
 import XCTest
 
+@_silgen_name("FRSetDuoPose")
+private func setDuoPose(_ innerLandscape: Int32) -> Int32
+
 /// `@MainActor` 标在**类**上，不是逐个方法上。
 ///
 /// 原先只有 `testCapture*` 七个方法标了，helper（`launch` / `tabButton` /
@@ -44,7 +47,7 @@ final class ScreenshotTests: XCTestCase {
 
     func testCapture00_Login() throws {
         // UI_TEST_SHOW_LOGIN 阻止自动 guest，让 LoginView 留下
-        launch(extra: ["UI_TEST_SHOW_LOGIN"])
+        try launch(extra: ["UI_TEST_SHOW_LOGIN"])
         // LoginView 有 hero 动画 + 实时统计加载，留 2.5s 渲染
         sleep(3)
         // 七条用例里这条原本是唯一没有断言的，而它偏偏是唯一会被「加了凭据登录」
@@ -58,51 +61,51 @@ final class ScreenshotTests: XCTestCase {
         XCTAssertFalse(app.tabBars.firstMatch.exists || tabButton(.dashboard) != nil,
                        "登录页上不该有主界面的 tab——说明它自动登录了。"
                        + "当前按钮清单：\n" + buttonInventory())
-        snap(named: "00-Login")
+        try snap(named: "00-Login")
     }
 
     func testCapture01_Dashboard() throws {
-        launch(extra: ["UI_TEST_TAB=\(Tab.dashboard.launchName)"])
+        try launch(extra: ["UI_TEST_TAB=\(Tab.dashboard.launchName)"])
         waitForMainUI()
         selectTab(Tab.dashboard, "Dashboard")
         // 给 Dashboard chart 渲染
         sleep(2)
-        snap(named: "01-Dashboard")
+        try snap(named: "01-Dashboard")
     }
 
     func testCapture02_Listings() throws {
         let (args, tab) = browse("list", padTab: Tab.listings)
-        launch(extra: args)
+        try launch(extra: args)
         waitForMainUI()
         selectBrowseTab(tab, "Listings")
         sleep(2)
-        snap(named: "02-Listings")
+        try snap(named: "02-Listings")
     }
 
     func testCapture03_Map() throws {
         let (args, tab) = browse("map", padTab: Tab.map)
-        launch(extra: args)
+        try launch(extra: args)
         waitForMainUI()
         selectBrowseTab(tab, "Map")
         // Leaflet 渲染稍慢
         sleep(3)
-        snap(named: "03-Map")
+        try snap(named: "03-Map")
     }
 
     func testCapture04_Calendar() throws {
         let (args, tab) = browse("calendar", padTab: Tab.calendar)
-        launch(extra: args)
+        try launch(extra: args)
         waitForMainUI()
         selectBrowseTab(tab, "Calendar")
         sleep(2)
-        snap(named: "04-Calendar")
+        try snap(named: "04-Calendar")
     }
 
     func testCapture05_Notifications() throws {
         // 这一屏访客看不到——tab bar 里根本没有 Notifications。必须带凭据跑
         // （UI_TEST_USERNAME / UI_TEST_PASSWORD），否则下面的断言会直接失败，
         // 而不是悄悄拍下 Dashboard。
-        launch(extra: ["UI_TEST_TAB=\(Tab.alerts.launchName)"])
+        try launch(extra: ["UI_TEST_TAB=\(Tab.alerts.launchName)"])
         waitForMainUI()
         // launch arg 落位在这一屏上不可靠：登录是异步的，而 tab 是同步设的，
         // 两轮云端实测都停在了 Dashboard。改顺序（先 await 再设 tab）也没解决，
@@ -114,15 +117,15 @@ final class ScreenshotTests: XCTestCase {
         // 这条最早改成「直接点」，现在其余几条也走同一个 selectTab。
         selectTab(Tab.alerts, "Alerts")
         sleep(2)
-        snap(named: "05-Notifications")
+        try snap(named: "05-Notifications")
     }
 
     func testCapture06_Settings() throws {
-        launch(extra: ["UI_TEST_TAB=\(Tab.settings.launchName)"])
+        try launch(extra: ["UI_TEST_TAB=\(Tab.settings.launchName)"])
         waitForMainUI()
         selectTab(Tab.settings, "Settings")
         sleep(1)
-        snap(named: "06-Settings")
+        try snap(named: "06-Settings")
     }
 
     // MARK: - 设备差异
@@ -178,6 +181,10 @@ final class ScreenshotTests: XCTestCase {
     /// 设备类型只决定 iPad 横屏及截图转正；浏览标签按实际 UI 查找，兼容 Duo。
     private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
 
+    private var duoInnerLandscape: Bool {
+        ProcessInfo.processInfo.environment["UI_TEST_DUO_INNER_LANDSCAPE"] == "1"
+    }
+
     /// 三个浏览视图在当前设备上怎么到达：(launch args, 目标 tab)。
     ///
     /// iPhone 上它们是 Browse 的三个子模式；iPad 上各占一个 tab。
@@ -195,7 +202,7 @@ final class ScreenshotTests: XCTestCase {
     /// 现在 iPad 那支从 `padTab` 推 tab 名，`mode` 只喂给 BROWSE_MODE，
     /// 两套词表不再有互相串门的机会。
     private func browse(_ mode: String, padTab: Tab) -> ([String], Tab) {
-        isPad
+        (isPad || duoInnerLandscape)
             ? (["UI_TEST_TAB=\(padTab.launchName)"], padTab)
             : (["UI_TEST_TAB=browse", "UI_TEST_BROWSE_MODE=\(mode)"], padTab)
     }
@@ -204,7 +211,7 @@ final class ScreenshotTests: XCTestCase {
 
     /// Launch App with screenshot mode + per-test extra args.
     /// 不在 setUp 里 launch 是因为不同 test 需要不同 args（tab/mode/login）。
-    private func launch(extra: [String]) {
+    private func launch(extra: [String]) throws {
         var args = ["UI_TEST_SCREENSHOT_MODE"]
         args.append(contentsOf: extra)
         // 凭据从环境变量取，**不写在代码里**——这个仓库是公开的。
@@ -229,8 +236,19 @@ final class ScreenshotTests: XCTestCase {
         // （见 MainTabView 的注释），能不转就不转。
         //
         // iPhone 不动：竖屏是它的正常形态。
-        if isPad {
+        if isPad || duoInnerLandscape {
             XCUIDevice.shared.orientation = .landscapeLeft
+        }
+
+        // Run in the simulator test runner so this also reaches Xcode Cloud clones.
+        // Setting orientation alone only rotates the outer display; the hinge must open.
+        if duoInnerLandscape || UIDevice.current.name.localizedCaseInsensitiveContains("Duo") {
+            let result = setDuoPose(duoInnerLandscape ? 1 : 0)
+            guard result == 0 else {
+                throw NSError(domain: "DuoScreenshot", code: Int(result),
+                              userInfo: [NSLocalizedDescriptionKey: "Device Hub pose control failed (\(result))"])
+            }
+            sleep(2)
         }
 
         // 语言不在这里设——由 Screenshots.xctestplan 的 configuration 决定。
@@ -466,7 +484,7 @@ final class ScreenshotTests: XCTestCase {
     }
 
     /// 保存当前屏幕为 XCTAttachment，跟测试结果一起进 .xcresult 包。
-    private func snap(named step: String) {
+    private func snap(named step: String) throws {
         // 拍物理屏幕，然后**自己转正**。
         //
         // 两种拍法都试过，都不能直接用（iPad 横屏下）：
@@ -484,8 +502,30 @@ final class ScreenshotTests: XCTestCase {
         // `UIImage.Orientation.right` 表示「原图相对正立被顺时针转过 90°」，
         // 绘制时 UIKit 会反向补偿，净效果就是逆时针 90°。用 renderer 重画一遍是
         // 为了把朝向**烘进像素**——PNG 不携带 UIImage 的 orientation。
-        var image = XCUIScreen.main.screenshot().image
-        if isPad { image = Self.uprighted(image) }
+        var image: UIImage
+        if duoInnerLandscape {
+            // The cover remains the main screen in some simulator versions.
+            // Select the inner framebuffer by its native dimensions, never by index.
+            let images = XCUIScreen.screens.map { $0.screenshot().image }
+            let sizes = images.compactMap { $0.cgImage }.map { "\($0.width)x\($0.height)" }
+            guard let inner = images.first(where: {
+                guard let cg = $0.cgImage else { return false }
+                return min(cg.width, cg.height) == 2007 && max(cg.width, cg.height) == 2853
+            }) else {
+                throw NSError(domain: "DuoScreenshot", code: 10,
+                              userInfo: [NSLocalizedDescriptionKey: "Inner display missing; available screenshots: \(sizes)"])
+            }
+            image = inner
+            if image.cgImage?.width == 2007 { image = Self.uprighted(image) }
+            guard image.cgImage?.width == 2853, image.cgImage?.height == 2007 else {
+                throw NSError(domain: "DuoScreenshot", code: 11,
+                              userInfo: [NSLocalizedDescriptionKey: "Expected inner landscape PNG: 2853x2007"])
+            }
+            print("Duo inner landscape: \(step), screens=\(sizes), appFrame=\(app.frame)")
+        } else {
+            image = XCUIScreen.main.screenshot().image
+            if isPad { image = Self.uprighted(image) }
+        }
         let attachment = XCTAttachment(image: image)
         // 名字里不再带语言：语言由 test plan 决定，附件的 configurationName
         // 已经带着它，提取脚本按那个分桶。名字里再写一份只会有机会写错。

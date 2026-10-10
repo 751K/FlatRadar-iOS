@@ -52,6 +52,7 @@ set -eu
 # tests/test_testplan_location.py 扫仓库里每一个 plan 把这条钉住——包括以后
 # 新加的，不需要有人记得回来补一行。
 PLANS="$CI_PRIMARY_REPOSITORY_PATH/TestPlans/Screenshots.xctestplan
+$CI_PRIMARY_REPOSITORY_PATH/TestPlans/ScreenshotsDuoInner.xctestplan
 $CI_PRIMARY_REPOSITORY_PATH/TestPlans/MacScreenshots.xctestplan"
 
 for PLAN in $PLANS; do
