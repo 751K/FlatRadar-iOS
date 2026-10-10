@@ -45,6 +45,25 @@ final class ScreenshotTests: XCTestCase {
 
     // MARK: - Captures
 
+    /// A single-page Cloud probe; attach raw PNG bytes before UIImage conversion.
+    func testCaptureDuoProbeLogin() throws {
+        try launch(extra: ["UI_TEST_SHOW_LOGIN"])
+        sleep(3)
+        print("Duo probe appFrame=\(app.frame)")
+        for (index, screen) in XCUIScreen.screens.enumerated() {
+            let screenshot = screen.screenshot()
+            let png = screenshot.pngRepresentation
+            let width = png[16..<20].reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
+            let height = png[20..<24].reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
+            let image = screenshot.image
+            print("Duo probe screen=\(index), PNG=\(width)x\(height), UIImage=\(image.cgImage?.width ?? 0)x\(image.cgImage?.height ?? 0), scale=\(image.scale)")
+            let attachment = XCTAttachment(data: png, uniformTypeIdentifier: "public.png")
+            attachment.name = "00-LoginProbe\(index)_Duo"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+        }
+    }
+
     func testCapture00_Login() throws {
         // UI_TEST_SHOW_LOGIN 阻止自动 guest，让 LoginView 留下
         try launch(extra: ["UI_TEST_SHOW_LOGIN"])

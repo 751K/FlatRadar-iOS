@@ -1,0 +1,34 @@
+{
+  "configurations": [
+    {
+      "id": "2C1EEAD7-56AB-4E23-AB9A-DD38C8ED06AE",
+      "name": "en-US",
+      "options": {
+        "language": "en",
+        "region": "US"
+      }
+    }
+  ],
+  "defaultOptions": {
+    "codeCoverage": false,
+    "environmentVariableEntries": [
+      {
+        "key": "UI_TEST_DUO_INNER_LANDSCAPE",
+        "value": "1"
+      }
+    ]
+  },
+  "testTargets": [
+    {
+      "target": {
+        "containerPath": "container:FlatRadar.xcodeproj",
+        "identifier": "FC5588722FBDB6A300855C9D",
+        "name": "FlatRadarUITests"
+      },
+      "selectedTests": [
+        "ScreenshotTests/testCaptureDuoProbeLogin()"
+      ]
+    }
+  ],
+  "version": 1
+}
