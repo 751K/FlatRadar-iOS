@@ -62,6 +62,14 @@ final class ScreenshotTests: XCTestCase {
             attachment.lifetime = .keepAlways
             add(attachment)
         }
+        let windowPNG = app.screenshot().pngRepresentation
+        let windowWidth = windowPNG[16..<20].reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
+        let windowHeight = windowPNG[20..<24].reduce(UInt32(0)) { ($0 << 8) | UInt32($1) }
+        print("Duo probe app-window PNG=\(windowWidth)x\(windowHeight)")
+        let windowAttachment = XCTAttachment(data: windowPNG, uniformTypeIdentifier: "public.png")
+        windowAttachment.name = "00-LoginProbeApp_Duo"
+        windowAttachment.lifetime = .keepAlways
+        add(windowAttachment)
     }
 
     func testCapture00_Login() throws {
