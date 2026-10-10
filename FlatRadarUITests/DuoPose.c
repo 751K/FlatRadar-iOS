@@ -46,10 +46,10 @@ int FRSetDuoPose(int innerLandscape) {
     int result = send_control(client, serialize, createEvent, dispatch,
                               CFSTR("hinge-slider-control"), CFSTR("range"), value);
     CFRelease(value);
-    if (!result) {
+    if (!result && !innerLandscape) {
         result = send_control(client, serialize, createEvent, dispatch,
                               CFSTR("orientation-picker-control"), CFSTR("enum"),
-                              innerLandscape ? CFSTR("landscape-left") : CFSTR("portrait"));
+                              CFSTR("portrait"));
     }
     CFRelease(client);
     dlclose(library);

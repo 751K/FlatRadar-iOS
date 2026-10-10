@@ -70,6 +70,7 @@ final class ScreenshotTests: XCTestCase {
         windowAttachment.name = "00-LoginProbeApp_Duo"
         windowAttachment.lifetime = .keepAlways
         add(windowAttachment)
+        try snap(named: "00-Login")
     }
 
     func testCapture00_Login() throws {
@@ -263,7 +264,7 @@ final class ScreenshotTests: XCTestCase {
         // （见 MainTabView 的注释），能不转就不转。
         //
         // iPhone 不动：竖屏是它的正常形态。
-        if isPad || duoInnerLandscape {
+        if isPad {
             XCUIDevice.shared.orientation = .landscapeLeft
         }
 
@@ -286,6 +287,20 @@ final class ScreenshotTests: XCTestCase {
         // 交给 test plan 之后，语言是构建配置的一部分，传不到就直接跑不起来。
         app.launchArguments = args
         app.launch()
+        if duoInnerLandscape {
+            // Opening changes the active screen and resets orientation. Apply rotation
+            // after launch; force an intervening value to bypass XCTest's cached pose.
+            XCUIDevice.shared.orientation = .portrait
+            XCUIDevice.shared.orientation = .landscapeLeft
+            let landscape = NSPredicate { [self] _, _ in
+                app.frame.width > app.frame.height
+            }
+            guard XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: landscape, object: nil)],
+                                timeout: 15) == .completed else {
+                throw NSError(domain: "DuoScreenshot", code: 12,
+                              userInfo: [NSLocalizedDescriptionKey: "Inner display did not rotate: \(app.frame)"])
+            }
+        }
     }
 
     /// 解析一个 tab 按钮。
@@ -537,13 +552,15 @@ final class ScreenshotTests: XCTestCase {
             let sizes = images.compactMap { $0.cgImage }.map { "\($0.width)x\($0.height)" }
             guard let inner = images.first(where: {
                 guard let cg = $0.cgImage else { return false }
-                return min(cg.width, cg.height) == 2007 && max(cg.width, cg.height) == 2853
+                return (min(cg.width, cg.height) == 2007 && max(cg.width, cg.height) == 2853)
+                    || (min(cg.width, cg.height) == 2006 && max(cg.width, cg.height) == 2852)
             }) else {
                 throw NSError(domain: "DuoScreenshot", code: 10,
                               userInfo: [NSLocalizedDescriptionKey: "Inner display missing; available screenshots: \(sizes)"])
             }
             image = inner
-            if image.cgImage?.width == 2007 { image = Self.uprighted(image) }
+            if let cg = image.cgImage, cg.width < cg.height { image = Self.uprighted(image) }
+            image = Self.padDuoRoundingEdge(image)
             guard image.cgImage?.width == 2853, image.cgImage?.height == 2007 else {
                 throw NSError(domain: "DuoScreenshot", code: 11,
                               userInfo: [NSLocalizedDescriptionKey: "Expected inner landscape PNG: 2853x2007"])
@@ -560,6 +577,29 @@ final class ScreenshotTests: XCTestCase {
         attachment.name = "\(step)_\(device)"
         attachment.lifetime = .keepAlways
         add(attachment)
+    }
+
+    /// XCTest rounds this simulator's odd native dimensions down by one pixel.
+    /// Extend the last row/column; do not rescale the captured content.
+    private static func padDuoRoundingEdge(_ image: UIImage) -> UIImage {
+        guard let cg = image.cgImage, cg.width == 2852, cg.height == 2006 else { return image }
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = true
+        let size = CGSize(width: 2853, height: 2007)
+        return UIGraphicsImageRenderer(size: size, format: format).image { context in
+            context.cgContext.interpolationQuality = .none
+            UIImage(cgImage: cg).draw(in: CGRect(x: 0, y: 0, width: 2852, height: 2006))
+            if let edge = cg.cropping(to: CGRect(x: 2851, y: 0, width: 1, height: 2006)) {
+                UIImage(cgImage: edge).draw(in: CGRect(x: 2852, y: 0, width: 1, height: 2006))
+            }
+            if let edge = cg.cropping(to: CGRect(x: 0, y: 2005, width: 2852, height: 1)) {
+                UIImage(cgImage: edge).draw(in: CGRect(x: 0, y: 2006, width: 2852, height: 1))
+            }
+            if let corner = cg.cropping(to: CGRect(x: 2851, y: 2005, width: 1, height: 1)) {
+                UIImage(cgImage: corner).draw(in: CGRect(x: 2852, y: 2006, width: 1, height: 1))
+            }
+        }
     }
 
     /// 把物理朝向的截图逆时针转 90°，并把朝向烘进像素。
