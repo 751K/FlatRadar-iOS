@@ -39,6 +39,12 @@ the navigation tabs. Perform login, page selection, and selection assertions on
 the closed cover first. Open the existing page only at capture time, allow it to
 reflow, and capture the physical inner panel. Do not query the UI proxy after opening.
 
+XCTest can encode even an opaque rendered image as RGBA. Before ASC upload, run
+`swift tools/screenshots/export-opaque-png.swift path/to/screenshots/*.png` on macOS.
+The exporter rejects actual transparency and writes RGB PNGs without resizing.
+Build 451's seven pages were verified pixel-for-pixel against the RGBA originals
+after export; dimensions remain 2853 × 2007.
+
 `DuoPose.c` is exclusively in `FlatRadarUITests`; its simulator HID calls are not
 linked into the shipping app. The hinge control is adapted from the MIT-licensed
 [hinge](https://github.com/artemnovichkov/hinge) tool; see [hinge-LICENSE](hinge-LICENSE).
