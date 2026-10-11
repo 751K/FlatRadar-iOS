@@ -22,7 +22,10 @@ attaching another outer-screen screenshot.
 screens, the app-window screenshot, and the final export for diagnosis. Cloud
 build 432 confirmed that opening the hinge resets orientation, app-window
 captures are black, and the physical inner PNG is rounded down to 2006 × 2852.
-The capture now rotates after opening, uses the physical inner screen, and copies
+Build 435 also confirmed that `XCUIDevice.orientation` reports a rotation without
+changing the open screen. The native Device Hub `portrait` control produces the
+wide inner pose; `landscape-left` stands the open phone upright. The capture posts
+that control after the hinge settles, uses the physical inner screen, and copies
 the last row/column to restore the missing pixel on each edge. The captured content
 is not rescaled. The exported landscape image must be exactly 2853 × 2007.
 

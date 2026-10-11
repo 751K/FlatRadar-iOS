@@ -289,10 +289,8 @@ final class ScreenshotTests: XCTestCase {
         app.launchArguments = args
         app.launch()
         if duoInnerLandscape {
-            // Opening changes the active screen and resets orientation. Apply rotation
-            // after launch; force an intervening value to bypass XCTest's cached pose.
-            XCUIDevice.shared.orientation = .portrait
-            XCUIDevice.shared.orientation = .landscapeLeft
+            // XCUIDevice changes the reported pose without rotating the open screen.
+            // DuoPose uses Device Hub's "portrait" control for the wide inner pose.
             let landscape = NSPredicate { [self] _, _ in
                 app.frame.width > app.frame.height
             }

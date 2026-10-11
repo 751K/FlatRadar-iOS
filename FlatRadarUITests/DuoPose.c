@@ -5,6 +5,7 @@
 #include <dlfcn.h>
 #include <mach/mach_time.h>
 #include <stdint.h>
+#include <unistd.h>
 
 typedef CFTypeRef (*CreateClient)(CFAllocatorRef, int, CFDictionaryRef);
 typedef CFDataRef (*Serialize)(CFTypeRef, CFOptionFlags);
@@ -46,10 +47,19 @@ int FRSetDuoPose(int innerLandscape) {
     int result = send_control(client, serialize, createEvent, dispatch,
                               CFSTR("hinge-slider-control"), CFSTR("range"), value);
     CFRelease(value);
-    if (!result && !innerLandscape) {
+    if (!result) {
+        // On the open Duo, Device Hub's "portrait" means the wide, sideways pose.
+        // Wait for the hinge transition; orientation events sent during it are dropped.
+        usleep(1500000);
         result = send_control(client, serialize, createEvent, dispatch,
                               CFSTR("orientation-picker-control"), CFSTR("enum"),
                               CFSTR("portrait"));
+        usleep(400000);
+        if (!result) {
+            result = send_control(client, serialize, createEvent, dispatch,
+                                  CFSTR("orientation-picker-control"), CFSTR("enum"),
+                                  CFSTR("portrait"));
+        }
     }
     CFRelease(client);
     dlclose(library);
