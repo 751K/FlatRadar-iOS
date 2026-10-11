@@ -291,14 +291,10 @@ final class ScreenshotTests: XCTestCase {
         if duoInnerLandscape {
             // XCUIDevice changes the reported pose without rotating the open screen.
             // DuoPose uses Device Hub's "portrait" control for the wide inner pose.
-            let landscape = NSPredicate { [self] _, _ in
-                app.frame.width > app.frame.height
-            }
-            guard XCTWaiter.wait(for: [XCTNSPredicateExpectation(predicate: landscape, object: nil)],
-                                timeout: 15) == .completed else {
-                throw NSError(domain: "DuoScreenshot", code: 12,
-                              userInfo: [NSLocalizedDescriptionKey: "Inner display did not rotate: \(app.frame)"])
-            }
+            // The open-screen automation proxy can retain cover/portrait geometry
+            // (app.screenshot() is black). Validate the physical PNG, not this proxy.
+            sleep(2)
+            print("Duo automation proxy frame after native pose: \(app.frame)")
         }
     }
 
