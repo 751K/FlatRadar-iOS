@@ -28,6 +28,8 @@ wide inner pose; `landscape-left` stands the open phone upright. The capture pos
 that control after the hinge settles, uses the physical inner screen, and copies
 the last row/column to restore the missing pixel on each edge. The captured content
 is not rescaled. The exported landscape image must be exactly 2853 × 2007.
+The inner panel uses the opposite native rotation to iPad captures: render with
+`.right` for Duo and retain `.left` for iPad (confirmed from build 444's pixels).
 
 `DuoPose.c` is exclusively in `FlatRadarUITests`; its simulator HID calls are not
 linked into the shipping app. The hinge control is adapted from the MIT-licensed

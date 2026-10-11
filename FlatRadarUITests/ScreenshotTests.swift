@@ -554,7 +554,11 @@ final class ScreenshotTests: XCTestCase {
                               userInfo: [NSLocalizedDescriptionKey: "Inner display missing; available screenshots: \(sizes)"])
             }
             image = inner
-            if let cg = image.cgImage, cg.width < cg.height { image = Self.uprighted(image) }
+            // The Duo inner panel has the opposite native rotation to the iPad.
+            // Build 444 proved that using the iPad's .left turns the result upside down.
+            if let cg = image.cgImage, cg.width < cg.height {
+                image = Self.uprighted(image, orientation: .right)
+            }
             image = Self.padDuoRoundingEdge(image)
             guard image.cgImage?.width == 2853, image.cgImage?.height == 2007 else {
                 throw NSError(domain: "DuoScreenshot", code: 11,
@@ -598,12 +602,12 @@ final class ScreenshotTests: XCTestCase {
     }
 
     /// 把物理朝向的截图逆时针转 90°，并把朝向烘进像素。
-    private static func uprighted(_ image: UIImage) -> UIImage {
+    private static func uprighted(_ image: UIImage, orientation: UIImage.Orientation = .left) -> UIImage {
         guard let cg = image.cgImage else { return image }
         // `.left` 不是 `.right`。build 307 用 `.right` 拍出来的是**倒 180°**的图
         // ——说明它给的是顺时针，而我们要的是逆时针（302 的产物用 PIL
         // `rotate(+90)` 转出来才正立）。90° 只有两个方向，反过来就是对的。
-        let rotated = UIImage(cgImage: cg, scale: image.scale, orientation: .left)
+        let rotated = UIImage(cgImage: cg, scale: image.scale, orientation: orientation)
         let format = UIGraphicsImageRendererFormat.default()
         format.scale = image.scale
         format.opaque = true
