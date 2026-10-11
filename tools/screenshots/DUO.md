@@ -18,10 +18,11 @@ clones, then selects the inner screen by its native pixel dimensions. A missing
 inner framebuffer or an incorrect output size fails the test instead of silently
 attaching another outer-screen screenshot.
 
-`ScreenshotsDuoProbe` runs only the English login page and includes raw physical
-screens, the app-window screenshot, and the final export for diagnosis. Cloud
-build 432 confirmed that opening the hinge resets orientation, app-window
-captures are black, and the physical inner PNG is rounded down to 2006 × 2852.
+`ScreenshotsDuoProbe` runs all seven pages in English before the full language
+batch. `testCaptureDuoProbeLogin` remains available as a manual raw-display diagnostic. Cloud
+build 432 confirmed that the initial orientation control produced a portrait
+inner layout, app-window captures are black, and the physical inner PNG is rounded
+down to 2006 × 2852.
 Build 435 also confirmed that `XCUIDevice.orientation` reports a rotation without
 changing the open screen. The native Device Hub `portrait` control produces the
 wide inner pose; `landscape-left` stands the open phone upright. The capture posts
@@ -30,6 +31,13 @@ the last row/column to restore the missing pixel on each edge. The captured cont
 is not rescaled. The exported landscape image must be exactly 2853 × 2007.
 The inner panel uses the opposite native rotation to iPad captures: render with
 `.right` for Duo and retain `.left` for iPad (confirmed from build 444's pixels).
+Keep each serialized HID payload alive until dispatch completes, and allow the
+last event to be delivered before releasing the client. The automation proxy's
+frame is unreliable on this headless simulator; inspect the physical capture.
+Build 448 confirmed that the open phone's automation bridge cannot reliably find
+the navigation tabs. Perform login, page selection, and selection assertions on
+the closed cover first. Open the existing page only at capture time, allow it to
+reflow, and capture the physical inner panel. Do not query the UI proxy after opening.
 
 `DuoPose.c` is exclusively in `FlatRadarUITests`; its simulator HID calls are not
 linked into the shipping app. The hinge control is adapted from the MIT-licensed

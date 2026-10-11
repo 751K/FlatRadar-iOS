@@ -38,6 +38,7 @@ final class ScreenshotTests: XCTestCase {
     /// 都是主 actor 隔离的，在那两个方法里碰它就会报并发警告。XCTestCase 本来就
     /// 每个 test 方法新建一个实例，所以内联初始化和原来在 setUp 里建是同一回事。
     private let app = XCUIApplication()
+    private var innerPosePrepared = false
 
     override func setUpWithError() throws {
         continueAfterFailure = false
@@ -49,6 +50,7 @@ final class ScreenshotTests: XCTestCase {
     func testCaptureDuoProbeLogin() throws {
         try launch(extra: ["UI_TEST_SHOW_LOGIN"])
         sleep(3)
+        try prepareInnerCapturePose()
         print("Duo probe appFrame=\(app.frame)")
         for (index, screen) in XCUIScreen.screens.enumerated() {
             let screenshot = screen.screenshot()
@@ -271,13 +273,15 @@ final class ScreenshotTests: XCTestCase {
         // Run in the simulator test runner so this also reaches Xcode Cloud clones.
         // Setting orientation alone only rotates the outer display; the hinge must open.
         if duoInnerLandscape || UIDevice.current.name.localizedCaseInsensitiveContains("Duo") {
-            let result = setDuoPose(duoInnerLandscape ? 1 : 0)
+            // Xcode's automation bridge only reads/interacts with the cover reliably.
+            // Select and verify the target page closed, then open only for capture.
+            let result = setDuoPose(0)
             guard result == 0 else {
                 throw NSError(domain: "DuoScreenshot", code: Int(result),
                               userInfo: [NSLocalizedDescriptionKey: "Device Hub pose control failed (\(result))"])
             }
             sleep(2)
-            if !duoInnerLandscape { XCUIDevice.shared.orientation = .portrait }
+            XCUIDevice.shared.orientation = .portrait
         }
 
         // 语言不在这里设——由 Screenshots.xctestplan 的 configuration 决定。
@@ -288,14 +292,19 @@ final class ScreenshotTests: XCTestCase {
         // 交给 test plan 之后，语言是构建配置的一部分，传不到就直接跑不起来。
         app.launchArguments = args
         app.launch()
-        if duoInnerLandscape {
-            // XCUIDevice changes the reported pose without rotating the open screen.
-            // DuoPose uses Device Hub's "portrait" control for the wide inner pose.
-            // The open-screen automation proxy can retain cover/portrait geometry
-            // (app.screenshot() is black). Validate the physical PNG, not this proxy.
-            sleep(2)
-            print("Duo automation proxy frame after native pose: \(app.frame)")
+        innerPosePrepared = false
+    }
+
+    private func prepareInnerCapturePose() throws {
+        guard duoInnerLandscape, !innerPosePrepared else { return }
+        let result = setDuoPose(1)
+        guard result == 0 else {
+            throw NSError(domain: "DuoScreenshot", code: Int(result),
+                          userInfo: [NSLocalizedDescriptionKey: "Opening inner display failed (\(result))"])
         }
+        // Give the existing page time to reflow; do not query the cover-based UI proxy.
+        sleep(3)
+        innerPosePrepared = true
     }
 
     /// 解析一个 tab 按钮。
@@ -522,6 +531,7 @@ final class ScreenshotTests: XCTestCase {
 
     /// 保存当前屏幕为 XCTAttachment，跟测试结果一起进 .xcresult 包。
     private func snap(named step: String) throws {
+        try prepareInnerCapturePose()
         // 拍物理屏幕，然后**自己转正**。
         //
         // 两种拍法都试过，都不能直接用（iPad 横屏下）：
@@ -564,7 +574,7 @@ final class ScreenshotTests: XCTestCase {
                 throw NSError(domain: "DuoScreenshot", code: 11,
                               userInfo: [NSLocalizedDescriptionKey: "Expected inner landscape PNG: 2853x2007"])
             }
-            print("Duo inner landscape: \(step), screens=\(sizes), appFrame=\(app.frame)")
+            print("Duo inner landscape: \(step), screens=\(sizes)")
         } else {
             image = XCUIScreen.main.screenshot().image
             if isPad { image = Self.uprighted(image) }
@@ -601,10 +611,10 @@ final class ScreenshotTests: XCTestCase {
         }
     }
 
-    /// 把物理朝向的截图逆时针转 90°，并把朝向烘进像素。
+    /// 按面板的原生方向转正，并把朝向烘进像素：iPad 默认 .left，Duo 内屏 .right。
     private static func uprighted(_ image: UIImage, orientation: UIImage.Orientation = .left) -> UIImage {
         guard let cg = image.cgImage else { return image }
-        // `.left` 不是 `.right`。build 307 用 `.right` 拍出来的是**倒 180°**的图
+        // iPad 默认 `.left`。build 307 用 `.right` 拍出来的是**倒 180°**的图
         // ——说明它给的是顺时针，而我们要的是逆时针（302 的产物用 PIL
         // `rotate(+90)` 转出来才正立）。90° 只有两个方向，反过来就是对的。
         let rotated = UIImage(cgImage: cg, scale: image.scale, orientation: orientation)

@@ -26,7 +26,13 @@
         "name": "FlatRadarUITests"
       },
       "selectedTests": [
-        "ScreenshotTests/testCaptureDuoProbeLogin()"
+        "ScreenshotTests/testCapture00_Login()",
+        "ScreenshotTests/testCapture01_Dashboard()",
+        "ScreenshotTests/testCapture02_Listings()",
+        "ScreenshotTests/testCapture03_Map()",
+        "ScreenshotTests/testCapture04_Calendar()",
+        "ScreenshotTests/testCapture05_Notifications()",
+        "ScreenshotTests/testCapture06_Settings()"
       ]
     }
   ],
