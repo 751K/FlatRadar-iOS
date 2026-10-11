@@ -25,10 +25,10 @@ static int send_control(CFTypeRef client, Serialize serialize, CreateEvent creat
     if (!data) return 2;
     CFTypeRef event = create(NULL, mach_absolute_time(), 0xFF61, 0x5B, 0,
                             CFDataGetBytePtr(data), CFDataGetLength(data), 0);
-    CFRelease(data);
-    if (!event) return 3;
+    if (!event) { CFRelease(data); return 3; }
     dispatch(client, event);
     CFRelease(event);
+    CFRelease(data);
     return 0;
 }
 
@@ -61,6 +61,7 @@ int FRSetDuoPose(int innerLandscape) {
                                   CFSTR("portrait"));
         }
     }
+    usleep(120000);
     CFRelease(client);
     dlclose(library);
     return result;
