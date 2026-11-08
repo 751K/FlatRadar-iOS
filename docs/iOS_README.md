@@ -19,7 +19,7 @@ For the Android client — its status, distribution, and roadmap — see [ANDROI
 
 ## Change Policy
 
-New cross-platform behavior is specified in the backend's [API.md](https://github.com/751K/holland2stay-monitor/blob/master/docs/API.md) first, then implemented consistently across Web, Android, and iOS. Anything iOS-only — platform frameworks, App Store metadata, device-specific UI — is planned in [NEXT.md](NEXT.md).
+New cross-platform behavior is specified in the backend's [API.md](https://github.com/751K/Flatradar/blob/master/docs/API.md) first, then implemented consistently across Web, Android, and iOS. Anything iOS-only — platform frameworks, App Store metadata, device-specific UI — is planned in [NEXT.md](NEXT.md).
 
 ## Quick Start
 
@@ -63,7 +63,7 @@ FlatRadar/
 └── Views/                      # SwiftUI screens
 ```
 
-The API contract lives in the backend repo, not here: [API.md](https://github.com/751K/holland2stay-monitor/blob/master/docs/API.md) is the human-readable version and [openapi.json](https://github.com/751K/holland2stay-monitor/blob/master/docs/openapi.json) the machine-readable one shared by iOS and Android. Treat the spec as the source of truth — the backend diffs it against its live route set in both directions, so it tells you when it falls behind.
+The API contract lives in the backend repo, not here: [API.md](https://github.com/751K/Flatradar/blob/master/docs/API.md) is the human-readable version and [openapi.json](https://github.com/751K/Flatradar/blob/master/docs/openapi.json) the machine-readable one shared by iOS and Android. Treat the spec as the source of truth — the backend diffs it against its live route set in both directions, so it tells you when it falls behind.
 
 ## Release Checklist
 

@@ -1,6 +1,6 @@
 """iOS 深色 App 图标的守卫。
 
-从 751K/holland2stay-monitor 的 tests/test_dark_icon.py 拆出来。那个文件同时守
+从 751K/Flatradar 的 tests/test_dark_icon.py 拆出来。那个文件同时守
 网页资源（static/logo*.png）和这个 iOS 图标；iOS 客户端迁出后，网页那半留在
 后端仓库，这两条跟着 Assets.xcassets 过来。
 

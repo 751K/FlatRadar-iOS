@@ -2,7 +2,7 @@ import Foundation
 
 /// `GET /api/v1/listings?sort=` 的排序规则，**照后端逐条搬过来**。
 ///
-/// 出处（holland2stay-monitor，钉在 `tools/server-sort/make_fixture.py` 的 `BACKEND_SHA`）：
+/// 出处（Flatradar，钉在 `tools/server-sort/make_fixture.py` 的 `BACKEND_SHA`）：
 /// - `app/services/listing_service.py`：`sort_listing_rows` / `_sort_value` / `status_rank`
 /// - `models.py`：`parse_float` / `is_sentinel_available_from` / `parse_features_list`
 /// - `config.py`：`energy_rank`
